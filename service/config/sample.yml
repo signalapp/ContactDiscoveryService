@@ -1,0 +1,26 @@
+enclave:
+  spid:        # Service Provider ID
+  certificate: # Service Provider Certificate
+  key:         # Service Provider Key
+  iasHost:     # IAS Host to talk to (testing or production)
+  instances:
+   - mrenclave: # mrenclave value 1
+     debug:     # Whether this is a debug or production enclave [true|false]
+   - mrenclave: # mrenclave value 2
+     debug:     # Whether this is a debug or production enclave [true|false]
+
+signal:
+  userToken:    # head -c 16 /dev/urandom | hexdump -ve '1/1 "%.2x"'
+  serverToken:  # head -c 16 /dev/urandom | hexdump -ve '1/1 "%.2x"'
+
+redis:
+  url:          # Redis URL
+
+directory:
+  initialSize: 10000000
+  loadFactor: 0.75
+
+limits:
+  contactQueries:
+    bucketSize:        # Leaky bucket size
+    leakRatePerMinute: # Leaky bucket rate per minute

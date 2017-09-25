@@ -1,0 +1,12 @@
+Source: libsabd-enclave
+Priority: optional
+Maintainer: Jeffrey Griffin <geogriffin@fastmail.com>
+Build-Depends: debhelper (>= 9), ocaml-native-compilers, g++-6, gcc-6
+Standards-Version: 3.9.8
+Section: libs
+
+Package: libsabd-enclave1
+Architecture: amd64
+Description: ContactDiscoveryService Enclave Library
+ A package to reproducibly build the enclave library for
+ ContactDiscoveryService.

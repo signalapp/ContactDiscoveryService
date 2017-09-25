@@ -1,0 +1,4 @@
+source-is-missing linux-sgx/*
+debhelper-but-no-misc-depends
+shared-lib-without-dependency-information usr/lib/libsabd-enclave.so.*
+shlib-with-executable-stack usr/lib/libsabd-enclave.so.*

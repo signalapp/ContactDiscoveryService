@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libsabd-enclave
+Source: <https://github.com/WhisperSystems/ContactDiscoveryService>
+
+Files: *
+Copyright: 2017 Jeffrey Griffin <geogriffin@fastmail.com>
+License: WIP
+ WIP.

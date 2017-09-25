@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS=qa=-all,sanitize=-all,hardening=-all,reproducible=-all,parallel=1
+unexport LANG
+export LC_ALL=C
+%:
+	dh $@ --no-parallel
+
+override_dh_auto_build:
+	dh_auto_build -- debuild-target

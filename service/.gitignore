@@ -1,0 +1,8 @@
+*~
+src/**/*.class
+lib/*.jar
+.idea
+*.iml
+target
+config/local.yml
+dependency-reduced-pom.xml
