@@ -50,9 +50,20 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SignatureException;
 import java.security.cert.CertPathValidatorException;
 import java.security.cert.CertificateException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.Period;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAccessor;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class ContactDiscoveryClient {
@@ -170,6 +181,14 @@ public class ContactDiscoveryClient {
       if (!"OK".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus())) {
         throw new SignatureException("Quote status is: " + signatureBodyEntity.getIsvEnclaveQuoteStatus());
       }
+
+      if (Instant.from(ZonedDateTime.of(LocalDateTime.from(DateTimeFormatter.ofPattern("yyy-MM-dd'T'HH:mm:ss.SSSSSS").parse(signatureBodyEntity.getTimestamp())), ZoneId.of("UTC")))
+                 .plus(Period.ofDays(1))
+                 .isBefore(Instant.now()))
+      {
+        throw new SignatureException("Signature is expired");
+      }
+      
     } catch (CertificateException | CertPathValidatorException | IOException e) {
       throw new SignatureException(e);
     }

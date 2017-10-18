@@ -21,6 +21,10 @@ public class SignatureBodyEntity {
   @NotEmpty
   private String isvEnclaveQuoteStatus;
 
+  @JsonProperty
+  @NotEmpty
+  private String timestamp;
+
   public byte[] getIsvEnclaveQuoteBody() {
     return isvEnclaveQuoteBody;
   }
@@ -29,4 +33,7 @@ public class SignatureBodyEntity {
     return isvEnclaveQuoteStatus;
   }
 
+  public String getTimestamp() {
+    return timestamp;
+  }
 }
