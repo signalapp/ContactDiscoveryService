@@ -65,8 +65,10 @@ _Static_assert(sizeof(sgxsd_request_negotiation_request_t) == sizeof(sgxsd_curve
 
 typedef struct sgxsd_pending_request_id {
   uint8_t data[sizeof(uint64_t)];
+  sgxsd_aes_gcm_iv_t iv;
+  sgxsd_aes_gcm_mac_t mac;
 } sgxsd_pending_request_id_t;
-_Static_assert(sizeof(sgxsd_pending_request_id_t) == sizeof(uint64_t), "Enclave ABI compatibility");
+_Static_assert(sizeof(sgxsd_pending_request_id_t) == sizeof(uint64_t) + sizeof(sgxsd_aes_gcm_iv_t) + sizeof(sgxsd_aes_gcm_mac_t), "Enclave ABI compatibility");
 
 typedef struct sgxsd_request_negotiation_response {
   sgxsd_curve25519_public_key_t server_static_pubkey;
@@ -98,8 +100,6 @@ typedef struct sgxsd_node_init_args {
   uint8_t pending_requests_table_order;
 } sgxsd_node_init_args_t;
 
-typedef struct sgxsd_ra_get_quote_args sgxsd_ra_get_quote_args_t;
-
 typedef uint64_t sgxsd_server_state_handle_t;
 
 //
@@ -127,5 +127,13 @@ typedef struct sgxsd_enclave {
 typedef sgxsd_status_t (*sgxsd_start_callback_t)(sgxsd_enclave_t, va_list);
 sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgx_launch_token_t *p_launch_token, const sgxsd_node_init_args_t *p_node_init_args, sgxsd_start_callback_t p_callback, ...);
 sgxsd_status_t sgxsd_get_next_quote(sgx_enclave_id_t enclave_id, sgx_spid_t spid, const uint8_t *p_sig_rl, uint32_t sig_rl_size, sgx_quote_t *p_quote, uint32_t quote_size);
+
+//
+// error codes
+//
+
+typedef enum sgxsd_status_code {
+  SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND = SGX_MK_ERROR(0x10001),
+} sgxsd_status_code_t;
 
 #endif

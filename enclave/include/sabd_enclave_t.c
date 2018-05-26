@@ -21,6 +21,7 @@
 #include "sabd_enclave_t.h"
 
 #include "sgx_trts.h" /* for sgx_ocalloc, sgx_is_outside_enclave */
+#include "sgx_lfence.h" /* for sgx_lfence */
 
 #include <errno.h>
 #include <string.h> /* for memcpy etc */
@@ -42,13 +43,11 @@ typedef struct ms_sgxsd_enclave_node_init_t {
 	sgxsd_node_init_args_t* ms_p_args;
 } ms_sgxsd_enclave_node_init_t;
 
-typedef struct ms_sgxsd_enclave_get_next_quote_t {
+typedef struct ms_sgxsd_enclave_get_next_report_t {
 	sgx_status_t ms_retval;
 	sgx_target_info_t ms_qe_target_info;
-	sgxsd_ra_get_quote_args_t* ms_p_get_quote_args;
-	sgx_quote_t* ms_p_quote;
-	uint32_t ms_quote_size;
-} ms_sgxsd_enclave_get_next_quote_t;
+	sgx_report_t* ms_p_report;
+} ms_sgxsd_enclave_get_next_report_t;
 
 typedef struct ms_sgxsd_enclave_set_current_quote_t {
 	sgx_status_t ms_retval;
@@ -90,19 +89,13 @@ typedef struct ms_sgxsd_ocall_reply_t {
 	sgxsd_msg_tag_t ms_msg_tag;
 } ms_sgxsd_ocall_reply_t;
 
-typedef struct ms_sgxsd_ocall_ra_get_quote_t {
-	sgx_status_t ms_retval;
-	sgx_report_t ms_report;
-	sgx_quote_nonce_t ms_nonce;
-	sgxsd_ra_get_quote_args_t* ms_p_get_quote_args;
-	sgx_report_t* ms_p_qe_report;
-	sgx_quote_t* ms_p_quote;
-	uint32_t ms_quote_size;
-} ms_sgxsd_ocall_ra_get_quote_t;
-
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_node_init(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_node_init_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_node_init_t* ms = SGX_CAST(ms_sgxsd_enclave_node_init_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
 	sgxsd_node_init_args_t* _tmp_p_args = ms->ms_p_args;
@@ -111,7 +104,12 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_node_init(void* pms)
 
 	CHECK_UNIQUE_POINTER(_tmp_p_args, _len_p_args);
 
-	if (_tmp_p_args != NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_args != NULL && _len_p_args != 0) {
 		_in_p_args = (sgxsd_node_init_args_t*)malloc(_len_p_args);
 		if (_in_p_args == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -120,6 +118,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_node_init(void* pms)
 
 		memcpy((void*)_in_p_args, _tmp_p_args, _len_p_args);
 	}
+
 	ms->ms_retval = sgxsd_enclave_node_init((const sgxsd_node_init_args_t*)_in_p_args);
 err:
 	if (_in_p_args) free((void*)_in_p_args);
@@ -127,32 +126,40 @@ err:
 	return status;
 }
 
-static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_get_next_quote(void* pms)
+static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_get_next_report(void* pms)
 {
-	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_get_next_quote_t));
-	ms_sgxsd_enclave_get_next_quote_t* ms = SGX_CAST(ms_sgxsd_enclave_get_next_quote_t*, pms);
+	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_get_next_report_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+	ms_sgxsd_enclave_get_next_report_t* ms = SGX_CAST(ms_sgxsd_enclave_get_next_report_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
-	sgxsd_ra_get_quote_args_t* _tmp_p_get_quote_args = ms->ms_p_get_quote_args;
-	sgx_quote_t* _tmp_p_quote = ms->ms_p_quote;
-	uint32_t _tmp_quote_size = ms->ms_quote_size;
-	size_t _len_p_quote = _tmp_quote_size;
-	sgx_quote_t* _in_p_quote = NULL;
+	sgx_report_t* _tmp_p_report = ms->ms_p_report;
+	size_t _len_p_report = sizeof(*_tmp_p_report);
+	sgx_report_t* _in_p_report = NULL;
 
-	CHECK_UNIQUE_POINTER(_tmp_p_quote, _len_p_quote);
+	CHECK_UNIQUE_POINTER(_tmp_p_report, _len_p_report);
 
-	if (_tmp_p_quote != NULL) {
-		if ((_in_p_quote = (sgx_quote_t*)malloc(_len_p_quote)) == NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_report != NULL && _len_p_report != 0) {
+		if ((_in_p_report = (sgx_report_t*)malloc(_len_p_report)) == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
 			goto err;
 		}
 
-		memset((void*)_in_p_quote, 0, _len_p_quote);
+		memset((void*)_in_p_report, 0, _len_p_report);
 	}
-	ms->ms_retval = sgxsd_enclave_get_next_quote(ms->ms_qe_target_info, (const sgxsd_ra_get_quote_args_t*)_tmp_p_get_quote_args, _in_p_quote, _tmp_quote_size);
+
+	ms->ms_retval = sgxsd_enclave_get_next_report(ms->ms_qe_target_info, _in_p_report);
 err:
-	if (_in_p_quote) {
-		memcpy(_tmp_p_quote, _in_p_quote, _len_p_quote);
-		free(_in_p_quote);
+	if (_in_p_report) {
+		memcpy(_tmp_p_report, _in_p_report, _len_p_report);
+		free(_in_p_report);
 	}
 
 	return status;
@@ -161,8 +168,13 @@ err:
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_set_current_quote(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_set_current_quote_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_set_current_quote_t* ms = SGX_CAST(ms_sgxsd_enclave_set_current_quote_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
+
 
 
 	ms->ms_retval = sgxsd_enclave_set_current_quote();
@@ -174,6 +186,10 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_set_current_quote(void* pms)
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_negotiate_request(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_negotiate_request_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_negotiate_request_t* ms = SGX_CAST(ms_sgxsd_enclave_negotiate_request_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
 	sgxsd_request_negotiation_request_t* _tmp_p_request = ms->ms_p_request;
@@ -186,7 +202,12 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_negotiate_request(void* pms)
 	CHECK_UNIQUE_POINTER(_tmp_p_request, _len_p_request);
 	CHECK_UNIQUE_POINTER(_tmp_p_response, _len_p_response);
 
-	if (_tmp_p_request != NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_request != NULL && _len_p_request != 0) {
 		_in_p_request = (sgxsd_request_negotiation_request_t*)malloc(_len_p_request);
 		if (_in_p_request == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -195,7 +216,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_negotiate_request(void* pms)
 
 		memcpy((void*)_in_p_request, _tmp_p_request, _len_p_request);
 	}
-	if (_tmp_p_response != NULL) {
+	if (_tmp_p_response != NULL && _len_p_response != 0) {
 		if ((_in_p_response = (sgxsd_request_negotiation_response_t*)malloc(_len_p_response)) == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
 			goto err;
@@ -203,6 +224,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_negotiate_request(void* pms)
 
 		memset((void*)_in_p_response, 0, _len_p_response);
 	}
+
 	ms->ms_retval = sgxsd_enclave_negotiate_request((const sgxsd_request_negotiation_request_t*)_in_p_request, _in_p_response);
 err:
 	if (_in_p_request) free((void*)_in_p_request);
@@ -217,6 +239,10 @@ err:
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_start(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_server_start_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_server_start_t* ms = SGX_CAST(ms_sgxsd_enclave_server_start_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
 	sgxsd_server_init_args_t* _tmp_p_args = ms->ms_p_args;
@@ -225,7 +251,12 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_start(void* pms)
 
 	CHECK_UNIQUE_POINTER(_tmp_p_args, _len_p_args);
 
-	if (_tmp_p_args != NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_args != NULL && _len_p_args != 0) {
 		_in_p_args = (sgxsd_server_init_args_t*)malloc(_len_p_args);
 		if (_in_p_args == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -234,6 +265,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_start(void* pms)
 
 		memcpy((void*)_in_p_args, _tmp_p_args, _len_p_args);
 	}
+
 	ms->ms_retval = sgxsd_enclave_server_start((const sgxsd_server_init_args_t*)_in_p_args, ms->ms_state_handle);
 err:
 	if (_in_p_args) free((void*)_in_p_args);
@@ -244,6 +276,10 @@ err:
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_call(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_server_call_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_server_call_t* ms = SGX_CAST(ms_sgxsd_enclave_server_call_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
 	sgxsd_server_handle_call_args_t* _tmp_p_args = ms->ms_p_args;
@@ -261,7 +297,12 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_call(void* pms)
 	CHECK_UNIQUE_POINTER(_tmp_msg_header, _len_msg_header);
 	CHECK_UNIQUE_POINTER(_tmp_msg_data, _len_msg_data);
 
-	if (_tmp_p_args != NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_args != NULL && _len_p_args != 0) {
 		_in_p_args = (sgxsd_server_handle_call_args_t*)malloc(_len_p_args);
 		if (_in_p_args == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -270,7 +311,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_call(void* pms)
 
 		memcpy((void*)_in_p_args, _tmp_p_args, _len_p_args);
 	}
-	if (_tmp_msg_header != NULL) {
+	if (_tmp_msg_header != NULL && _len_msg_header != 0) {
 		_in_msg_header = (sgxsd_msg_header_t*)malloc(_len_msg_header);
 		if (_in_msg_header == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -279,7 +320,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_call(void* pms)
 
 		memcpy((void*)_in_msg_header, _tmp_msg_header, _len_msg_header);
 	}
-	if (_tmp_msg_data != NULL) {
+	if (_tmp_msg_data != NULL && _len_msg_data != 0) {
 		_in_msg_data = (uint8_t*)malloc(_len_msg_data);
 		if (_in_msg_data == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -288,6 +329,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_call(void* pms)
 
 		memcpy((void*)_in_msg_data, _tmp_msg_data, _len_msg_data);
 	}
+
 	ms->ms_retval = sgxsd_enclave_server_call((const sgxsd_server_handle_call_args_t*)_in_p_args, (const sgxsd_msg_header_t*)_in_msg_header, (const uint8_t*)_in_msg_data, _tmp_msg_size, ms->ms_msg_tag, ms->ms_state_handle);
 err:
 	if (_in_p_args) free((void*)_in_p_args);
@@ -300,6 +342,10 @@ err:
 static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_stop(void* pms)
 {
 	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_server_stop_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
 	ms_sgxsd_enclave_server_stop_t* ms = SGX_CAST(ms_sgxsd_enclave_server_stop_t*, pms);
 	sgx_status_t status = SGX_SUCCESS;
 	sgxsd_server_terminate_args_t* _tmp_p_args = ms->ms_p_args;
@@ -308,7 +354,12 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_stop(void* pms)
 
 	CHECK_UNIQUE_POINTER(_tmp_p_args, _len_p_args);
 
-	if (_tmp_p_args != NULL) {
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_p_args != NULL && _len_p_args != 0) {
 		_in_p_args = (sgxsd_server_terminate_args_t*)malloc(_len_p_args);
 		if (_in_p_args == NULL) {
 			status = SGX_ERROR_OUT_OF_MEMORY;
@@ -317,6 +368,7 @@ static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_server_stop(void* pms)
 
 		memcpy((void*)_in_p_args, _tmp_p_args, _len_p_args);
 	}
+
 	ms->ms_retval = sgxsd_enclave_server_stop((const sgxsd_server_terminate_args_t*)_in_p_args, ms->ms_state_handle);
 err:
 	if (_in_p_args) free((void*)_in_p_args);
@@ -331,7 +383,7 @@ SGX_EXTERNC const struct {
 	7,
 	{
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_node_init, 0},
-		{(void*)(uintptr_t)sgx_sgxsd_enclave_get_next_quote, 0},
+		{(void*)(uintptr_t)sgx_sgxsd_enclave_get_next_report, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_set_current_quote, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_negotiate_request, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_start, 0},
@@ -342,12 +394,11 @@ SGX_EXTERNC const struct {
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[2][7];
+	uint8_t entry_table[1][7];
 } g_dyn_entry_table = {
-	2,
+	1,
 	{
-		{0, 0, 0, 0, 0, 1, 1, },
-		{0, 1, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, },
 	}
 };
 
@@ -375,8 +426,8 @@ sgx_status_t SGX_CDECL sgxsd_ocall_reply(sgx_status_t* retval, const sgxsd_msg_h
 
 	if (reply_header != NULL && sgx_is_within_enclave(reply_header, _len_reply_header)) {
 		ms->ms_reply_header = (sgxsd_msg_header_t*)__tmp;
+		memcpy(__tmp, reply_header, _len_reply_header);
 		__tmp = (void *)((size_t)__tmp + _len_reply_header);
-		memcpy((void*)ms->ms_reply_header, reply_header, _len_reply_header);
 	} else if (reply_header == NULL) {
 		ms->ms_reply_header = NULL;
 	} else {
@@ -386,8 +437,8 @@ sgx_status_t SGX_CDECL sgxsd_ocall_reply(sgx_status_t* retval, const sgxsd_msg_h
 	
 	if (reply_data != NULL && sgx_is_within_enclave(reply_data, _len_reply_data)) {
 		ms->ms_reply_data = (uint8_t*)__tmp;
+		memcpy(__tmp, reply_data, _len_reply_data);
 		__tmp = (void *)((size_t)__tmp + _len_reply_data);
-		memcpy((void*)ms->ms_reply_data, reply_data, _len_reply_data);
 	} else if (reply_data == NULL) {
 		ms->ms_reply_data = NULL;
 	} else {
@@ -399,65 +450,9 @@ sgx_status_t SGX_CDECL sgxsd_ocall_reply(sgx_status_t* retval, const sgxsd_msg_h
 	ms->ms_msg_tag = msg_tag;
 	status = sgx_ocall(0, ms);
 
-	if (retval) *retval = ms->ms_retval;
-
-	sgx_ocfree();
-	return status;
-}
-
-sgx_status_t SGX_CDECL sgxsd_ocall_ra_get_quote(sgx_status_t* retval, sgx_report_t report, sgx_quote_nonce_t nonce, const sgxsd_ra_get_quote_args_t* p_get_quote_args, sgx_report_t* p_qe_report, sgx_quote_t* p_quote, uint32_t quote_size)
-{
-	sgx_status_t status = SGX_SUCCESS;
-	size_t _len_p_qe_report = sizeof(*p_qe_report);
-	size_t _len_p_quote = quote_size;
-
-	ms_sgxsd_ocall_ra_get_quote_t* ms = NULL;
-	size_t ocalloc_size = sizeof(ms_sgxsd_ocall_ra_get_quote_t);
-	void *__tmp = NULL;
-
-	ocalloc_size += (p_qe_report != NULL && sgx_is_within_enclave(p_qe_report, _len_p_qe_report)) ? _len_p_qe_report : 0;
-	ocalloc_size += (p_quote != NULL && sgx_is_within_enclave(p_quote, _len_p_quote)) ? _len_p_quote : 0;
-
-	__tmp = sgx_ocalloc(ocalloc_size);
-	if (__tmp == NULL) {
-		sgx_ocfree();
-		return SGX_ERROR_UNEXPECTED;
+	if (status == SGX_SUCCESS) {
+		if (retval) *retval = ms->ms_retval;
 	}
-	ms = (ms_sgxsd_ocall_ra_get_quote_t*)__tmp;
-	__tmp = (void *)((size_t)__tmp + sizeof(ms_sgxsd_ocall_ra_get_quote_t));
-
-	ms->ms_report = report;
-	ms->ms_nonce = nonce;
-	ms->ms_p_get_quote_args = SGX_CAST(sgxsd_ra_get_quote_args_t*, p_get_quote_args);
-	if (p_qe_report != NULL && sgx_is_within_enclave(p_qe_report, _len_p_qe_report)) {
-		ms->ms_p_qe_report = (sgx_report_t*)__tmp;
-		__tmp = (void *)((size_t)__tmp + _len_p_qe_report);
-		memset(ms->ms_p_qe_report, 0, _len_p_qe_report);
-	} else if (p_qe_report == NULL) {
-		ms->ms_p_qe_report = NULL;
-	} else {
-		sgx_ocfree();
-		return SGX_ERROR_INVALID_PARAMETER;
-	}
-	
-	if (p_quote != NULL && sgx_is_within_enclave(p_quote, _len_p_quote)) {
-		ms->ms_p_quote = (sgx_quote_t*)__tmp;
-		__tmp = (void *)((size_t)__tmp + _len_p_quote);
-		memset(ms->ms_p_quote, 0, _len_p_quote);
-	} else if (p_quote == NULL) {
-		ms->ms_p_quote = NULL;
-	} else {
-		sgx_ocfree();
-		return SGX_ERROR_INVALID_PARAMETER;
-	}
-	
-	ms->ms_quote_size = quote_size;
-	status = sgx_ocall(1, ms);
-
-	if (retval) *retval = ms->ms_retval;
-	if (p_qe_report) memcpy((void*)p_qe_report, ms->ms_p_qe_report, _len_p_qe_report);
-	if (p_quote) memcpy((void*)p_quote, ms->ms_p_quote, _len_p_quote);
-
 	sgx_ocfree();
 	return status;
 }

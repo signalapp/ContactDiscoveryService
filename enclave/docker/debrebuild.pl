@@ -137,6 +137,18 @@ foreach my $pkg ($inst_build_deps->get_deps()) {
     };
 }
 
+open(my $build_deps_fd, '>', "$outdir/build-deps") or die;
+foreach my $pkg (@inst_build_deps) {
+    my $pkg_name = $pkg->{name};
+    my $pkg_ver = $pkg->{version};
+    my $pkg_arch = $pkg->{architecture};
+    if ($pkg_arch eq "all" || $pkg_arch eq $build_arch || $pkg_arch eq "") {
+	print $build_deps_fd "$pkg_name=$pkg_ver\n";
+    } else {
+	print $build_deps_fd "$pkg_name:$pkg_arch=$pkg_ver\n";
+    }
+}
+
 if (!defined($base_files_version)) {
     die "no base-files\n";
 }
@@ -196,26 +208,10 @@ foreach my $d (('/etc/apt', '/etc/apt/apt.conf.d', '/etc/apt/preferences.d',
     make_path("$tempdir/$d");
 }
 
-my $armored_key = "$tempdir/etc/apt/trusted.gpg.d/reproducible.asc";
-my $dearmored_key = "$tempdir/etc/apt/trusted.gpg.d/reproducible.gpg";
-my $http_code = LWP::Simple::mirror("https://reproducible.alioth.debian.org/reproducible.asc", $armored_key);
-if ($http_code != 200) {
-    die "got http $http_code when trying to retrieve reproducible.asc\n";
-}
-my $expected_gpg = <<'END';
-pub:-:4096:1:5DB7CA67EA59A31F:1412221944:1553872278::-:
-fpr:::::::::49B6574736D0B637CC3701EA5DB7CA67EA59A31F:
-uid:::::::::Debian Reproducible Builds Archive Signing Key:
-END
-if (qx(gpg --with-colons --with-fingerprint $armored_key) ne $expected_gpg) {
-    die "wrong reproducible.asc key\n";
-}
-system 'gpg', '--yes', '--batch', '--output', $dearmored_key, '--dearmor', $armored_key;
-
 open(FH, '>', "$tempdir/etc/apt/sources.list");
 print FH <<EOF;
-deb http://reproducible.alioth.debian.org/debian/ ./
 deb http://httpredir.debian.org/debian/ $base_dist main
+deb http://security.debian.org/ $base_dist/updates main
 EOF
 close FH;
 # Create dpkg status
@@ -446,14 +442,3 @@ while (0 < scalar keys %notfound_timestamps) {
 
 0 == system 'cp', "$tempdir/etc/apt/sources.list", "$outdir/sources.list"
     or die "cannot cp $tempdir/etc/apt/sources.list to $outdir/sources.list";
-open(my $build_deps_fd, '>', "$outdir/build-deps") or die;
-foreach my $pkg (@inst_build_deps) {
-    my $pkg_name = $pkg->{name};
-    my $pkg_ver = $pkg->{version};
-    my $pkg_arch = $pkg->{architecture};
-    if ($pkg_arch eq "all" || $pkg_arch eq $build_arch) {
-	print $build_deps_fd "$pkg_name=$pkg_ver\n";
-    } else {
-	print $build_deps_fd "$pkg_name:$pkg_arch=$pkg_ver\n";
-    }
-}

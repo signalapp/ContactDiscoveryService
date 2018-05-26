@@ -36,7 +36,7 @@ and repeat the same steps.
 - GNU Make
 - gcc-6
 - devscripts (debian package)
-- [Intel SGX SDK v1.9 SDK](https://github.com/01org/linux-sgx/tree/sgx_1.9) build dependencies
+- [Intel SGX SDK v2.1.3 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.1.3) build dependencies
 
 `````
 $ make debuild derebuild
@@ -55,7 +55,7 @@ be checked in as build-deps in the enclave/docker/ folder, along with sources.li
 buildinfo, which will then be used to reproduce the build when running `make docker`
 again in the future.
 
-The `debuild` target also builds parts needed from the Intel SGX SDK v1.9 after cloning it
+The `debuild` target also builds parts needed from the Intel SGX SDK v2.1.3 after cloning it
 from github.
 
 ### Building without Docker or Debian:
@@ -63,7 +63,7 @@ from github.
 #### Prerequisites:
 - GNU Make
 - gcc-6
-- [Intel SGX SDK v1.9 SDK](https://github.com/01org/linux-sgx/tree/sgx_1.9) (or its build dependencies)
+- [Intel SGX SDK v2.1.3 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.1.3) (or its build dependencies)
 
 `````
 $ make -C <repository_root>/enclave all install
@@ -72,14 +72,14 @@ $ make -C <repository_root>/enclave all install
 The `all` target will probably fail to reproduce the same binary as above, but doesn't
 require Docker or Debian Linux.
 
-If SGX_SDK_DIR, or SGX_INCLUDEDIR and SGX_LIBDIR, are not specified, the Intel SGX SDK
-v1.9 will be cloned from github and any required libraries will be built. The SDK build
+If `SGX_SDK_DIR`, or `SGX_INCLUDEDIR` and `SGX_LIBDIR`, are not specified, the Intel SGX SDK
+will be cloned from github and any required libraries will be built. The SDK build
 prerequisites should be present in this case.
 
 The `install` target copies the enclave and jni libraries to service/src/resources/, which
 should potentially be checked in to be used with the service.
 
-NB: the installed enclave will be signed with SGX_FLAGS_DEBUG enabled by an automatically
+NB: the installed enclave will be signed with `SGX_FLAGS_DEBUG` enabled by an automatically
 generated signing key. Due to Intel SGX licensing requirements, a debug enclave can
 currently only be run with the SGX debug flag enabled, allowing inspection of its
 encrypted memory, and invalidating its security properties. To use an enclave in
@@ -97,7 +97,7 @@ $ mvn package
 ## Running the service
 
 ### Runtime requirements:
-- [Intel SGX SDK v1.9 PSW](https://github.com/01org/linux-sgx/tree/sgx_1.9#install-intelr-sgx-psw)
+- [Intel SGX SDK v2.1.3 PSW](https://github.com/intel/linux-sgx/tree/sgx_2.1.3#install-the-intelr-sgx-psw)
 
 `````
 $ cd <repository_root>

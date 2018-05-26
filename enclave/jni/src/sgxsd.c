@@ -116,12 +116,6 @@ sgxsd_status_t sgxsd_init_node_init(sgxsd_enclave_t enclave, sgxsd_enclave_args_
     }
 }
 
-typedef struct sgxsd_ra_get_quote_args {
-  sgx_spid_t spid;
-  const uint8_t *p_sig_rl;
-  uint32_t sig_rl_size;
-} sgxsd_ra_get_quote_args_t;
-
 sgxsd_status_t sgxsd_get_next_quote(sgx_enclave_id_t enclave_id, sgx_spid_t spid,
                                     const uint8_t *p_sig_rl, uint32_t sig_rl_size,
                                     sgx_quote_t *p_quote, uint32_t quote_size) {
@@ -129,33 +123,31 @@ sgxsd_status_t sgxsd_get_next_quote(sgx_enclave_id_t enclave_id, sgx_spid_t spid
   sgx_target_info_t qe_target_info = {{{0}}}; // NB: sgx_init_quote expects qe_target_info to be zeroed (undocumented!)
   sgx_status_t init_quote_res = sgx_init_quote(&qe_target_info, &gid);
   if (init_quote_res == SGX_SUCCESS) {
-      const sgxsd_ra_get_quote_args_t get_quote_args = {
-          .spid = spid,
-          .p_sig_rl = p_sig_rl,
-          .sig_rl_size = sig_rl_size,
-      };
-      sgx_status_t get_next_quote_res;
-      sgx_status_t get_next_quote_ecall_res =
-        sgxsd_enclave_get_next_quote(enclave_id, &get_next_quote_res,
-                                     qe_target_info, &get_quote_args, p_quote, quote_size);
-      if (get_next_quote_ecall_res == SGX_SUCCESS) {
-          if (get_next_quote_res == SGX_SUCCESS) {
-              return sgxsd_status_ok();
+      sgx_report_t report;
+      sgx_status_t get_next_report_res;
+      sgx_status_t get_next_report_ecall_res =
+        sgxsd_enclave_get_next_report(enclave_id, &get_next_report_res,
+                                     qe_target_info, &report);
+      if (get_next_report_ecall_res == SGX_SUCCESS) {
+          if (get_next_report_res == SGX_SUCCESS) {
+              sgx_status_t get_quote_res =
+                  sgx_get_quote(&report, SGX_UNLINKABLE_SIGNATURE, &spid,
+                                NULL /* p_nonce */,
+                                p_sig_rl, sig_rl_size,
+                                NULL /* p_qe_report */,
+                                p_quote, quote_size);
+              if (get_quote_res == SGX_SUCCESS) {
+                  return sgxsd_status_ok();
+              } else {
+                  return sgxsd_status_error_code("sgxsd_enclave_get_quote_fail", get_quote_res);
+              }
           } else {
-              return sgxsd_status_error_code("sgxsd_enclave_get_next_quote_fail", get_next_quote_res);
+              return sgxsd_status_error_code("sgxsd_enclave_get_next_report_fail", get_next_report_res);
           }
       } else {
-          return sgxsd_status_error_code("ecall_fail", get_next_quote_ecall_res);
+          return sgxsd_status_error_code("ecall_fail", get_next_report_ecall_res);
       }
   } else {
       return sgxsd_status_error_code("init_quote_fail", init_quote_res);
   }
-}
-
-sgx_status_t sgxsd_ocall_ra_get_quote(sgx_report_t report, sgx_quote_nonce_t nonce,
-                                      const sgxsd_ra_get_quote_args_t *p_get_quote_args,
-                                      sgx_report_t *p_qe_report, sgx_quote_t *p_quote, uint32_t quote_size) {
-  return sgx_get_quote(&report, SGX_UNLINKABLE_SIGNATURE, &p_get_quote_args->spid, &nonce,
-                       p_get_quote_args->p_sig_rl, p_get_quote_args->sig_rl_size,
-                       p_qe_report, p_quote, quote_size);
 }

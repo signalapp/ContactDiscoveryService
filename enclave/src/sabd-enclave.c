@@ -30,6 +30,7 @@
 #include "sabd_enclave_t.h"
 
 #include "sgx_trts.h"
+#include "sgx_lfence.h"
 
 #if UNIT_TESTING
 #include <stdarg.h>
@@ -272,6 +273,15 @@ sgx_status_t sabd_lookup_hash(const jid_t *in_jids, size_t in_jid_count,
     in_ab_jids_result[ab_jid_idx] = !!ab_jid_result;
   }
 
+  // write new dummy values to temporary tables (to force erasure of sensitive data)
+  for (hash_slot_idx_t hash_slot_idx = 0; likely(hash_slot_idx < hash_table_slot_count); hash_slot_idx++) {
+    in_hashed_ab_jids_result_bits[hash_slot_idx] = 0x8000;
+    volatile __m256i *chain_blocks = (__m256i *) &hashed_ab_jids[hash_slot_idx * chain_length];
+    chain_blocks[0] = _mm256_setzero_si256();
+    chain_blocks[1] = _mm256_setzero_si256();
+    chain_blocks[2] = _mm256_setzero_si256();
+  }
+
   free((void *) in_hashed_ab_jids_result_bits);
   free(hashed_ab_jids);
   return SGX_SUCCESS;
@@ -330,6 +340,7 @@ sgx_status_t sgxsd_enclave_server_handle_call(const sabd_call_args_t *p_args,
       msg.size / 8 != p_args->ab_jid_count) {
     return SGX_ERROR_INVALID_PARAMETER;
   }
+  sgx_lfence();
 
   sabd_msg_t *p_sabd_msg = malloc(sizeof(sabd_msg_t));
   if (p_sabd_msg == NULL) {
@@ -344,31 +355,42 @@ sgx_status_t sgxsd_enclave_server_handle_call(const sabd_call_args_t *p_args,
   memcpy(&p_state->ab_jids[p_state->ab_jid_count], msg.data, msg.size);
   p_state->ab_jid_count += p_sabd_msg->ab_jid_count;
 
+  memset_s(&from, sizeof(from), 0, sizeof(from));
+
   return SGX_SUCCESS;
 }
 sgx_status_t sgxsd_enclave_server_terminate(const sabd_stop_args_t *p_args, sabd_state_t *p_state) {
   if (p_state == NULL) {
     return SGX_ERROR_INVALID_STATE;
   }
-  if (p_args == NULL) {
-    free(p_state);
-    return SGX_ERROR_INVALID_PARAMETER;
-  }
 
-  // make sure in_jids is outside of the enclave
-  size_t in_jids_size = p_args->in_jid_count * sizeof(p_args->in_jids[0]);
-  if (p_args->in_jid_count > SIZE_MAX / sizeof(p_args->in_jids[0]) ||
-      sgx_is_outside_enclave(p_args->in_jids, in_jids_size) != 1) {
-    free(p_state);
-    return SGX_ERROR_INVALID_PARAMETER;
+  sgx_status_t validate_args_res = SGX_ERROR_INVALID_PARAMETER;
+  size_t validated_in_jid_count = 0;
+  if (p_args == NULL) {
+    validate_args_res = SGX_ERROR_INVALID_PARAMETER;
+  } else {
+    // make sure in_jids is outside of the enclave
+    size_t in_jids_size = p_args->in_jid_count * sizeof(p_args->in_jids[0]);
+    if (p_args->in_jid_count > SIZE_MAX / sizeof(p_args->in_jids[0]) ||
+        sgx_is_outside_enclave(p_args->in_jids, in_jids_size) != 1) {
+      validate_args_res = SGX_ERROR_INVALID_PARAMETER;
+    } else {
+      validated_in_jid_count = in_jids_size / sizeof(p_args->in_jids[0]);
+      validate_args_res = SGX_SUCCESS;
+    }
   }
-  size_t validated_in_jid_count = in_jids_size / sizeof(p_args->in_jids[0]);
 
   sgx_status_t lookup_res;
   sgx_status_t replies_res = SGX_SUCCESS;
   if (p_state->ab_jid_count != 0) {
     uint8_t *in_ab_jids_result = malloc(p_state->ab_jid_count);
-    if (in_ab_jids_result != NULL) {
+    if (validate_args_res != SGX_SUCCESS) {
+      // failed to validate lookup args
+      lookup_res = validate_args_res;
+    } else if (in_ab_jids_result != NULL) {
+      // prevent speculative execution in case in_jids lies inside enclave
+      sgx_lfence();
+
       lookup_res = sabd_lookup_hash(p_args->in_jids, validated_in_jid_count,
                                     p_state->ab_jids, p_state->ab_jid_count,
                                     in_ab_jids_result);
@@ -384,6 +406,7 @@ sgx_status_t sgxsd_enclave_server_terminate(const sabd_stop_args_t *p_args, sabd
           .data = &in_ab_jids_result[ab_jid_idx],
           .size = p_msg->ab_jid_count,
         };
+        // sgxsd_enclave_server_reply overwrites reply_buf.data
         sgx_status_t reply_res = sgxsd_enclave_server_reply(reply_buf, p_msg->from);
         if (replies_res == SGX_SUCCESS) {
           replies_res = reply_res;
@@ -391,17 +414,23 @@ sgx_status_t sgxsd_enclave_server_terminate(const sabd_stop_args_t *p_args, sabd
       }
 
       sabd_msg_t *p_prev_msg = p_msg->prev;
+      memset_s(p_msg, sizeof(*p_msg), 0, sizeof(*p_msg));
       free(p_msg);
       p_msg = p_prev_msg;
     }
 
     free(in_ab_jids_result);
   } else {
-    lookup_res = SGX_SUCCESS;
+    lookup_res = validate_args_res;
   }
 
+  size_t state_size = sizeof(sabd_state_t) + sizeof(jid_t) * p_state->max_ab_jids;
+  memset_s(p_state, state_size, 0, state_size);
   free(p_state);
   if (lookup_res == SGX_SUCCESS) {
+    if (replies_res == SGX_ERROR_INVALID_PARAMETER) {
+      return SGX_ERROR_UNEXPECTED;
+    }
     return replies_res;
   } else {
     return lookup_res;

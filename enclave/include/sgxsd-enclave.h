@@ -61,6 +61,22 @@ sgx_status_t sgxsd_enclave_server_terminate(const sgxsd_server_terminate_args_t 
 sgx_status_t sgxsd_enclave_server_reply(sgxsd_msg_buf_t reply_buf, sgxsd_msg_from_t from);
 
 //
+// public utility apis
+//
+
+sgx_status_t sgxsd_aes_gcm_encrypt(const sgxsd_aes_gcm_key_t *p_key,
+				   const void *p_src, uint32_t src_len, void *p_dst,
+				   const sgxsd_aes_gcm_iv_t *p_iv,
+                                   const void *p_aad, uint32_t aad_len,
+                                   sgxsd_aes_gcm_mac_t *p_out_mac);
+
+sgx_status_t sgxsd_aes_gcm_decrypt(const sgxsd_aes_gcm_key_t *p_key,
+				   const void *p_src, uint32_t src_len, void *p_dst,
+				   const sgxsd_aes_gcm_iv_t *p_iv,
+                                   const void *p_aad, uint32_t aad_len,
+                                   const sgxsd_aes_gcm_mac_t *p_in_mac);
+
+//
 // internal definitions
 //
 

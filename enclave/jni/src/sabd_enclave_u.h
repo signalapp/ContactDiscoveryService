@@ -27,11 +27,11 @@
 #include <string.h>
 #include "sgx_edger8r.h" /* for sgx_satus_t etc. */
 
+#include "sabd.h"
 #include "stdbool.h"
 #include "sgx_quote.h"
 #include "sgx_report.h"
 #include "sgxsd.h"
-#include "sabd.h"
 
 #include <stdlib.h> /* for size_t */
 
@@ -42,10 +42,9 @@ extern "C" {
 #endif
 
 sgx_status_t SGX_UBRIDGE(SGX_NOCONVENTION, sgxsd_ocall_reply, (const sgxsd_msg_header_t* reply_header, const uint8_t* reply_data, size_t reply_data_size, sgxsd_msg_tag_t msg_tag));
-sgx_status_t SGX_UBRIDGE(SGX_NOCONVENTION, sgxsd_ocall_ra_get_quote, (sgx_report_t report, sgx_quote_nonce_t nonce, const sgxsd_ra_get_quote_args_t* p_get_quote_args, sgx_report_t* p_qe_report, sgx_quote_t* p_quote, uint32_t quote_size));
 
 sgx_status_t sgxsd_enclave_node_init(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_node_init_args_t* p_args);
-sgx_status_t sgxsd_enclave_get_next_quote(sgx_enclave_id_t eid, sgx_status_t* retval, sgx_target_info_t qe_target_info, const sgxsd_ra_get_quote_args_t* p_get_quote_args, sgx_quote_t* p_quote, uint32_t quote_size);
+sgx_status_t sgxsd_enclave_get_next_report(sgx_enclave_id_t eid, sgx_status_t* retval, sgx_target_info_t qe_target_info, sgx_report_t* p_report);
 sgx_status_t sgxsd_enclave_set_current_quote(sgx_enclave_id_t eid, sgx_status_t* retval);
 sgx_status_t sgxsd_enclave_negotiate_request(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_request_negotiation_request_t* p_request, sgxsd_request_negotiation_response_t* p_response);
 sgx_status_t sgxsd_enclave_server_start(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_init_args_t* p_args, sgxsd_server_state_handle_t state_handle);

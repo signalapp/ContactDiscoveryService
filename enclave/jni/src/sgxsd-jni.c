@@ -226,7 +226,7 @@ sgxsd_status_t sgxsd_jni_start_callback_v(sgxsd_enclave_t enclave, va_list args)
 //
 
 typedef struct sgxsd_jni_msg_tag {
-    jweak j_callback_ref;
+    jobject j_callback_ref;
     jmethodID j_callback_method_id;
 } sgxsd_jni_msg_tag_t;
 
@@ -243,11 +243,12 @@ sgx_status_t sgxsd_ocall_reply(const sgxsd_msg_header_t *p_reply_header,
     jbyteArray j_reply_mac = sgxsd_jni_to_byte_array(env, p_reply_header->mac.data, sizeof(p_reply_header->mac.data));
 
     jobject j_callback_obj = (*env)->NewLocalRef(env, jni_msg_tag.j_callback_ref);
-    (*env)->DeleteWeakGlobalRef(env, jni_msg_tag.j_callback_ref);
+    (*env)->DeleteGlobalRef(env, jni_msg_tag.j_callback_ref);
     if (j_callback_obj != NULL) {
         // do the null/error checking and throwing an exception in the java callback
         (*env)->CallVoidMethod(env, j_callback_obj, jni_msg_tag.j_callback_method_id,
                                j_reply_data, j_reply_iv, j_reply_mac);
+        (*env)->DeleteLocalRef(env, j_callback_obj);
     }
     return SGX_SUCCESS;
 }
@@ -471,10 +472,18 @@ void sgxsd_jni_server_call(JNIEnv *env, sgx_enclave_id_t enclave_id, sgxsd_serve
                            const uint8_t *msg_data, size_t msg_size,
                            sgxsd_aes_gcm_iv_t msg_iv, sgxsd_aes_gcm_mac_t msg_mac,
                            sgxsd_pending_request_id_t pending_request_id,
-                           sgxsd_jni_msg_tag_t jni_msg_tag) {
-    sgxsd_jni_msg_tag_t *p_jni_msg_tag = malloc(sizeof(jni_msg_tag));
+                           jobject j_callback_obj,
+                           jmethodID j_callback_method_id) {
+    sgxsd_jni_msg_tag_t *p_jni_msg_tag = malloc(sizeof(sgxsd_jni_msg_tag_t));
     if (p_jni_msg_tag != NULL) {
-        *p_jni_msg_tag = jni_msg_tag;
+        jobject j_callback_ref = (*env)->NewGlobalRef(env, j_callback_obj);
+        (*env)->DeleteLocalRef(env, j_callback_obj);
+
+        *p_jni_msg_tag = (sgxsd_jni_msg_tag_t) {
+            .j_callback_ref = j_callback_ref,
+            .j_callback_method_id = j_callback_method_id,
+        };
+
         sgxsd_msg_tag_t msg_tag = { .p_tag = p_jni_msg_tag };
         sgxsd_msg_header_t msg_header = {
           .iv = msg_iv,
@@ -490,11 +499,13 @@ void sgxsd_jni_server_call(JNIEnv *env, sgx_enclave_id_t enclave_id, sgxsd_serve
             if (call_res == SGX_SUCCESS) {
                 return;
             } else {
+                (*env)->DeleteGlobalRef(env, p_jni_msg_tag->j_callback_ref);
                 free(p_jni_msg_tag);
                 sgxsd_jni_throw_sgxsd_exception(env, "server_call_fail", call_res);
                 return;
             }
         } else {
+            (*env)->DeleteGlobalRef(env, p_jni_msg_tag->j_callback_ref);
             free(p_jni_msg_tag);
             sgxsd_jni_throw_sgxsd_exception(env, "ecall_fail", call_ecall_res);
             return;
@@ -536,7 +547,7 @@ JNIEXPORT void JNICALL SGXSD_JNI_CLASS_METHOD(nativeServerCall)
     (*env)->DeleteLocalRef(env, j_msg_mac);
 
     sgxsd_pending_request_id_t pending_request_id;
-    (*env)->GetByteArrayRegion(env, j_pending_request_id, 0, sizeof(pending_request_id.data), (void *) &pending_request_id.data);
+    (*env)->GetByteArrayRegion(env, j_pending_request_id, 0, sizeof(pending_request_id), (void *) &pending_request_id);
     (*env)->DeleteLocalRef(env, j_pending_request_id);
 
     jmethodID j_callback_method_id;
@@ -548,19 +559,11 @@ JNIEXPORT void JNICALL SGXSD_JNI_CLASS_METHOD(nativeServerCall)
     j_callback_method_id = (*env)->GetMethodID(env, j_callback_class, "receiveServerReply", "([B[B[B)V");
     (*env)->DeleteLocalRef(env, j_callback_class);
 
-    jweak j_callback_ref = (*env)->NewWeakGlobalRef(env, j_callback_obj);
-    (*env)->DeleteLocalRef(env, j_callback_obj);
-
-    sgxsd_jni_msg_tag_t jni_msg_tag = {
-        .j_callback_ref = j_callback_ref,
-        .j_callback_method_id = j_callback_method_id,
-    };
-
     if ((*env)->ExceptionCheck(env) != JNI_TRUE) {
         size_t msg_size;
         uint8_t *msg_data = sgxsd_jni_copy_byte_array(env, j_msg_data, &msg_size);
         if (msg_data != NULL) {
-          sgxsd_jni_server_call(env, enclave_id, server_state, &sabd_call_args, sizeof(sabd_call_args), msg_data, msg_size, msg_iv, msg_mac, pending_request_id, jni_msg_tag);
+          sgxsd_jni_server_call(env, enclave_id, server_state, &sabd_call_args, sizeof(sabd_call_args), msg_data, msg_size, msg_iv, msg_mac, pending_request_id, j_callback_obj, j_callback_method_id);
           free(msg_data);
           return;
         } else {

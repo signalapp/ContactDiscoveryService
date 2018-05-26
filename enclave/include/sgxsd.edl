@@ -1,0 +1,36 @@
+enclave {
+    include "stdbool.h"
+    include "sgx_quote.h"
+    include "sgx_report.h"
+    include "sgxsd.h"
+
+    trusted {
+        public sgx_status_t sgxsd_enclave_node_init([in] const sgxsd_node_init_args_t *p_args);
+
+        public sgx_status_t sgxsd_enclave_get_next_report
+            (sgx_target_info_t qe_target_info, [out] sgx_report_t *p_report);
+        public sgx_status_t sgxsd_enclave_set_current_quote();
+
+        public sgx_status_t sgxsd_enclave_negotiate_request
+            ([in] const sgxsd_request_negotiation_request_t *p_request,
+             [out] sgxsd_request_negotiation_response_t *p_response);
+
+        public sgx_status_t sgxsd_enclave_server_start
+            ([in] const sgxsd_server_init_args_t *p_args,
+             sgxsd_server_state_handle_t state_handle);
+        public sgx_status_t sgxsd_enclave_server_call
+            ([in] const sgxsd_server_handle_call_args_t *p_args,
+             [in] const sgxsd_msg_header_t *msg_header,
+             [in, size=msg_size] uint8_t *msg_data, size_t msg_size,
+             sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
+        public sgx_status_t sgxsd_enclave_server_stop
+            ([in] const sgxsd_server_terminate_args_t *p_args,
+             sgxsd_server_state_handle_t state_handle);
+    };
+    untrusted {
+        sgx_status_t sgxsd_ocall_reply
+            ([in] const sgxsd_msg_header_t *reply_header,
+             [in, size=reply_data_size] const uint8_t *reply_data, size_t reply_data_size,
+             sgxsd_msg_tag_t msg_tag);
+    };
+};

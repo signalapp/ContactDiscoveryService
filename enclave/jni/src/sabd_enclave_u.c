@@ -26,13 +26,11 @@ typedef struct ms_sgxsd_enclave_node_init_t {
 	sgxsd_node_init_args_t* ms_p_args;
 } ms_sgxsd_enclave_node_init_t;
 
-typedef struct ms_sgxsd_enclave_get_next_quote_t {
+typedef struct ms_sgxsd_enclave_get_next_report_t {
 	sgx_status_t ms_retval;
 	sgx_target_info_t ms_qe_target_info;
-	sgxsd_ra_get_quote_args_t* ms_p_get_quote_args;
-	sgx_quote_t* ms_p_quote;
-	uint32_t ms_quote_size;
-} ms_sgxsd_enclave_get_next_quote_t;
+	sgx_report_t* ms_p_report;
+} ms_sgxsd_enclave_get_next_report_t;
 
 typedef struct ms_sgxsd_enclave_set_current_quote_t {
 	sgx_status_t ms_retval;
@@ -74,16 +72,6 @@ typedef struct ms_sgxsd_ocall_reply_t {
 	sgxsd_msg_tag_t ms_msg_tag;
 } ms_sgxsd_ocall_reply_t;
 
-typedef struct ms_sgxsd_ocall_ra_get_quote_t {
-	sgx_status_t ms_retval;
-	sgx_report_t ms_report;
-	sgx_quote_nonce_t ms_nonce;
-	sgxsd_ra_get_quote_args_t* ms_p_get_quote_args;
-	sgx_report_t* ms_p_qe_report;
-	sgx_quote_t* ms_p_quote;
-	uint32_t ms_quote_size;
-} ms_sgxsd_ocall_ra_get_quote_t;
-
 static sgx_status_t SGX_CDECL sabd_enclave_sgxsd_ocall_reply(void* pms)
 {
 	ms_sgxsd_ocall_reply_t* ms = SGX_CAST(ms_sgxsd_ocall_reply_t*, pms);
@@ -92,22 +80,13 @@ static sgx_status_t SGX_CDECL sabd_enclave_sgxsd_ocall_reply(void* pms)
 	return SGX_SUCCESS;
 }
 
-static sgx_status_t SGX_CDECL sabd_enclave_sgxsd_ocall_ra_get_quote(void* pms)
-{
-	ms_sgxsd_ocall_ra_get_quote_t* ms = SGX_CAST(ms_sgxsd_ocall_ra_get_quote_t*, pms);
-	ms->ms_retval = sgxsd_ocall_ra_get_quote(ms->ms_report, ms->ms_nonce, (const sgxsd_ra_get_quote_args_t*)ms->ms_p_get_quote_args, ms->ms_p_qe_report, ms->ms_p_quote, ms->ms_quote_size);
-
-	return SGX_SUCCESS;
-}
-
 static const struct {
 	size_t nr_ocall;
-	void * table[2];
+	void * table[1];
 } ocall_table_sabd_enclave = {
-	2,
+	1,
 	{
 		(void*)sabd_enclave_sgxsd_ocall_reply,
-		(void*)sabd_enclave_sgxsd_ocall_ra_get_quote,
 	}
 };
 sgx_status_t sgxsd_enclave_node_init(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_node_init_args_t* p_args)
@@ -120,14 +99,12 @@ sgx_status_t sgxsd_enclave_node_init(sgx_enclave_id_t eid, sgx_status_t* retval,
 	return status;
 }
 
-sgx_status_t sgxsd_enclave_get_next_quote(sgx_enclave_id_t eid, sgx_status_t* retval, sgx_target_info_t qe_target_info, const sgxsd_ra_get_quote_args_t* p_get_quote_args, sgx_quote_t* p_quote, uint32_t quote_size)
+sgx_status_t sgxsd_enclave_get_next_report(sgx_enclave_id_t eid, sgx_status_t* retval, sgx_target_info_t qe_target_info, sgx_report_t* p_report)
 {
 	sgx_status_t status;
-	ms_sgxsd_enclave_get_next_quote_t ms;
+	ms_sgxsd_enclave_get_next_report_t ms;
 	ms.ms_qe_target_info = qe_target_info;
-	ms.ms_p_get_quote_args = (sgxsd_ra_get_quote_args_t*)p_get_quote_args;
-	ms.ms_p_quote = p_quote;
-	ms.ms_quote_size = quote_size;
+	ms.ms_p_report = p_report;
 	status = sgx_ecall(eid, 1, &ocall_table_sabd_enclave, &ms);
 	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;

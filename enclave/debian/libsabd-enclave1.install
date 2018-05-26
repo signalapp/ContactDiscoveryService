@@ -1,1 +1,1 @@
-libsabd*-enclave.so /usr/lib/
+libsabd_enclave.unsigned.so /usr/lib/

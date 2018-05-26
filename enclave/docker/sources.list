@@ -1,3 +1,2 @@
-deb http://reproducible.alioth.debian.org/debian/ ./
 deb http://httpredir.debian.org/debian/ stretch main
-deb http://snapshot.debian.org/archive/debian/20170613T035431Z/ unstable main
+deb http://security.debian.org/ stretch/updates main
