@@ -64,7 +64,7 @@ public class PendingRequestQueue {
 
     results.add(first);
 
-    while (!queue.isEmpty() && queue.getFirst().getRequest().getAddressCount() + resultAddressCount < maxAddressCount) {
+    while (!queue.isEmpty() && queue.getFirst().getRequest().getAddressCount() + resultAddressCount <= maxAddressCount) {
       PendingRequest request = queue.removeFirst();
       resultAddressCount    += request.getRequest().getAddressCount();
       addressCount          -= request.getRequest().getAddressCount();

@@ -61,12 +61,18 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ContactDiscoveryClient {
+
+  private static final int MAX_REQUEST_SIZE = 2048;
 
   public RemoteAttestation getRemoteAttestation(String keyStorePath, String url, String mrenclave, String authorizationHeader)
       throws UnauthenticatedQuoteException, SignatureException, KeyStoreException, Quote.InvalidQuoteFormatException, UnauthenticatedResponseException
@@ -98,10 +104,9 @@ public class ContactDiscoveryClient {
     }
   }
 
-  public List<String> getRegisteredUsers(String contactsPath, RemoteAttestation remoteAttestation, String url, String mrenclave, String authorizationHeader)
+  public Stream<String> getRegisteredUsers(List<String> addressBook, RemoteAttestation remoteAttestation, String url, String mrenclave, String authorizationHeader)
       throws IOException
   {
-    List<String>      addressBook = loadAddressBook(contactsPath);
     DiscoveryRequest  request     = createDiscoveryRequest(addressBook, remoteAttestation);
 
     DiscoveryResponse response    = ClientBuilder.newClient()
@@ -115,8 +120,7 @@ public class ContactDiscoveryClient {
 
     return StreamUtils.zip(addressBook.stream(), responseData.stream(), ImmutablePair::new)
                       .filter(pair -> pair.getRight() != 0)
-                      .map(Pair::getLeft)
-                      .collect(Collectors.toList());
+                      .map(Pair::getLeft);
   }
 
   public void setRegisteredUser(String url, String authorizationHeader, String user) {
@@ -207,7 +211,7 @@ public class ContactDiscoveryClient {
     }
   }
 
-  private List<String> loadAddressBook(String path) throws IOException {
+  private static List<String> loadAddressBook(String path) throws IOException {
     List<String>   results = new LinkedList<>();
     BufferedReader reader  = new BufferedReader(new FileReader(new File(path)));
 
@@ -289,8 +293,10 @@ public class ContactDiscoveryClient {
     options.addOption("s", true, "Address to set as registered");
     options.addOption("d", true, "Address to delete from registered");
     options.addOption("a", true, "File containing addresses to lookup");
+    options.addOption("S", true, String.format("Size of discovery requests, in addresses (%d default)", MAX_REQUEST_SIZE));
     options.addOption("m", true, "MRENCLAVE value");
     options.addOption("t", true, "Path to trust store");
+    options.addOption("T", true, "Number of threads used for sending discovery requests");
 
     CommandLineParser parser      = new DefaultParser();
     CommandLine       commandLine = parser.parse(options, argv);
@@ -323,25 +329,44 @@ public class ContactDiscoveryClient {
   }
 
   private static void handleDiscoverCommand(CommandLine commandLine) throws Throwable {
-    String                 authorizationHeader = "Basic " + Base64.encodeBase64String((commandLine.getOptionValue("u") + ":" + commandLine.getOptionValue("p")).getBytes());
-    ContactDiscoveryClient client              = new ContactDiscoveryClient();
+    String       authorizationHeader = "Basic " + Base64.encodeBase64String((commandLine.getOptionValue("u") + ":" + commandLine.getOptionValue("p")).getBytes());
+    List<String> addressBook         = loadAddressBook(commandLine.getOptionValue("a"));
+    String       keyStorePath        = commandLine.getOptionValue("t");
+    String       url                 = commandLine.getOptionValue("h");
+    String       mrenclave           = commandLine.getOptionValue("m");
+    int          threadCount         = Integer.parseInt(commandLine.getOptionValue("T", "1"));
+    int          maxRequestSize      = Integer.parseInt(commandLine.getOptionValue("S", String.valueOf(MAX_REQUEST_SIZE)));
+    ForkJoinPool attestationPool     = new ForkJoinPool(threadCount);
+    ForkJoinPool requestPool         = new ForkJoinPool(threadCount);
 
-    RemoteAttestation      remoteAttestation = client.getRemoteAttestation(commandLine.getOptionValue("t"),
-                                                                           commandLine.getOptionValue("h"),
-                                                                           commandLine.getOptionValue("m"),
-                                                                           authorizationHeader);
-
-    System.out.println("Successfully retrieved remote attestation: " + remoteAttestation);
-
-
-    List<String> registeredUsers = client.getRegisteredUsers(commandLine.getOptionValue("a"),
-                                                             remoteAttestation,
-                                                             commandLine.getOptionValue("h"),
-                                                             commandLine.getOptionValue("m"),
-                                                             authorizationHeader);
+    List<CompletableFuture<Stream<String>>> futures = new ArrayList<>();
+    for (int addressBookIdx = 0; addressBookIdx < addressBook.size(); addressBookIdx += maxRequestSize) {
+      ContactDiscoveryClient client            = new ContactDiscoveryClient();
+      int                    addressBookEndIdx = Math.min(addressBookIdx + maxRequestSize, addressBook.size());
+      List<String>           addressBookChunk  = addressBook.subList(addressBookIdx, addressBookEndIdx);
+      CompletableFuture<Stream<String>> future =
+        CompletableFuture
+        .supplyAsync(() -> {
+            try {
+              return client.getRemoteAttestation(keyStorePath, url, mrenclave, authorizationHeader);
+            } catch (Exception ex) {
+              throw new CompletionException(ex);
+            }
+          }, attestationPool)
+        .thenApplyAsync(remoteAttestation -> {
+            try {
+              return client.getRegisteredUsers(addressBookChunk, remoteAttestation, url, mrenclave, authorizationHeader);
+            } catch (Exception ex) {
+              throw new CompletionException(ex);
+            }
+          }, requestPool);
+      futures.add(future);
+    }
 
     System.out.println("Registered users:");
-    registeredUsers.forEach(System.out::println);
+    futures.stream()
+           .flatMap(future -> future.join())
+           .forEach(System.out::println);
   }
 
   private static void handleRegisterCommand(CommandLine commandLine) throws Throwable {
