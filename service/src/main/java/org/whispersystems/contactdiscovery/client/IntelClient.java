@@ -62,10 +62,11 @@ public class IntelClient {
 
   private final Logger logger = LoggerFactory.getLogger(IntelClient.class);
 
-  private final Client client;
-  private final String host;
+  private final Client  client;
+  private final String  host;
+  private final boolean acceptGroupOutOfDate;
 
-  public IntelClient(String host, String clientCertificate, String clientKey)
+  public IntelClient(String host, String clientCertificate, String clientKey, boolean acceptGroupOutOfDate)
       throws CertificateException, KeyStoreException, IOException
   {
     byte[]     synthesizedKeyStore = initializeKeyStore(clientCertificate, clientKey);
@@ -80,6 +81,8 @@ public class IntelClient {
     this.client = ClientBuilder.newBuilder()
                                .sslContext(sslContext)
                                .build();
+
+    this.acceptGroupOutOfDate = acceptGroupOutOfDate;
   }
 
   public byte[] getSignatureRevocationList(long gid) {
@@ -121,14 +124,15 @@ public class IntelClient {
         throw new StaleRevocationListException(responseBodyString);
       }
 
-      if ("GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus())) {
+      if ("GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus()) && !acceptGroupOutOfDate) {
         throw new GroupOutOfDateException(responseBody.getPlatformInfoBlob(), false);
       }
       if ("GROUP_REVOKED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new GroupOutOfDateException(responseBody.getPlatformInfoBlob(), true);
       }
 
-      if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus())) {
+      if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus()) &&
+          !"GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new QuoteVerificationException("Bad response: " + responseBodyString);
       }
 

@@ -3,6 +3,7 @@ enclave:
   certificate: # Service Provider Certificate
   key:         # Service Provider Key
   iasHost:     # IAS Host to talk to (testing or production)
+  acceptGroupOutOfDate: # Whether to serve IAS responses with GROUP_OUT_OF_DATE instead of OK [true|false]
   instances:
    - mrenclave: # mrenclave value 1
      debug:     # Whether this is a debug or production enclave [true|false]

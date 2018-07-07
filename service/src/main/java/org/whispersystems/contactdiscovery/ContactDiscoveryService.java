@@ -30,6 +30,7 @@ import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.SignedQuoteUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
@@ -81,7 +82,8 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
 
     IntelClient intelClient = new IntelClient(configuration.getEnclaveConfiguration().getIasHost(),
                                               configuration.getEnclaveConfiguration().getCertificate(),
-                                              configuration.getEnclaveConfiguration().getKey());
+                                              configuration.getEnclaveConfiguration().getKey(),
+                                              configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration().getUrl());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
@@ -119,6 +121,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
 
     environment.jersey().register(new NoSuchEnclaveExceptionMapper());
     environment.jersey().register(new RateLimitExceededExceptionMapper());
+    environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
   }
 
 }

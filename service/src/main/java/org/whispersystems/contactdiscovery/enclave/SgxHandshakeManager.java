@@ -78,10 +78,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
           }
 
           try {
-            byte[] platformInfoBlob = signature.getPlatformInfoBlob();
-            if (platformInfoBlob != null) {
-              SgxEnclave.reportPlatformAttestationStatus(platformInfoBlob, true);
-            }
+            reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
           } catch (IntelClient.QuoteVerificationException | SgxException e) {
             logger.warn("Problems decoding platform info blob", e);
           }
@@ -94,17 +91,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
           try {
             byte[] platformInfoBlob = e.getPlatformInfoBlob();
             if (platformInfoBlob != null) {
-              Set<SgxNeedsUpdateFlag> needsUpdateFlags =
-                SgxEnclave.reportPlatformAttestationStatus(platformInfoBlob, false);
-              if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.UCODE_UPDATE)) {
-                logger.warn("Platform CPU microcode needs update: "+e.getMessage());
-              }
-              if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.CSME_FW_UPDATE)) {
-                logger.warn("Platform CSME FW needs update: "+e.getMessage());
-              }
-              if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.PSW_UPDATE)) {
-                logger.warn("SGX Platform Software (PSW) needs update: "+e.getMessage());
-              }
+              reportPlatformAttestationStatus(platformInfoBlob, false);
             } else {
               logger.warn("Platform needs update: "+e.getMessage()+", but didn't get platform info blob from IAS");
             }
@@ -123,9 +110,26 @@ public class SgxHandshakeManager implements Managed, Runnable {
       }
     }
   }
+  private void reportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccess)
+    throws SgxException {
+    if (platformInfoBlob == null) {
+      return;
+    }
+    Set<SgxNeedsUpdateFlag> needsUpdateFlags =
+      SgxEnclave.reportPlatformAttestationStatus(platformInfoBlob, attestationSuccess);
+    if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.UCODE_UPDATE)) {
+      logger.warn("Platform CPU microcode needs update");
+    }
+    if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.CSME_FW_UPDATE)) {
+      logger.warn("Platform CSME FW needs update");
+    }
+    if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.PSW_UPDATE)) {
+      logger.warn("SGX Platform Software (PSW) needs update");
+    }
+  }
 
   public RemoteAttestationResponse getHandshake(String enclaveId, byte[] clientPublic)
-    throws SgxException, NoSuchEnclaveException {
+    throws SgxException, NoSuchEnclaveException, SignedQuoteUnavailableException {
     SgxEnclave enclave = sgxEnclaveManager.getEnclave(enclaveId);
 
     SgxSignedQuote                signedQuote;
@@ -133,6 +137,9 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
     synchronized (quotes) {
       signedQuote = quotes.get(enclaveId);
+      if (signedQuote == null) {
+        throw new SignedQuoteUnavailableException("No IAS Signed Quote available");
+      }
       response    = enclave.negotiateRequest(clientPublic);
     }
 

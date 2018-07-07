@@ -205,7 +205,9 @@ public class ContactDiscoveryClient {
         throw new SignatureException("Signed quote is not the same as RA quote: " + Hex.encodeHexString(signatureBodyEntity.getIsvEnclaveQuoteBody()) + " vs " + Hex.encodeHexString(quote.getQuoteBytes()));
       }
 
-      if (!"OK".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus())) {
+      if (!"OK".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus()) &&
+          // Remove in production
+          !"GROUP_OUT_OF_DATE".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus())) {
         throw new SignatureException("Quote status is: " + signatureBodyEntity.getIsvEnclaveQuoteStatus());
       }
 

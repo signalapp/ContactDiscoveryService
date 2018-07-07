@@ -22,6 +22,7 @@ import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
+import org.whispersystems.contactdiscovery.enclave.SignedQuoteUnavailableException;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
@@ -64,7 +65,7 @@ public class RemoteAttestationResource {
   public RemoteAttestationResponse getAttestationHandshake(@Auth User user,
                                                            @PathParam("enclaveId") String enclaveId,
                                                            @Valid RemoteAttestationRequest request)
-      throws NoSuchEnclaveException, SgxException, RateLimitExceededException
+      throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
     return sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());

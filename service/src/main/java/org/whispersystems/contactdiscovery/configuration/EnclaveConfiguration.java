@@ -54,6 +54,9 @@ public class EnclaveConfiguration {
   private int targetBatchSize = 4096;
 
   @JsonProperty
+  private boolean acceptGroupOutOfDate = false;
+
+  @JsonProperty
   @NotEmpty
   @Valid
   private List<EnclaveInstanceConfiguration> instances;
@@ -84,6 +87,10 @@ public class EnclaveConfiguration {
 
   public String getKey() {
     return key;
+  }
+
+  public boolean getAcceptGroupOutOfDate() {
+    return acceptGroupOutOfDate;
   }
 
   public void setCertificate(String certificate) {
