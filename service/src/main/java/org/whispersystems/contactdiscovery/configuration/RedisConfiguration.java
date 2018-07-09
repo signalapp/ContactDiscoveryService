@@ -20,6 +20,9 @@ package org.whispersystems.contactdiscovery.configuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hibernate.validator.constraints.NotEmpty;
 
+import javax.validation.Valid;
+import java.util.List;
+
 /**
  * Configuration for service redis instance
  *
@@ -29,9 +32,18 @@ public class RedisConfiguration {
 
   @JsonProperty
   @NotEmpty
-  private String url;
+  private String masterName;
 
-  public String getUrl() {
-    return url;
+  @JsonProperty
+  @NotEmpty
+  @Valid
+  private List<String> sentinelUrls;
+
+  public String getMasterName() {
+    return masterName;
+  }
+
+  public List<String> getSentinelUrls() {
+    return sentinelUrls;
   }
 }

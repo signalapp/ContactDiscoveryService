@@ -38,8 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.dropwizard.lifecycle.Managed;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.ScanResult;
+import redis.clients.util.Pool;
 
 /**
  * Manages the system directory of all registered users
@@ -58,7 +58,7 @@ public class DirectoryManager implements Managed {
   private final RedisClientFactory redisFactory;
   private final DirectoryHashSet   directory;
 
-  private JedisPool        jedisPool;
+  private Pool<Jedis>      jedisPool;
   private PubSubConnection pubSubConnection;
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;

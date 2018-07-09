@@ -30,20 +30,20 @@ import java.io.IOException;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import redis.clients.util.Pool;
 
 public class RateLimiter {
 
   private final Logger       logger = LoggerFactory.getLogger(RateLimiter.class);
   private final ObjectMapper mapper = SystemMapper.getMapper();
 
-  private final Meter     meter;
-  private final JedisPool cacheClient;
-  private final String    name;
-  private final int       bucketSize;
-  private final double    leakRatePerMillis;
+  private final Meter       meter;
+  private final Pool<Jedis> cacheClient;
+  private final String      name;
+  private final int         bucketSize;
+  private final double      leakRatePerMillis;
 
-  public RateLimiter(JedisPool cacheClient, String name,
+  public RateLimiter(Pool<Jedis> cacheClient, String name,
                      int bucketSize, double leakRatePerMinute)
   {
     MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);

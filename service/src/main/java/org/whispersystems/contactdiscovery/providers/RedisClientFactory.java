@@ -18,6 +18,7 @@ package org.whispersystems.contactdiscovery.providers;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.configuration.RedisConfiguration;
 import org.whispersystems.dispatch.io.RedisPubSubConnectionFactory;
 import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.util.Util;
@@ -26,32 +27,34 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.JedisSentinelPool;
 import redis.clients.jedis.Protocol;
+import redis.clients.util.Pool;
 
 public class RedisClientFactory implements RedisPubSubConnectionFactory {
 
   private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
 
-  private final String    host;
-  private final int       port;
-  private final JedisPool jedisPool;
+  private final JedisSentinelPool jedisPool;
 
-  public RedisClientFactory(String url) throws URISyntaxException {
+  public RedisClientFactory(RedisConfiguration redisConfig) throws URISyntaxException {
     JedisPoolConfig poolConfig = new JedisPoolConfig();
     poolConfig.setTestOnBorrow(true);
 
-    URI redisURI = new URI(url);
+    String      masterName = redisConfig.getMasterName();
+    Set<String> sentinels  = new LinkedHashSet(redisConfig.getSentinelUrls());
 
-    this.host      = redisURI.getHost();
-    this.port      = redisURI.getPort();
-    this.jedisPool = new JedisPool(poolConfig, host, port,
-                                   Protocol.DEFAULT_TIMEOUT, null);
+    this.jedisPool = new JedisSentinelPool(masterName, sentinels, poolConfig,
+                                           Protocol.DEFAULT_TIMEOUT, null);
   }
 
-  public JedisPool getRedisClientPool() {
+  public Pool<Jedis> getRedisClientPool() {
     return jedisPool;
   }
 
@@ -59,7 +62,8 @@ public class RedisClientFactory implements RedisPubSubConnectionFactory {
   public PubSubConnection connect() {
     while (true) {
       try {
-        Socket socket = new Socket(host, port);
+        HostAndPort hostAndPort = jedisPool.getCurrentHostMaster();
+        Socket socket = new Socket(hostAndPort.getHost(), hostAndPort.getPort());
         return new PubSubConnection(socket);
       } catch (IOException e) {
         logger.warn("Error connecting", e);

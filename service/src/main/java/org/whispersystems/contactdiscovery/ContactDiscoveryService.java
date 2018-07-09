@@ -85,7 +85,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
-    RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration().getUrl());
+    RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
