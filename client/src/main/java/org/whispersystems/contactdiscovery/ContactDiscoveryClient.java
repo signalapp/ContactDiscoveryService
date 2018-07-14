@@ -31,9 +31,13 @@ import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.Invocation;
+import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -62,12 +66,16 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ContactDiscoveryClient {
@@ -83,13 +91,23 @@ public class ContactDiscoveryClient {
       Curve25519KeyPair keyPair  = curve.generateKeyPair();
 
       RemoteAttestationRequest  request  = new RemoteAttestationRequest(keyPair.getPublicKey());
-      RemoteAttestationResponse response = ClientBuilder.newClient()
+      Response                  rawResp  = ClientBuilder.newClient()
                                                         .target(url)
                                                         .path("/v1/attestation/" + mrenclave)
                                                         .request(MediaType.APPLICATION_JSON_TYPE)
                                                         .header("Authorization", authorizationHeader)
-                                                        .put(Entity.json(request), RemoteAttestationResponse.class);
+                                                        .put(Entity.json(request));
+      RemoteAttestationResponse response = rawResp.readEntity(RemoteAttestationResponse.class);
+      Set<Cookie>               cookies  = Optional.ofNullable(rawResp.getCookies())
+                                                   .orElse(Collections.emptyMap())
+                                                   .values()
+                                                   .stream()
+                                                   .map(NewCookie::toCookie)
+                                                   .collect(Collectors.toSet());
 
+      if (rawResp.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL) {
+        throw new WebApplicationException(rawResp);
+      }
 
       RemoteAttestationKeys keys      = new RemoteAttestationKeys(keyPair, response.getServerEphemeralPublic(), response.getServerStaticPublic());
       Quote                 quote     = new Quote(response.getQuote());
@@ -98,7 +116,7 @@ public class ContactDiscoveryClient {
       verifyServerQuote(quote, response.getServerStaticPublic(), mrenclave);
       verifyIasSignature(keyStore, response.getCertificates(), response.getSignatureBody(), response.getSignature(), quote);
 
-      return new RemoteAttestation(requestId, keys);
+      return new RemoteAttestation(requestId, keys, cookies);
     } catch (BadPaddingException e) {
       throw new UnauthenticatedResponseException(e);
     }
@@ -107,14 +125,19 @@ public class ContactDiscoveryClient {
   public Stream<String> getRegisteredUsers(List<String> addressBook, RemoteAttestation remoteAttestation, String url, String mrenclave, String authorizationHeader)
       throws IOException
   {
-    DiscoveryRequest  request     = createDiscoveryRequest(addressBook, remoteAttestation);
+    DiscoveryRequest   request    = createDiscoveryRequest(addressBook, remoteAttestation);
 
-    DiscoveryResponse response    = ClientBuilder.newClient()
+    Invocation.Builder reqBuilder = ClientBuilder.newClient()
                                                  .target(url)
                                                  .path("/v1/discovery/" + mrenclave)
                                                  .request(MediaType.APPLICATION_JSON_TYPE)
-                                                 .header("Authorization", authorizationHeader)
-                                                 .put(Entity.json(request), DiscoveryResponse.class);
+                                                 .header("Authorization", authorizationHeader);
+
+    remoteAttestation.getCookies()
+                     .stream()
+                     .forEach(cookie -> reqBuilder.cookie(cookie));
+
+    DiscoveryResponse response = reqBuilder.put(Entity.json(request), DiscoveryResponse.class);
 
     List<Byte> responseData = Arrays.asList(ArrayUtils.toObject(getDiscoveryResponseData(response, remoteAttestation)));
 
