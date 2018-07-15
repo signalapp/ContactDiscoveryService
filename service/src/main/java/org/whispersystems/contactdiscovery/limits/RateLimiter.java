@@ -62,7 +62,7 @@ public class RateLimiter {
       setBucket(key, bucket);
     } else {
       meter.mark();
-      throw new RateLimitExceededException(key + " , " + amount);
+      throw new RateLimitExceededException(key + " , " + amount, (long) (amount / leakRatePerMillis));
     }
   }
 

@@ -28,7 +28,9 @@ import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.mappers.AEADBadTagExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.SignedQuoteUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
@@ -122,6 +124,8 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new NoSuchEnclaveExceptionMapper());
     environment.jersey().register(new RateLimitExceededExceptionMapper());
     environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
+    environment.jersey().register(new NoSuchPendingRequestExceptionMapper());
+    environment.jersey().register(new AEADBadTagExceptionMapper());
   }
 
 }

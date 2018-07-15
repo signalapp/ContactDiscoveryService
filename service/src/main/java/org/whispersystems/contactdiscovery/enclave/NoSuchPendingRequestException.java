@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2017 Open Whisper Systems
+/**
+ * Copyright (C) 2018 Open Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -14,16 +14,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.whispersystems.contactdiscovery.limits;
+package org.whispersystems.contactdiscovery.enclave;
 
-public class RateLimitExceededException extends Exception {
-  private final long retryAfter;
-  public RateLimitExceededException(String s, long retryAfter) {
-    super(s);
-    this.retryAfter = retryAfter;
-  }
-
-  public long getRetryAfter() {
-    return retryAfter;
+public class NoSuchPendingRequestException extends Exception {
+  public NoSuchPendingRequestException() {
   }
 }

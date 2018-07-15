@@ -66,7 +66,7 @@ public class ContactDiscoveryResourceTest {
     when(requestManager.submit(eq(validEnclaveId), any())).thenReturn(responseFuture);
     when(requestManager.submit(eq(invalidEnclaveId), any())).thenReturn(exceptionFuture);
 
-    doThrow(new RateLimitExceededException("too many")).when(rateLimiter).validate(eq(AuthHelper.VALID_NUMBER_TWO), eq(2047));
+    doThrow(new RateLimitExceededException("too many", 100)).when(rateLimiter).validate(eq(AuthHelper.VALID_NUMBER_TWO), eq(2047));
   }
 
 
@@ -117,7 +117,7 @@ public class ContactDiscoveryResourceTest {
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER_TWO, AuthHelper.VALID_TOKEN))
                                  .put(Entity.entity(new DiscoveryRequest(2047, new byte[32], new byte[12], new byte[512], new byte[16]), MediaType.APPLICATION_JSON_TYPE));
 
-    assertEquals(413, response.getStatus());
+    assertEquals(429, response.getStatus());
   }
 
 

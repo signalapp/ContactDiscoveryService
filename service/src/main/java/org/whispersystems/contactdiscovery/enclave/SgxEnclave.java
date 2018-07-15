@@ -20,7 +20,9 @@ package org.whispersystems.contactdiscovery.enclave;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.AEADBadTagException;
 import java.nio.ByteBuffer;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CompletableFuture;
 import java.util.EnumSet;
 import java.util.Set;
@@ -149,6 +151,8 @@ public class SgxEnclave implements Runnable {
   private void handleSgxException(SgxException ex) {
     if (ex.getCode() <= Integer.MAX_VALUE) {
       switch ((int) ex.getCode()) {
+        case SgxException.SGX_ERROR_INVALID_PARAMETER: throw new IllegalArgumentException(ex.getName());
+        case SgxException.SGX_ERROR_INVALID_STATE:     throw new IllegalStateException(ex.getName());
         case SgxException.SGX_ERROR_ENCLAVE_LOST:
         case SgxException.SGX_ERROR_ENCLAVE_CRASHED:
         case SgxException.SGX_ERROR_INVALID_ENCLAVE:
@@ -157,6 +161,17 @@ public class SgxEnclave implements Runnable {
         }
       }
     }
+  }
+  private Exception convertSgxException(SgxException ex) {
+    if (ex.getCode() <= Integer.MAX_VALUE) {
+      switch ((int) ex.getCode()) {
+        case SgxException.SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND: return new NoSuchPendingRequestException();
+        case SgxException.SGX_ERROR_MAC_MISMATCH:                return new AEADBadTagException();
+        case SgxException.SGX_ERROR_INVALID_PARAMETER:           return new IllegalArgumentException(ex.getName());
+        case SgxException.SGX_ERROR_INVALID_STATE:               return new IllegalStateException(ex.getName());
+      }
+    }
+    return ex;
   }
 
   long getGid() {
@@ -254,7 +269,7 @@ public class SgxEnclave implements Runnable {
                            future.complete(new SgxsdMessage(replyData, replyIv, replyMac, requestTicket));
                          });
       } catch (SgxException ex) {
-        future.completeExceptionally(ex);
+        future.completeExceptionally(convertSgxException(ex));
         handleSgxException(ex);
       }
 
@@ -272,7 +287,7 @@ public class SgxEnclave implements Runnable {
       try {
         nativeServerStop(getEnclaveState().id, stateHandle, inJidsBuf, inJidCount);
       } catch (SgxException ex) {
-        batchFuture.completeExceptionally(ex);
+        batchFuture.completeExceptionally(convertSgxException(ex));
         handleSgxException(ex);
         throw ex;
       }

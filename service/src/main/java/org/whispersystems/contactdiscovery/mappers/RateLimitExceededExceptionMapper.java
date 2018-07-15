@@ -26,6 +26,8 @@ import javax.ws.rs.ext.Provider;
 public class RateLimitExceededExceptionMapper implements ExceptionMapper<RateLimitExceededException> {
   @Override
   public Response toResponse(RateLimitExceededException e) {
-    return Response.status(413).build();
+    return Response.status(429)
+                   .header("Retry-After", Long.toString(e.getRetryAfter() / 1000L))
+                   .build();
   }
 }

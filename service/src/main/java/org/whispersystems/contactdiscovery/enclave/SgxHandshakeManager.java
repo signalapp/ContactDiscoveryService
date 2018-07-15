@@ -79,7 +79,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
           try {
             reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
-          } catch (IntelClient.QuoteVerificationException | SgxException e) {
+          } catch (IntelClient.QuoteVerificationException | SgxException | IllegalArgumentException e) {
             logger.warn("Problems decoding platform info blob", e);
           }
 
@@ -95,7 +95,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
             } else {
               logger.warn("Platform needs update: "+e.getMessage()+", but didn't get platform info blob from IAS");
             }
-          } catch (IntelClient.QuoteVerificationException | SgxException e2) {
+          } catch (IntelClient.QuoteVerificationException | SgxException | IllegalArgumentException e2) {
             logger.warn("Platform needs update: "+e.getMessage()+", but problems finding which component", e2);
           }
           complete = true;

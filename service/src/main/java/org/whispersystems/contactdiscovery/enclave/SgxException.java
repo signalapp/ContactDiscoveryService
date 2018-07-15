@@ -43,6 +43,10 @@ public class SgxException extends Exception {
     return code;
   }
 
+  // from sgxsd.h:
+  public static final int
+    SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND = (0x10001);
+
   // from sgx_error.h:
   public static final int
     SGX_ERROR_UNEXPECTED         = (0x0001),      /* Unexpected error */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Open Whisper Systems
+ * Copyright (C) 2018 Open Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,7 +18,7 @@
 package org.whispersystems.contactdiscovery.mappers;
 
 import io.dropwizard.jersey.errors.ErrorMessage;
-import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
+import org.whispersystems.contactdiscovery.enclave.NoSuchPendingRequestException;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -26,12 +26,12 @@ import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
 @Provider
-public class NoSuchEnclaveExceptionMapper implements ExceptionMapper<NoSuchEnclaveException> {
+public class NoSuchPendingRequestExceptionMapper implements ExceptionMapper<NoSuchPendingRequestException> {
   @Override
-  public Response toResponse(NoSuchEnclaveException ex) {
-    return Response.status(404)
+  public Response toResponse(NoSuchPendingRequestException ex) {
+    return Response.status(409)
                    .type(MediaType.APPLICATION_JSON_TYPE)
-                   .entity(new ErrorMessage(404, ex.toString()))
+                   .entity(new ErrorMessage(409, ex.getMessage()))
                    .build();
   }
 }
