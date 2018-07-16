@@ -15,13 +15,25 @@ signal:
   serverToken:  # head -c 16 /dev/urandom | hexdump -ve '1/1 "%.2x"'
 
 redis:
-  url:          # Redis URL
+  masterName:   # Redis Sentinel master name
+  sentinelUrls:
+   - # Redis Sentinel host:port 1
+   - # Redis Sentinel host:port 2
 
 directory:
   initialSize: 10000000
-  loadFactor: 0.75
+  loadFactor:  0.75
 
 limits:
   contactQueries:
     bucketSize:        # Leaky bucket size
     leakRatePerMinute: # Leaky bucket rate per minute
+  remoteAttestations:
+    bucketSize:        # Leaky bucket size
+    leakRatePerMinute: # Leaky bucket rate per minute
+
+metrics:
+  reporters:
+    - type:     json # wavefront metrics reporter
+      hostname:      # wavefront endpoint hostname
+      token:         # wavefront endpoint token

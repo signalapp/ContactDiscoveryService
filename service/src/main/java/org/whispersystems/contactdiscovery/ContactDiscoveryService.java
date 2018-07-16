@@ -33,6 +33,11 @@ import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.SignedQuoteUnavailableExceptionMapper;
+import org.whispersystems.contactdiscovery.metrics.CpuUsageGauge;
+import org.whispersystems.contactdiscovery.metrics.FileDescriptorGauge;
+import org.whispersystems.contactdiscovery.metrics.FreeMemoryGauge;
+import org.whispersystems.contactdiscovery.metrics.NetworkReceivedGauge;
+import org.whispersystems.contactdiscovery.metrics.NetworkSentGauge;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
@@ -49,6 +54,7 @@ import java.security.KeyStoreException;
 import java.security.Security;
 import java.security.cert.CertificateException;
 
+import static com.codahale.metrics.MetricRegistry.name;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -126,6 +132,12 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
     environment.jersey().register(new NoSuchPendingRequestExceptionMapper());
     environment.jersey().register(new AEADBadTagExceptionMapper());
+
+    environment.metrics().register(name(CpuUsageGauge.class, "cpu"), new CpuUsageGauge());
+    environment.metrics().register(name(FreeMemoryGauge.class, "free_memory"), new FreeMemoryGauge());
+    environment.metrics().register(name(NetworkSentGauge.class, "bytes_sent"), new NetworkSentGauge());
+    environment.metrics().register(name(NetworkReceivedGauge.class, "bytes_received"), new NetworkReceivedGauge());
+    environment.metrics().register(name(FileDescriptorGauge.class, "fd_count"), new FileDescriptorGauge());
   }
 
 }

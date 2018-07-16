@@ -1,0 +1,2 @@
+io.dropwizard.logging.FileAppenderFactory
+org.whispersystems.contactdiscovery.metrics.LoggingNetworkAppenderFactory
