@@ -31,6 +31,7 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.MediaType;
@@ -60,11 +61,11 @@ public class ContactDiscoveryResource {
 
   @Timed
   @PUT
-  @Path("/{enclave_id}")
+  @Path("/{enclaveId}")
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
   public void getRegisteredContacts(@Auth User user,
-                                    @PathParam("enclave_id") String enclaveId,
+                                    @PathParam("enclaveId") String enclaveId,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
       throws NoSuchEnclaveException, RateLimitExceededException
@@ -72,6 +73,40 @@ public class ContactDiscoveryResource {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
 
     requestManager.submit(enclaveId, request)
+                  .thenAccept(asyncResponse::resume)
+                  .exceptionally(throwable -> {
+                    asyncResponse.resume(throwable.getCause());
+                    return null;
+                  });
+  }
+
+  @Timed
+  @PUT
+  @Path("/test/{testName}/{enclaveId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @Consumes(MediaType.APPLICATION_JSON)
+  public void testGetRegisteredContacts(@Auth User user,
+                                        @PathParam("testName") String testName,
+                                        @PathParam("enclaveId") String enclaveId,
+                                        @Valid DiscoveryRequest request,
+                                        @Suspended AsyncResponse asyncResponse)
+          throws NoSuchEnclaveException, RateLimitExceededException
+  {
+    rateLimiter.validate(user.getNumber(), request.getAddressCount());
+
+    Function<DiscoveryResponse, DiscoveryResponse> testFun;
+    if ("bad-mac".equals(testName)) {
+      testFun = discoveryResponse -> {
+        discoveryResponse.getMac()[0] ^= 0xFF;
+        return discoveryResponse;
+      };
+    } else {
+      asyncResponse.resume(new WebApplicationException(404));
+      return;
+    }
+
+    requestManager.submit(enclaveId, request)
+                  .thenApply(testFun)
                   .thenAccept(asyncResponse::resume)
                   .exceptionally(throwable -> {
                     asyncResponse.resume(throwable.getCause());
