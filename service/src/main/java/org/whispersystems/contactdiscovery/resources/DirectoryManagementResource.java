@@ -23,14 +23,18 @@ import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 
+import javax.validation.Valid;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import io.dropwizard.auth.Auth;
+import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
 
 /**
  * API endpoint that the Signal service uses to update this micro-services view of
@@ -71,6 +75,22 @@ public class DirectoryManagementResource {
   {
     try {
       directoryManager.removeAddress(address);
+    } catch (InvalidAddressException e) {
+      logger.warn("Bad address", e);
+      throw new WebApplicationException(Response.Status.BAD_REQUEST);
+    }
+  }
+
+  @Timed
+  @PUT
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Path("/reconcile/{bucketCount}/{bucket}")
+  public void reconcileBucket(@Auth SignalService signalService,
+                              @PathParam("bucketCount") long bucketCount,
+                              @PathParam("bucket") long bucket,
+                              @Valid DirectoryReconciliationRequest request) {
+    try {
+      directoryManager.reconcileBucket(bucketCount, bucket, request.getNumbers());
     } catch (InvalidAddressException e) {
       logger.warn("Bad address", e);
       throw new WebApplicationException(Response.Status.BAD_REQUEST);

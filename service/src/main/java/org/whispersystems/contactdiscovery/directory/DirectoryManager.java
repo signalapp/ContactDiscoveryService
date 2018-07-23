@@ -16,6 +16,9 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.protobuf.ByteString;
@@ -26,20 +29,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
+import org.whispersystems.contactdiscovery.redis.LuaScript;
+import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.redis.PubSubReply;
 import org.whispersystems.dispatch.util.Util;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import io.dropwizard.lifecycle.Managed;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanResult;
 import redis.clients.util.Pool;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * Manages the system directory of all registered users
@@ -49,6 +60,9 @@ import redis.clients.util.Pool;
 public class DirectoryManager implements Managed {
 
   private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
+
+  private static final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter          reconciledNumbersMeter = metricRegistry.meter(name(DirectoryManager.class, "reconciledNumbers"));
 
   private static final String CHANNEL     = "signal_address_update";
   private static final String ADDRESS_SET = "signal_addresses::1";
@@ -62,6 +76,8 @@ public class DirectoryManager implements Managed {
   private PubSubConnection pubSubConnection;
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
+
+  private ReconcileOperation reconcileOperation;
 
   public DirectoryManager(RedisClientFactory redisFactory, long initialCapacity, float loadFactor) {
     this.redisFactory = redisFactory;
@@ -78,13 +94,14 @@ public class DirectoryManager implements Managed {
     long directoryAddress = parseAddress(address);
 
     try (Jedis jedis = jedisPool.getResource()) {
-      jedis.sadd(ADDRESS_SET, address);
-      jedis.publish(CHANNEL.getBytes(),
-                    PubSubMessage.newBuilder()
-                                 .setContent(ByteString.copyFrom(address.getBytes()))
-                                 .setType(PubSubMessage.Type.ADDED)
-                                 .build()
-                                 .toByteArray());
+      if (1L == jedis.sadd(ADDRESS_SET, address)) {
+        jedis.publish(CHANNEL.getBytes(),
+                      PubSubMessage.newBuilder()
+                                   .setContent(ByteString.copyFrom(address.getBytes()))
+                                   .setType(PubSubMessage.Type.ADDED)
+                                   .build()
+                                   .toByteArray());
+      }
     }
 
     directory.add(directoryAddress);
@@ -94,16 +111,76 @@ public class DirectoryManager implements Managed {
     long directoryAddress = parseAddress(address);
 
     try (Jedis jedis = jedisPool.getResource()) {
-      jedis.srem(ADDRESS_SET, address);
-      jedis.publish(CHANNEL.getBytes(),
-                    PubSubMessage.newBuilder()
-                                 .setContent(ByteString.copyFrom(address.getBytes()))
-                                 .setType(PubSubMessage.Type.REMOVED)
-                                 .build()
-                                 .toByteArray());
+      if (1L == jedis.srem(ADDRESS_SET, address)) {
+        jedis.publish(CHANNEL.getBytes(),
+                      PubSubMessage.newBuilder()
+                                   .setContent(ByteString.copyFrom(address.getBytes()))
+                                   .setType(PubSubMessage.Type.REMOVED)
+                                   .build()
+                                   .toByteArray());
+      }
     }
 
     directory.remove(directoryAddress);
+  }
+
+  public void reconcileBucket(long bucketCount, long bucket, List<String> addresses) throws InvalidAddressException {
+    ReconciliationBucketKey bucketKey = new ReconciliationBucketKey(bucketCount, bucket);
+    reconcileOperation.reconcileBucket(bucketKey, addresses);
+    try (Jedis jedis = jedisPool.getResource()) {
+      processReconciledDeletes(jedis, bucketKey);
+      processReconciledAdds(jedis, bucketKey);
+    }
+  }
+
+  private void processReconciledDeletes(Jedis jedis, ReconciliationBucketKey bucketKey) {
+    String bucketDeletesKey = new String(bucketKey.getBucketDeletes());
+    jedis.sinterstore(bucketDeletesKey, bucketDeletesKey, ADDRESS_SET);
+
+    List<String> deletedAddresses;
+    while (!(deletedAddresses = jedis.srandmember(bucketDeletesKey, 1024)).isEmpty()) {
+      ArrayList<String> completedDeletes = new ArrayList<>(deletedAddresses.size());
+      try {
+        for (String deletedAddress : deletedAddresses) {
+          try {
+            removeAddress(deletedAddress);
+          } catch (InvalidAddressException ex) {
+          }
+          completedDeletes.add(deletedAddress);
+        }
+      } finally {
+        reconciledNumbersMeter.mark(completedDeletes.size());
+        jedis.srem(bucketDeletesKey, completedDeletes.toArray(new String[0]));
+      }
+    }
+  }
+
+  private void processReconciledAdds(Jedis jedis, ReconciliationBucketKey bucketKey) throws InvalidAddressException {
+    Optional<InvalidAddressException> invalidAddressEx = Optional.absent();
+
+    String bucketAddsKey = new String(bucketKey.getBucketAdds());
+    jedis.sdiffstore(bucketAddsKey, bucketAddsKey, ADDRESS_SET);
+
+    List<String> addedAddresses;
+    while (!(addedAddresses = jedis.srandmember(bucketAddsKey, 1024)).isEmpty()) {
+      ArrayList<String> completedAdds = new ArrayList<>(addedAddresses.size());
+      try {
+        for (String addedAddress : addedAddresses) {
+          try {
+            addAddress(addedAddress);
+          } catch (InvalidAddressException ex) {
+            invalidAddressEx = Optional.of(ex);
+          }
+          completedAdds.add(addedAddress);
+        }
+      } finally {
+        reconciledNumbersMeter.mark(completedAdds.size());
+        jedis.srem(bucketAddsKey, completedAdds.toArray(new String[0]));
+      }
+    }
+    if (invalidAddressEx.isPresent()) {
+      throw invalidAddressEx.get();
+    }
   }
 
   public Pair<ByteBuffer, Long> getAddressList() {
@@ -116,6 +193,8 @@ public class DirectoryManager implements Managed {
     this.pubSubConnection = redisFactory.connect();
     this.pubSubConsumer   = new PubSubConsumer();
     this.keepAliveSender  = new KeepAliveSender();
+
+    this.reconcileOperation = new ReconcileOperation(jedisPool);
 
     this.pubSubConnection.subscribe(CHANNEL);
     this.pubSubConsumer.start();
@@ -208,6 +287,46 @@ public class DirectoryManager implements Managed {
       } catch (InvalidAddressException e) {
         logger.warn("Badly formatted address", e);
       }
+    }
+  }
+
+  private static class ReconciliationBucketKey {
+    private final byte[] bucketAddresses;
+    private final byte[] bucketDeletes;
+    private final byte[] bucketAdds;
+
+    ReconciliationBucketKey(long bucketCount, long bucket) {
+      String bucketName = bucketCount + "::" + bucket;
+      this.bucketAddresses = ("directory_reconciliation_addresses::" + bucketName).getBytes();
+      this.bucketDeletes = ("directory_reconciliation_deletes::" + bucketName).getBytes();
+      this.bucketAdds = ("directory_reconciliation_adds::" + bucketName).getBytes();
+    }
+
+    public byte[] getBucketAddresses() {
+      return bucketAddresses;
+    }
+
+    public byte[] getBucketDeletes() {
+      return bucketDeletes;
+    }
+
+    public byte[] getBucketAdds() {
+      return bucketAdds;
+    }
+  }
+
+  private static class ReconcileOperation {
+
+    private final LuaScript reconcileBucket;
+
+    ReconcileOperation(Pool<Jedis> jedisPool) throws IOException {
+      this.reconcileBucket = LuaScript.fromResource(jedisPool, "lua/reconcile_bucket.lua");
+    }
+
+    public void reconcileBucket(ReconciliationBucketKey key, List<String> addresses) {
+      List<byte[]> keys = Arrays.asList(key.getBucketAddresses(), key.getBucketAdds(), key.getBucketDeletes());
+      List<byte[]> args = addresses.stream().map(String::getBytes).collect(Collectors.toList());
+      reconcileBucket.execute(keys, args);
     }
   }
 
