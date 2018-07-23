@@ -25,6 +25,8 @@ public class DirectoryReconciliationRequest {
   @JsonProperty
   private List<String> numbers;
 
+  public DirectoryReconciliationRequest() {}
+
   public DirectoryReconciliationRequest(List<String> numbers) {
     this.numbers = numbers;
   }
