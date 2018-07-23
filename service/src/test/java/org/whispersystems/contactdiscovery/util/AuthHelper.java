@@ -1,6 +1,5 @@
 package org.whispersystems.contactdiscovery.util;
 
-import com.google.common.base.Optional;
 import org.apache.commons.codec.binary.Base64;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -13,6 +12,9 @@ import org.whispersystems.dropwizard.simpleauth.BasicCredentialAuthFilter;
 
 import io.dropwizard.auth.AuthenticationException;
 import io.dropwizard.auth.basic.BasicCredentials;
+
+import java.util.Optional;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -47,7 +49,7 @@ public class AuthHelper {
             return Optional.of(new User(VALID_NUMBER_TWO));
           }
 
-          return Optional.absent();
+          return Optional.empty();
         }
       });
 
@@ -61,7 +63,7 @@ public class AuthHelper {
             return Optional.of(new SignalService());
           }
 
-          return Optional.absent();
+          return Optional.empty();
         }
       });
 

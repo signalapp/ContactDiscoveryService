@@ -42,6 +42,7 @@ public class DirectoryManagerTest {
 
     when(redisClientFactory.getRedisClientPool()).thenReturn(jedisPool);
     when(jedisPool.getResource()).thenReturn(jedis);
+    when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
 
     when(pubSubConnection.read()).thenAnswer(new Answer<PubSubReply>() {

@@ -1,9 +1,11 @@
 package org.whispersystems.contactdiscovery.auth;
 
-import com.google.common.base.Optional;
 import org.junit.Test;
 
 import io.dropwizard.auth.basic.BasicCredentials;
+
+import java.util.Optional;
+
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
 

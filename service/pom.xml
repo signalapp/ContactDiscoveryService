@@ -27,7 +27,7 @@
         <dependency>
             <groupId>org.whispersystems</groupId>
             <artifactId>dropwizard-simpleauth</artifactId>
-            <version>0.3.0</version>
+            <version>0.4.1</version>
         </dependency>
         <dependency>
             <groupId>io.dropwizard</groupId>

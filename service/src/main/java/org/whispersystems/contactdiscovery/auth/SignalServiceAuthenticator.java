@@ -19,13 +19,13 @@ package org.whispersystems.contactdiscovery.auth;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
-import com.google.common.base.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.dropwizard.simpleauth.Authenticator;
 
 import java.security.MessageDigest;
+import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import io.dropwizard.auth.AuthenticationException;
@@ -61,6 +61,6 @@ public class SignalServiceAuthenticator implements Authenticator<BasicCredential
     }
 
     authenticationFailedMeter.mark();
-    return Optional.absent();
+    return Optional.empty();
   }
 }

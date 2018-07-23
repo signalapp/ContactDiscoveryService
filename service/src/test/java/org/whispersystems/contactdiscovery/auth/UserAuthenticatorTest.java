@@ -1,12 +1,12 @@
 package org.whispersystems.contactdiscovery.auth;
 
-import com.google.common.base.Optional;
 import org.apache.commons.codec.binary.Hex;
 import org.junit.Test;
 import org.whispersystems.contactdiscovery.util.ByteUtils;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import io.dropwizard.auth.basic.BasicCredentials;
