@@ -16,11 +16,15 @@
  */
 package org.whispersystems.contactdiscovery.enclave;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.client.IntelClient.QuoteSignatureResponse;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
+import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.dispatch.util.Util;
 
 import java.util.HashMap;
@@ -32,6 +36,8 @@ import java.util.concurrent.TimeUnit;
 
 import io.dropwizard.lifecycle.Managed;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Maintains and periodically refreshes the signed quotes for each
  * enclave in the SgxEnclaveManager.
@@ -41,6 +47,12 @@ import io.dropwizard.lifecycle.Managed;
 public class SgxHandshakeManager implements Managed, Runnable {
 
   private final Logger logger = LoggerFactory.getLogger(SgxHandshakeManager.class);
+
+  private static final MetricRegistry metricRegistry              = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter          getQuoteSignatureMeter      = metricRegistry.meter(name(SgxHandshakeManager.class, "getQuoteSignature"));
+  private static final Meter          getQuoteSignatureErrorMeter = metricRegistry.meter(name(SgxHandshakeManager.class, "getQuoteSignatureError"));
+  private static final Meter          needsMicrocodeUpdateMeter   = metricRegistry.meter(name(SgxHandshakeManager.class, "needsMicrocodeUpdate"));
+  private static final Meter          needsPSWUpdateMeter         = metricRegistry.meter(name(SgxHandshakeManager.class, "needsPSWUpdate"));
 
   private final Map<String, SgxSignedQuote> quotes = new HashMap<>();
 
@@ -77,6 +89,8 @@ public class SgxHandshakeManager implements Managed, Runnable {
             enclave.setCurrentQuote();
           }
 
+          getQuoteSignatureMeter.mark();
+
           try {
             reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
           } catch (IntelClient.QuoteVerificationException | SgxException | IllegalArgumentException e) {
@@ -85,9 +99,13 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
           complete = true;
         } catch (SgxException e) {
+          getQuoteSignatureErrorMeter.mark();
+
           logger.warn("Problem calling enclave", e);
           complete = true;
         } catch (IntelClient.GroupOutOfDateException e) {
+          getQuoteSignatureErrorMeter.mark();
+
           try {
             byte[] platformInfoBlob = e.getPlatformInfoBlob();
             if (platformInfoBlob != null) {
@@ -100,9 +118,13 @@ public class SgxHandshakeManager implements Managed, Runnable {
           }
           complete = true;
         } catch (IntelClient.QuoteVerificationException e) {
+          getQuoteSignatureErrorMeter.mark();
+
           logger.warn("Problem retrieving quote", e);
           Util.sleep(2000);
         } catch (NoSuchRevocationListException | StaleRevocationListException e) {
+          getQuoteSignatureErrorMeter.mark();
+
           logger.warn("Stale or missing revocation list, refetching...", e);
           sgxRevocationListManager.refreshRevocationList(enclave.getGid());
           Util.sleep(1000);
@@ -118,12 +140,14 @@ public class SgxHandshakeManager implements Managed, Runnable {
     Set<SgxNeedsUpdateFlag> needsUpdateFlags =
       SgxEnclave.reportPlatformAttestationStatus(platformInfoBlob, attestationSuccess);
     if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.UCODE_UPDATE)) {
+      needsMicrocodeUpdateMeter.mark();
       logger.warn("Platform CPU microcode needs update");
     }
     if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.CSME_FW_UPDATE)) {
       logger.warn("Platform CSME FW needs update");
     }
     if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.PSW_UPDATE)) {
+      needsPSWUpdateMeter.mark();
       logger.warn("SGX Platform Software (PSW) needs update");
     }
   }

@@ -273,13 +273,9 @@ public class DirectoryManager implements Managed {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            logger.info("Got added address: " + new String(update.getContent().toByteArray()));
             directory.add(parseAddress(new String(update.getContent().toByteArray())));
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
-            logger.info("Got removed address: " + new String(update.getContent().toByteArray()));
             directory.remove(parseAddress(new String(update.getContent().toByteArray())));
-          } else if (update.getType() == PubSubMessage.Type.KEEPALIVE) {
-            logger.info("Got keepalive...");
           }
         }
       } catch (InvalidProtocolBufferException e) {
