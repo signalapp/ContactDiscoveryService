@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery;
 
+import com.codahale.metrics.SharedMetricRegistries;
 import org.apache.commons.codec.DecoderException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.whispersystems.contactdiscovery.auth.SignalService;
@@ -43,6 +44,7 @@ import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
+import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.NativeUtils;
 import org.whispersystems.dropwizard.simpleauth.AuthDynamicFeature;
 import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
@@ -84,6 +86,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
   {
     NativeUtils.loadNativeResource("/enclave-jni.so");
     Security.addProvider(new BouncyCastleProvider());
+    SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
 
     UserAuthenticator          userAuthenticator          = new UserAuthenticator(configuration.getSignalServiceConfiguration().getUserAuthenticationToken());
     SignalServiceAuthenticator signalServiceAuthenticator = new SignalServiceAuthenticator(configuration.getSignalServiceConfiguration().getServerAuthenticationToken());
