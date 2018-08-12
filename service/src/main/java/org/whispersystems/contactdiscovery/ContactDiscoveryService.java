@@ -30,6 +30,7 @@ import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.AEADBadTagExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.InvalidAddressExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
@@ -135,6 +136,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
     environment.jersey().register(new NoSuchPendingRequestExceptionMapper());
     environment.jersey().register(new AEADBadTagExceptionMapper());
+    environment.jersey().register(new InvalidAddressExceptionMapper());
 
     environment.metrics().register(name(CpuUsageGauge.class, "cpu"), new CpuUsageGauge());
     environment.metrics().register(name(FreeMemoryGauge.class, "free_memory"), new FreeMemoryGauge());

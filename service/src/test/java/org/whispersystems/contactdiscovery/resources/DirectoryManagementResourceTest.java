@@ -18,7 +18,10 @@ import javax.ws.rs.core.Response;
 import io.dropwizard.testing.junit.ResourceTestRule;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
@@ -62,20 +65,45 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryReconcile() throws InvalidAddressException {
-    List<String> addresses = new ArrayList<>();
-    addresses.add("+14151111111");
+  public void testDirectoryReconcileAll() throws InvalidAddressException {
+    List<String> addresses = Arrays.asList("+14151111111");
 
-    DirectoryReconciliationRequest reconciliationRequest = new DirectoryReconciliationRequest(addresses);
+    DirectoryReconciliationRequest reconciliationRequest = new DirectoryReconciliationRequest(addresses, null);
 
     Response response = resources.getJerseyTest()
-                                 .target("/v1/directory/reconcile/1/1")
+                                 .target("/v1/directory/reconcile")
                                  .request(MediaType.APPLICATION_JSON_TYPE)
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
                                  .put(Entity.json(reconciliationRequest));
 
     assertEquals(204, response.getStatus());
-    verify(directoryManager, times(1)).reconcileBucket(1L, 1L, addresses);
+    verify(directoryManager, times(1)).reconcile(eq(Optional.empty()), eq(Optional.empty()), eq(addresses));
+  }
+
+  @Test
+  public void testDirectoryReconcilePart() throws InvalidAddressException {
+    List<String> addresses = Arrays.asList("+14151111111");
+
+    DirectoryReconciliationRequest requestOne = new DirectoryReconciliationRequest(addresses, "+14151111111");
+    DirectoryReconciliationRequest requestTwo = new DirectoryReconciliationRequest(null, null);
+
+    Response responseOne = resources.getJerseyTest()
+                                    .target("/v1/directory/reconcile")
+                                    .request(MediaType.APPLICATION_JSON_TYPE)
+                                    .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                    .put(Entity.json(requestOne));
+
+    Response responseTwo = resources.getJerseyTest()
+                                    .target("/v1/directory/reconcile/+14151111111")
+                                    .request(MediaType.APPLICATION_JSON_TYPE)
+                                    .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                    .put(Entity.json(requestTwo));
+
+    assertEquals(204, responseOne.getStatus());
+    assertEquals(204, responseTwo.getStatus());
+
+    verify(directoryManager, times(1)).reconcile(eq(Optional.empty()), eq(Optional.of("+14151111111")), eq(addresses));
+    verify(directoryManager, times(1)).reconcile(eq(Optional.of("+14151111111")), eq(Optional.empty()), isNull());
   }
 
 }

@@ -36,6 +36,10 @@ import javax.ws.rs.core.Response;
 import io.dropwizard.auth.Auth;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 /**
  * API endpoint that the Signal service uses to update this micro-services view of
  * registered users.
@@ -58,13 +62,9 @@ public class DirectoryManagementResource {
   @Path("/{address}")
   public void addAddress(@Auth SignalService signalService,
                          @PathParam("address") String address)
+      throws InvalidAddressException
   {
-    try {
-      directoryManager.addAddress(address);
-    } catch (InvalidAddressException e) {
-      logger.warn("Bad address", e);
-      throw new WebApplicationException(Response.Status.BAD_REQUEST);
-    }
+    directoryManager.addAddress(address);
   }
 
   @Timed
@@ -72,29 +72,32 @@ public class DirectoryManagementResource {
   @Path("/{address}")
   public void removeAddress(@Auth SignalService signalService,
                             @PathParam("address") String address)
+      throws InvalidAddressException
   {
-    try {
-      directoryManager.removeAddress(address);
-    } catch (InvalidAddressException e) {
-      logger.warn("Bad address", e);
-      throw new WebApplicationException(Response.Status.BAD_REQUEST);
-    }
+    directoryManager.removeAddress(address);
   }
 
   @Timed
   @PUT
   @Consumes(MediaType.APPLICATION_JSON)
-  @Path("/reconcile/{bucketCount}/{bucket}")
-  public void reconcileBucket(@Auth SignalService signalService,
-                              @PathParam("bucketCount") long bucketCount,
-                              @PathParam("bucket") long bucket,
-                              @Valid DirectoryReconciliationRequest request) {
-    try {
-      directoryManager.reconcileBucket(bucketCount, bucket, request.getNumbers());
-    } catch (InvalidAddressException e) {
-      logger.warn("Bad address", e);
-      throw new WebApplicationException(Response.Status.BAD_REQUEST);
-    }
+  @Path("/reconcile")
+  public void reconcile(@Auth SignalService signalService,
+                        @Valid DirectoryReconciliationRequest request)
+      throws InvalidAddressException
+  {
+    directoryManager.reconcile(Optional.empty(), Optional.ofNullable(request.getToNumber()), request.getNumbers());
+  }
+
+  @Timed
+  @PUT
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Path("/reconcile/{fromNumber}")
+  public void reconcile(@Auth SignalService signalService,
+                        @PathParam("fromNumber") String fromNumber,
+                        @Valid DirectoryReconciliationRequest request)
+      throws InvalidAddressException
+  {
+    directoryManager.reconcile(Optional.of(fromNumber), Optional.ofNullable(request.getToNumber()), request.getNumbers());
   }
 
 }

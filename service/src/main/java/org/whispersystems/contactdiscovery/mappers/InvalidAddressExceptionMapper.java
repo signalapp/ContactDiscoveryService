@@ -1,48 +1,31 @@
-/**
- * Copyright (C) 2018 Open WhisperSystems
- * <p>
+/*
+ * Copyright (C) 2018 Open Whisper Systems
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * <p>
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * <p>
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.whispersystems.contactdiscovery.entities;
+package org.whispersystems.contactdiscovery.mappers;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 
-import java.util.List;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.ext.ExceptionMapper;
+import javax.ws.rs.ext.Provider;
 
-public class DirectoryReconciliationRequest {
-
-  @JsonProperty
-  private List<String> numbers;
-
-  @JsonProperty
-  private String toNumber;
-
-
-  public DirectoryReconciliationRequest() {
+@Provider
+public class InvalidAddressExceptionMapper implements ExceptionMapper<InvalidAddressException> {
+  @Override
+  public Response toResponse(InvalidAddressException ex) {
+    return Response.status(400).build();
   }
-
-  public DirectoryReconciliationRequest(List<String> numbers, String toNumber) {
-    this.numbers = numbers;
-    this.toNumber = toNumber;
-  }
-
-  public List<String> getNumbers() {
-    return numbers;
-  }
-
-  public String getToNumber() {
-    return toNumber;
-  }
-
 }
