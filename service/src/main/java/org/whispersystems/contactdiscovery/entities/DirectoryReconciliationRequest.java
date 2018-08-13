@@ -23,26 +23,33 @@ import java.util.List;
 public class DirectoryReconciliationRequest {
 
   @JsonProperty
-  private List<String> numbers;
+  private String fromNumber;
 
   @JsonProperty
   private String toNumber;
 
+  @JsonProperty
+  private List<String> numbers;
 
   public DirectoryReconciliationRequest() {
   }
 
-  public DirectoryReconciliationRequest(List<String> numbers, String toNumber) {
-    this.numbers = numbers;
-    this.toNumber = toNumber;
+  public DirectoryReconciliationRequest(String fromNumber, String toNumber, List<String> numbers) {
+    this.fromNumber = fromNumber;
+    this.toNumber   = toNumber;
+    this.numbers    = numbers;
   }
 
-  public List<String> getNumbers() {
-    return numbers;
+  public String getFromNumber() {
+    return fromNumber;
   }
 
   public String getToNumber() {
     return toNumber;
+  }
+
+  public List<String> getNumbers() {
+    return numbers;
   }
 
 }

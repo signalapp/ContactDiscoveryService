@@ -67,6 +67,7 @@ public class DirectoryManagerTest {
   @Test
   public void testAdd() throws Exception {
     when(jedis.zscan(anyString(), anyString())).thenReturn(scanResult);
+    when(jedis.zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14154444444"))).thenReturn(1L);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryHashSet);
     directoryManager.start();
@@ -101,6 +102,7 @@ public class DirectoryManagerTest {
   @Test
   public void testReconcileAll() throws Exception {
     when(jedis.zscan(anyString(), anyString())).thenReturn(scanResult);
+    when(jedis.zrem(eq("signal_addresses_sorted::1"), eq("+14152222222"))).thenReturn(1L);
 
     Set<String> addressSet = new HashSet<>(Arrays.asList("+14151111111", "+14152222222"));
     when(jedis.zrangeByLex(eq("signal_addresses_sorted::1"), eq("-"), eq("+"))).thenReturn(addressSet);
@@ -111,7 +113,6 @@ public class DirectoryManagerTest {
 
     verify(jedis).zscan(eq("signal_addresses_sorted::1"), any());
     verify(jedis).zrangeByLex(eq("signal_addresses_sorted::1"), eq("-"), eq("+"));
-    verify(jedis).zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14151111111"));
     verify(jedis).zrem(eq("signal_addresses_sorted::1"), eq("+14152222222"));
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
@@ -121,6 +122,7 @@ public class DirectoryManagerTest {
   @Test
   public void testReconcileRange() throws Exception {
     when(jedis.zscan(anyString(), anyString())).thenReturn(scanResult);
+    when(jedis.zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14153333333"))).thenReturn(1L);
 
     Set<String> addressSetOne = new HashSet<>(Arrays.asList("+14151111111"));
     Set<String> addressSetTwo = new HashSet<>(Arrays.asList("+14152222222"));
@@ -130,13 +132,12 @@ public class DirectoryManagerTest {
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryHashSet);
     directoryManager.start();
     directoryManager.reconcile(Optional.empty(), Optional.of("+14151111111"), Arrays.asList("+14151111111"));
-    directoryManager.reconcile(Optional.of("+14151111111"), Optional.empty(), Arrays.asList("+14152222222"));
+    directoryManager.reconcile(Optional.of("+14151111111"), Optional.empty(), Arrays.asList("+14152222222", "+14153333333"));
 
     verify(jedis).zscan(eq("signal_addresses_sorted::1"), any());
     verify(jedis).zrangeByLex(eq("signal_addresses_sorted::1"), eq("-"), eq("[+14151111111"));
     verify(jedis).zrangeByLex(eq("signal_addresses_sorted::1"), eq("(+14151111111"), eq("+"));
-    verify(jedis).zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14151111111"));
-    verify(jedis).zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14152222222"));
+    verify(jedis).zadd(eq("signal_addresses_sorted::1"), eq(0.0), eq("+14153333333"));
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
     verifyNoMoreInteractions(jedis);

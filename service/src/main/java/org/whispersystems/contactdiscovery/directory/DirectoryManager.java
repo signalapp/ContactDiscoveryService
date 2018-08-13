@@ -39,6 +39,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -128,21 +129,26 @@ public class DirectoryManager implements Managed {
   public void reconcile(Optional<String> fromNumber, Optional<String> toNumber, List<String> addresses)
       throws InvalidAddressException
   {
-    List<String> newAddresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
-    Set<String>  oldAddresses = getAddressesInRange(fromNumber, toNumber);
+    addresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
 
-    oldAddresses.removeAll(newAddresses);
+    Set<String> removeAddresses = getAddressesInRange(fromNumber, toNumber);
+    Set<String> addAddresses    = new HashSet<>(addresses);
 
-    for (String oldAddress : oldAddresses) {
+    addAddresses.removeAll(removeAddresses);
+    removeAddresses.removeAll(addresses);
+
+    for (String removeAddress : removeAddresses) {
       try {
-        removeAddress(oldAddress);
+        removeAddress(removeAddress);
+        reconciledNumbersMeter.mark();
       } catch (InvalidAddressException ex) {
-        logger.error("invalid address: ", oldAddress);
+        logger.error("invalid address: ", removeAddress);
       }
     }
 
-    for (String newAddress : newAddresses) {
-      addAddress(newAddress);
+    for (String addAddress : addAddresses) {
+      addAddress(addAddress);
+      reconciledNumbersMeter.mark();
     }
   }
 

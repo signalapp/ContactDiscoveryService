@@ -85,19 +85,9 @@ public class DirectoryManagementResource {
                         @Valid DirectoryReconciliationRequest request)
       throws InvalidAddressException
   {
-    directoryManager.reconcile(Optional.empty(), Optional.ofNullable(request.getToNumber()), request.getNumbers());
-  }
-
-  @Timed
-  @PUT
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Path("/reconcile/{fromNumber}")
-  public void reconcile(@Auth SignalService signalService,
-                        @PathParam("fromNumber") String fromNumber,
-                        @Valid DirectoryReconciliationRequest request)
-      throws InvalidAddressException
-  {
-    directoryManager.reconcile(Optional.of(fromNumber), Optional.ofNullable(request.getToNumber()), request.getNumbers());
+    directoryManager.reconcile(Optional.ofNullable(request.getFromNumber()),
+                               Optional.ofNullable(request.getToNumber()),
+                               request.getNumbers());
   }
 
 }
