@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
+import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
@@ -68,15 +69,14 @@ public class DirectoryManagementResourceTest {
   public void testDirectoryReconcileAll() throws InvalidAddressException {
     List<String> addresses = Arrays.asList("+14151111111");
 
-    DirectoryReconciliationRequest reconciliationRequest = new DirectoryReconciliationRequest(null, null, addresses);
+    DirectoryReconciliationRequest  reconciliationRequest  = new DirectoryReconciliationRequest(null, null, addresses);
+    DirectoryReconciliationResponse reconciliationResponse = resources.getJerseyTest()
+                                                                      .target("/v1/directory/reconcile")
+                                                                      .request(MediaType.APPLICATION_JSON_TYPE)
+                                                                      .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                                                      .put(Entity.json(reconciliationRequest), DirectoryReconciliationResponse.class);
 
-    Response response = resources.getJerseyTest()
-                                 .target("/v1/directory/reconcile")
-                                 .request(MediaType.APPLICATION_JSON_TYPE)
-                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                 .put(Entity.json(reconciliationRequest));
-
-    assertEquals(204, response.getStatus());
+    assertEquals(DirectoryReconciliationResponse.Status.OK, reconciliationResponse.getStatus());
     verify(directoryManager, times(1)).reconcile(eq(Optional.empty()), eq(Optional.empty()), eq(addresses));
   }
 
@@ -84,23 +84,22 @@ public class DirectoryManagementResourceTest {
   public void testDirectoryReconcilePart() throws InvalidAddressException {
     List<String> addresses = Arrays.asList("+14151111111");
 
-    DirectoryReconciliationRequest requestOne = new DirectoryReconciliationRequest(null, "+14151111111", addresses);
-    DirectoryReconciliationRequest requestTwo = new DirectoryReconciliationRequest("+14151111111", null, null);
+    DirectoryReconciliationRequest  requestOne  = new DirectoryReconciliationRequest(null, "+14151111111", addresses);
+    DirectoryReconciliationRequest  requestTwo  = new DirectoryReconciliationRequest("+14151111111", null, null);
+    DirectoryReconciliationResponse responseOne = resources.getJerseyTest()
+                                                           .target("/v1/directory/reconcile")
+                                                           .request(MediaType.APPLICATION_JSON_TYPE)
+                                                           .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                                           .put(Entity.json(requestOne), DirectoryReconciliationResponse.class);
 
-    Response responseOne = resources.getJerseyTest()
-                                    .target("/v1/directory/reconcile")
-                                    .request(MediaType.APPLICATION_JSON_TYPE)
-                                    .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                    .put(Entity.json(requestOne));
+    DirectoryReconciliationResponse responseTwo = resources.getJerseyTest()
+                                                           .target("/v1/directory/reconcile")
+                                                           .request(MediaType.APPLICATION_JSON_TYPE)
+                                                           .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                                           .put(Entity.json(requestTwo), DirectoryReconciliationResponse.class);
 
-    Response responseTwo = resources.getJerseyTest()
-                                    .target("/v1/directory/reconcile")
-                                    .request(MediaType.APPLICATION_JSON_TYPE)
-                                    .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                    .put(Entity.json(requestTwo));
-
-    assertEquals(204, responseOne.getStatus());
-    assertEquals(204, responseTwo.getStatus());
+    assertEquals(DirectoryReconciliationResponse.Status.OK, responseOne.getStatus());
+    assertEquals(DirectoryReconciliationResponse.Status.OK, responseTwo.getStatus());
 
     verify(directoryManager, times(1)).reconcile(eq(Optional.empty()), eq(Optional.of("+14151111111")), eq(addresses));
     verify(directoryManager, times(1)).reconcile(eq(Optional.of("+14151111111")), eq(Optional.empty()), isNull());
