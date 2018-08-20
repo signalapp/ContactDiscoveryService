@@ -101,7 +101,7 @@ public class IntelClient {
   public QuoteSignatureResponse getQuoteSignature(byte[] quote) throws QuoteVerificationException, StaleRevocationListException {
     try {
       Response response = client.target(host)
-                                .path("/attestation/sgx/v2/report")
+                                .path("/attestation/sgx/v3/report")
                                 .request(MediaType.APPLICATION_JSON)
                                 .post(Entity.json(new QuoteSignatureRequest(quote)));
 
@@ -124,15 +124,19 @@ public class IntelClient {
         throw new StaleRevocationListException(responseBodyString);
       }
 
+      if ("CONFIGURATION_NEEDED".equals(responseBody.getIsvEnclaveQuoteStatus()) && !acceptGroupOutOfDate) {
+        throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
+      }
       if ("GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus()) && !acceptGroupOutOfDate) {
-        throw new GroupOutOfDateException(responseBody.getPlatformInfoBlob(), false);
+        throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
       }
       if ("GROUP_REVOKED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
-        throw new GroupOutOfDateException(responseBody.getPlatformInfoBlob(), true);
+        throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
       }
 
       if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus()) &&
-          !"GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus())) {
+          !"GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus()) &&
+          !"CONFIGURATION_NEEDED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new QuoteVerificationException("Bad response: " + responseBodyString);
       }
 
@@ -249,18 +253,13 @@ public class IntelClient {
 
   public static class GroupOutOfDateException extends QuoteVerificationException {
     private final String  platformInfoBlob;
-    private final boolean revoked;
 
-    public GroupOutOfDateException(String platformInfoBlob, boolean revoked) {
-      super("group "+(revoked? "revoked" : "out of date"));
+    public GroupOutOfDateException(String message, String platformInfoBlob) {
+      super(message);
       this.platformInfoBlob = platformInfoBlob;
-      this.revoked          = revoked;
     }
     public byte[] getPlatformInfoBlob() throws QuoteVerificationException {
       return unwrapPlatformInfoBlob(platformInfoBlob);
-    }
-    public boolean getRevoked() {
-      return revoked;
     }
   }
 
