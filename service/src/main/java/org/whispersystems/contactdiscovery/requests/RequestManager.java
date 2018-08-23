@@ -17,6 +17,10 @@
 
 package org.whispersystems.contactdiscovery.requests;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
 import org.apache.commons.lang3.tuple.Pair;
@@ -38,6 +42,9 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import io.dropwizard.lifecycle.Managed;
+import org.whispersystems.contactdiscovery.util.Constants;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * Starts and manages worker threads that drain the pending request queue set
@@ -48,6 +55,10 @@ import io.dropwizard.lifecycle.Managed;
 public class RequestManager implements Managed {
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
+
+  private static final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter          processedNumbersMeter = metricRegistry.meter(name(RequestManager.class, "processedNumbers"));
+  private static final Timer          processBatchTimer     = metricRegistry.timer(name(RequestManager.class, "processBatch"));
 
   private final DirectoryManager       directoryManager;
   private final PendingRequestQueueSet pending;
@@ -124,6 +135,8 @@ public class RequestManager implements Managed {
                                                          request.getRequest().getMac(),
                                                          request.getRequest().getRequestId());
 
+          processedNumbersMeter.mark(request.getRequest().getAddressCount());
+
           batch.add(enclaveMessage, request.getRequest().getAddressCount())
                .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(response.getIv(),
                                                                                            response.getData(),
@@ -131,13 +144,15 @@ public class RequestManager implements Managed {
                .exceptionally(exception -> request.getResponse().completeExceptionally(exception));
         }
 
-        batch.process(registeredUsers.getLeft(), registeredUsers.getRight());
-      } catch (SgxException e) {
-        logger.warn("Exception processing request batch", e);
+        try (Timer.Context timer = processBatchTimer.time()) {
+          batch.process(registeredUsers.getLeft(), registeredUsers.getRight());
+        }
+      } catch (Throwable t) {
+        logger.warn("Exception processing request batch", t);
 
         requests.stream()
                 .map(PendingRequest::getResponse)
-                .forEach(future -> future.completeExceptionally(e));
+                .forEach(future -> future.completeExceptionally(t));
       }
     }
   }
