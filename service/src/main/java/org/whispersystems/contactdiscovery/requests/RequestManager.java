@@ -17,6 +17,7 @@
 
 package org.whispersystems.contactdiscovery.requests;
 
+import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
@@ -59,6 +60,7 @@ public class RequestManager implements Managed {
   private static final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter          processedNumbersMeter = metricRegistry.meter(name(RequestManager.class, "processedNumbers"));
   private static final Timer          processBatchTimer     = metricRegistry.timer(name(RequestManager.class, "processBatch"));
+  private static final Histogram      batchSizeHistogram    = metricRegistry.histogram(name(RequestManager.class, "batchSize"));
 
   private final DirectoryManager       directoryManager;
   private final PendingRequestQueueSet pending;
@@ -135,14 +137,15 @@ public class RequestManager implements Managed {
                                                          request.getRequest().getMac(),
                                                          request.getRequest().getRequestId());
 
-          processedNumbersMeter.mark(request.getRequest().getAddressCount());
-
           batch.add(enclaveMessage, request.getRequest().getAddressCount())
                .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(response.getIv(),
                                                                                            response.getData(),
                                                                                            response.getMac())))
                .exceptionally(exception -> request.getResponse().completeExceptionally(exception));
         }
+
+        processedNumbersMeter.mark(batchSize);
+        batchSizeHistogram.update(batchSize);
 
         try (Timer.Context timer = processBatchTimer.time()) {
           batch.process(registeredUsers.getLeft(), registeredUsers.getRight());

@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
 import org.bouncycastle.crypto.CryptoException;
@@ -77,6 +78,7 @@ public class RemoteAttestationResource {
     this.rateLimiter         = rateLimiter;
   }
 
+  @Timed
   @PUT
   @Path("/{enclaveId}")
   @Consumes(MediaType.APPLICATION_JSON)
