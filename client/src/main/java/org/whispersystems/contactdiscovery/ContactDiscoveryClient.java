@@ -95,6 +95,7 @@ public class ContactDiscoveryClient {
                                                         .target(url)
                                                         .path("/v1/attestation/" + mrenclave)
                                                         .request(MediaType.APPLICATION_JSON_TYPE)
+                                                        .header("Connection", "close")
                                                         .header("Authorization", authorizationHeader)
                                                         .put(Entity.json(request));
       RemoteAttestationResponse response = rawResp.readEntity(RemoteAttestationResponse.class);
@@ -131,6 +132,7 @@ public class ContactDiscoveryClient {
                                                  .target(url)
                                                  .path("/v1/discovery/" + mrenclave)
                                                  .request(MediaType.APPLICATION_JSON_TYPE)
+                                                 .header("Connection", "close")
                                                  .header("Authorization", authorizationHeader);
 
     remoteAttestation.getCookies()
