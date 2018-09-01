@@ -82,7 +82,7 @@ public class ContactDiscoveryClient {
 
   private static final int MAX_REQUEST_SIZE = 2048;
 
-  public RemoteAttestation getRemoteAttestation(String keyStorePath, String url, String mrenclave, String authorizationHeader)
+  public RemoteAttestation getRemoteAttestation(String keyStorePath, String url, String mrenclave, boolean acceptDebugQuote, String authorizationHeader)
       throws UnauthenticatedQuoteException, SignatureException, KeyStoreException, Quote.InvalidQuoteFormatException, UnauthenticatedResponseException
   {
     try {
@@ -113,7 +113,7 @@ public class ContactDiscoveryClient {
       Quote                 quote     = new Quote(response.getQuote());
       byte[]                requestId = getPlaintext(keys.getServerKey(), response.getIv(), response.getCiphertext(), response.getTag());
 
-      verifyServerQuote(quote, response.getServerStaticPublic(), mrenclave);
+      verifyServerQuote(quote, response.getServerStaticPublic(), mrenclave, acceptDebugQuote);
       verifyIasSignature(keyStore, response.getCertificates(), response.getSignatureBody(), response.getSignature(), quote);
 
       return new RemoteAttestation(requestId, keys, cookies);
@@ -169,7 +169,7 @@ public class ContactDiscoveryClient {
   }
 
 
-  private void verifyServerQuote(Quote quote, byte[] serverPublicStatic, String mrenclave)
+  private void verifyServerQuote(Quote quote, byte[] serverPublicStatic, String mrenclave, boolean acceptDebugQuote)
       throws UnauthenticatedQuoteException
   {
     try {
@@ -184,8 +184,8 @@ public class ContactDiscoveryClient {
         throw new UnauthenticatedQuoteException("The response quote has the wrong mrenclave value in it: " + Hex.encodeHexString(quote.getMrenclave()));
       }
 
-      if (!quote.isDebugQuote()) { // Invert in production
-        throw new UnauthenticatedQuoteException("Expecting debug quote!");
+      if (quote.isDebugQuote() && !acceptDebugQuote) {
+        throw new UnauthenticatedQuoteException("Quote had debug flag set!");
       }
     } catch (DecoderException e) {
       throw new AssertionError(e);
@@ -359,6 +359,7 @@ public class ContactDiscoveryClient {
     String       keyStorePath        = commandLine.getOptionValue("t");
     String       url                 = commandLine.getOptionValue("h");
     String       mrenclave           = commandLine.getOptionValue("m");
+    boolean      acceptDebugQuote    = commandLine.hasOption("d");
     int          threadCount         = Integer.parseInt(commandLine.getOptionValue("T", "1"));
     int          maxRequestSize      = Integer.parseInt(commandLine.getOptionValue("S", String.valueOf(MAX_REQUEST_SIZE)));
     ForkJoinPool attestationPool     = new ForkJoinPool(threadCount);
@@ -373,7 +374,7 @@ public class ContactDiscoveryClient {
         CompletableFuture
         .supplyAsync(() -> {
             try {
-              return client.getRemoteAttestation(keyStorePath, url, mrenclave, authorizationHeader);
+              return client.getRemoteAttestation(keyStorePath, url, mrenclave, acceptDebugQuote, authorizationHeader);
             } catch (Exception ex) {
               throw new CompletionException(ex);
             }

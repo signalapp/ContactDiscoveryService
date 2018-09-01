@@ -72,7 +72,9 @@ public class SigningCertificate {
       Signature signature = Signature.getInstance("SHA256withRSA");
       signature.initVerify(path.getCertificates().get(0));
       signature.update(body.getBytes());
-      signature.verify(Base64.decodeBase64(encodedSignature));
+      if (!signature.verify(Base64.decodeBase64(encodedSignature))) {
+        throw new SignatureException("Signature verification failed.");
+      }
     } catch (NoSuchAlgorithmException | InvalidKeyException e) {
       throw new AssertionError(e);
     }
