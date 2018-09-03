@@ -87,7 +87,7 @@ public class IntelClient {
 
   public byte[] getSignatureRevocationList(long gid) {
     String encodedRevocationList = client.target(host)
-                                         .path(String.format("/attestation/sgx/v2/sigrl/%08x", gid))
+                                         .path(String.format("/attestation/sgx/v3/sigrl/%08x", gid))
                                          .request()
                                          .get(String.class);
 
