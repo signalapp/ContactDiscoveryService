@@ -74,7 +74,8 @@ public class SgxHandshakeManagerTest {
     when(enclaveResponse.getServerStaticPublicKey()).thenReturn(serverStatic);
 
     SgxHandshakeManager handshakeManager = new SgxHandshakeManager(enclaveManager, revocationListManager, intelClient);
-    handshakeManager.run();
+    handshakeManager.setRunning(true);
+    handshakeManager.refreshAllQuotes();
 
     verify(revocationListManager, times(2)).getRevocationList(eq(1L));
     verify(revocationListManager, times(1)).refreshRevocationList(eq(1L));
