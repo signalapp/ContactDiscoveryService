@@ -21,8 +21,10 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.client.GroupOutOfDateException;
 import org.whispersystems.contactdiscovery.client.IntelClient;
-import org.whispersystems.contactdiscovery.client.IntelClient.QuoteSignatureResponse;
+import org.whispersystems.contactdiscovery.client.QuoteSignatureResponse;
+import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.dispatch.util.Util;
@@ -93,7 +95,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
           try {
             reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
-          } catch (IntelClient.QuoteVerificationException | SgxException | IllegalArgumentException e) {
+          } catch (QuoteVerificationException | SgxException | IllegalArgumentException e) {
             logger.warn("Problems decoding platform info blob", e);
           }
 
@@ -103,7 +105,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
           logger.warn("Problem calling enclave", e);
           complete = true;
-        } catch (IntelClient.GroupOutOfDateException e) {
+        } catch (GroupOutOfDateException e) {
           getQuoteSignatureErrorMeter.mark();
 
           try {
@@ -113,11 +115,11 @@ public class SgxHandshakeManager implements Managed, Runnable {
             } else {
               logger.warn("Platform needs update: "+e.getMessage()+", but didn't get platform info blob from IAS");
             }
-          } catch (IntelClient.QuoteVerificationException | SgxException | IllegalArgumentException e2) {
+          } catch (QuoteVerificationException | SgxException | IllegalArgumentException e2) {
             logger.warn("Platform needs update: "+e.getMessage()+", but problems finding which component", e2);
           }
           complete = true;
-        } catch (IntelClient.QuoteVerificationException e) {
+        } catch (QuoteVerificationException e) {
           getQuoteSignatureErrorMeter.mark();
 
           logger.warn("Problem retrieving quote", e);
@@ -164,7 +166,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
       if (signedQuote == null) {
         throw new SignedQuoteUnavailableException("No IAS Signed Quote available");
       }
-      response    = enclave.negotiateRequest(clientPublic);
+      response = enclave.negotiateRequest(clientPublic);
     }
 
     return new RemoteAttestationResponse(response.getServerEphemeralPublicKey(),

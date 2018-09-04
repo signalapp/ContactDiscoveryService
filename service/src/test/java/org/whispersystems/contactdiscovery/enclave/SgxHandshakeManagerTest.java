@@ -4,6 +4,8 @@ import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.whispersystems.contactdiscovery.client.IntelClient;
+import org.whispersystems.contactdiscovery.client.QuoteSignatureResponse;
+import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 
 import java.security.SecureRandom;
@@ -18,13 +20,13 @@ import static org.mockito.Mockito.*;
 public class SgxHandshakeManagerTest {
 
   @Test
-  public void testGetQuote() throws SgxException, NoSuchRevocationListException, NoSuchEnclaveException, SignedQuoteUnavailableException, StaleRevocationListException, IntelClient.QuoteVerificationException {
-    SgxEnclaveManager                  enclaveManager        = mock(SgxEnclaveManager.class                 );
-    SgxRevocationListManager           revocationListManager = mock(SgxRevocationListManager.class          );
-    IntelClient                        intelClient           = mock(IntelClient.class                       );
-    SgxEnclave                         enclave               = mock(SgxEnclave.class                        );
-    IntelClient.QuoteSignatureResponse intelResponse         = mock(IntelClient.QuoteSignatureResponse.class);
-    SgxRequestNegotiationResponse      enclaveResponse       = mock(SgxRequestNegotiationResponse.class);
+  public void testGetQuote() throws SgxException, NoSuchRevocationListException, NoSuchEnclaveException, SignedQuoteUnavailableException, StaleRevocationListException, QuoteVerificationException {
+    SgxEnclaveManager             enclaveManager        = mock(SgxEnclaveManager.class                 );
+    SgxRevocationListManager      revocationListManager = mock(SgxRevocationListManager.class          );
+    IntelClient                   intelClient           = mock(IntelClient.class                       );
+    SgxEnclave                    enclave               = mock(SgxEnclave.class                        );
+    QuoteSignatureResponse        intelResponse         = mock(QuoteSignatureResponse.class);
+    SgxRequestNegotiationResponse enclaveResponse       = mock(SgxRequestNegotiationResponse.class);
 
     Map<String, SgxEnclave> enclaveMap = new HashMap<String, SgxEnclave>() {{
       put("mrenclave_valid", enclave);
@@ -48,11 +50,11 @@ public class SgxHandshakeManagerTest {
     when(enclave.negotiateRequest(any())).thenReturn(enclaveResponse);
     when(revocationListManager.getRevocationList(eq(1L))).thenReturn(sigrl);
 
-    when(intelClient.getQuoteSignature(eq(quote))).thenAnswer(new Answer<IntelClient.QuoteSignatureResponse>() {
+    when(intelClient.getQuoteSignature(eq(quote))).thenAnswer(new Answer<QuoteSignatureResponse>() {
       private int invocationTime = 0;
 
       @Override
-      public IntelClient.QuoteSignatureResponse answer(InvocationOnMock invocationOnMock) throws Throwable {
+      public QuoteSignatureResponse answer(InvocationOnMock invocationOnMock) throws Throwable {
         if (invocationTime++ == 0) {
           throw new StaleRevocationListException("Stale!");
         }

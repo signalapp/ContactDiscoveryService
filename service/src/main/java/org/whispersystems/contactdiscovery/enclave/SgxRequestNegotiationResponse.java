@@ -31,7 +31,6 @@ public class SgxRequestNegotiationResponse {
   private final byte[] pendingRequestIdIv;
   private final byte[] pendingRequestIdTag;
 
-  @VisibleForTesting
   public SgxRequestNegotiationResponse(byte[] serverStaticPublicKey, byte[] serverEphemeralPublicKey,
                                        byte[] pendingRequestIdCiphertext, byte[] pendingRequestIdIv,
                                        byte[] pendingRequestIdTag) {
@@ -39,11 +38,11 @@ public class SgxRequestNegotiationResponse {
         pendingRequestIdIv == null || pendingRequestIdTag == null) {
       throw new IllegalArgumentException();
     }
-    this.serverStaticPublicKey    = serverStaticPublicKey;
-    this.serverEphemeralPublicKey = serverEphemeralPublicKey;
-    this.pendingRequestIdCiphertext     = pendingRequestIdCiphertext;
-    this.pendingRequestIdIv       = pendingRequestIdIv;
-    this.pendingRequestIdTag      = pendingRequestIdTag;
+    this.serverStaticPublicKey      = serverStaticPublicKey;
+    this.serverEphemeralPublicKey   = serverEphemeralPublicKey;
+    this.pendingRequestIdCiphertext = pendingRequestIdCiphertext;
+    this.pendingRequestIdIv         = pendingRequestIdIv;
+    this.pendingRequestIdTag        = pendingRequestIdTag;
   }
 
   public byte[] getServerStaticPublicKey() {

@@ -51,7 +51,7 @@ import io.dropwizard.auth.Auth;
 @Path("/v1/discovery")
 public class ContactDiscoveryResource {
 
-  private final RateLimiter     rateLimiter;
+  private final RateLimiter    rateLimiter;
   private final RequestManager requestManager;
 
   public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager) {

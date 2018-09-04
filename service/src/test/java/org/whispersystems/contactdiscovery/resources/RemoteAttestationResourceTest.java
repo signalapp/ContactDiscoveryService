@@ -4,7 +4,7 @@ import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.whispersystems.contactdiscovery.client.IntelClient;
+import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchRevocationListException;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
@@ -58,7 +58,7 @@ public class RemoteAttestationResourceTest {
                                                             .build();
 
   @Before
-  public void setup() throws NoSuchEnclaveException, SgxException, NoSuchRevocationListException, SignedQuoteUnavailableException, StaleRevocationListException, IntelClient.QuoteVerificationException {
+  public void setup() throws NoSuchEnclaveException, SgxException, NoSuchRevocationListException, SignedQuoteUnavailableException, StaleRevocationListException, QuoteVerificationException {
     this.serverEphemeral = new byte[32];
     this.serverPublic    = new byte[32];
     this.quote           = new byte[16];

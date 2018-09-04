@@ -38,29 +38,32 @@ public class DirectoryHashSet {
 
   public DirectoryHashSet(long initialCapacity, float loadFactor) {
     if (loadFactor >= 1.0f || loadFactor <= 0.0f) {
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("bad load factor: " + loadFactor);
     }
-    this.loadFactor = loadFactor;
-    this.curBuffer = allocateBuffer(initialCapacity);
-    this.newBuffer = null;
-
-    this.threshold = (long) (initialCapacity * loadFactor);
-    this.elementCount = 0;
-    this.usedSlotCount = 0;
+    this.loadFactor             = loadFactor;
+    this.curBuffer              = allocateBuffer(initialCapacity);
+    this.newBuffer              = null;
+    this.elementCount           = 0;
+    this.usedSlotCount          = 0;
+    this.newBufferUsedSlotCount = 0;
+    this.threshold              = (long) (initialCapacity * loadFactor);
   }
+
   public ByteBuffer getDirectByteBuffer() {
     return curBuffer;
   }
+
   public long capacity() {
     return curBuffer.capacity() / 8;
   }
+
   public float currentLoadFactor() {
     return (float) (((double) usedSlotCount) / ((double) capacity()));
   }
 
   public boolean add(long element) {
     if (element <= 0) {
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("bad number: " + element);
     }
     boolean added;
     boolean needsRehash = false;
@@ -95,7 +98,7 @@ public class DirectoryHashSet {
 
   public boolean remove(long element) {
     if (element <= 0) {
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("bad number: " + element);
     }
     synchronized (writeLock) {
       boolean removed = removeFromBuffer(curBuffer, element);
@@ -150,13 +153,15 @@ public class DirectoryHashSet {
 
   private static ByteBuffer allocateBuffer(long slotCount) {
     if (slotCount > Integer.MAX_VALUE / 8) {
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("hash_table_too_large");
     }
     return ByteBuffer.allocateDirect((int) (slotCount * 8));
   }
+
   private static int hashElement(int slotCount, long element) {
     return (int) (element % slotCount);
   }
+
   private static long addToBuffer(ByteBuffer buffer, long element) {
     int slotCount = buffer.capacity() / 8;
     int slotIdx = hashElement(slotCount, element);
@@ -183,6 +188,7 @@ public class DirectoryHashSet {
     buffer.putLong(freeSlotIdx * 8, element);
     return slotValue;
   }
+
   private static boolean removeFromBuffer(ByteBuffer buffer, long element) {
     int slotCount = buffer.capacity() / 8;
     int slotIdx = hashElement(slotCount, element);
@@ -199,4 +205,5 @@ public class DirectoryHashSet {
     }
     return false;
   }
+
 }
