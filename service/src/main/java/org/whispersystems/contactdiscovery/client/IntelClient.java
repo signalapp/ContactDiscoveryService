@@ -28,6 +28,7 @@ import org.glassfish.jersey.SslConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.enclave.StaleRevocationListException;
+import org.whispersystems.contactdiscovery.util.ByteUtils;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 
 import javax.net.ssl.SSLContext;
@@ -43,10 +44,17 @@ import java.io.InputStreamReader;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.Period;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Client interface for communication with IAS
@@ -106,6 +114,14 @@ public class IntelClient {
 
       QuoteSignatureResponseBody responseBody = SystemMapper.getMapper().readValue(responseBodyString, QuoteSignatureResponseBody.class);
 
+      if (responseBody.getVersion() != 3) {
+        throw new QuoteVerificationException("Bad response version: " + responseBody.getVersion());
+      }
+
+      if (!MessageDigest.isEqual(ByteUtils.truncate(responseBody.getIsvEnclaveQuoteBody(), 432), ByteUtils.truncate(quote, 432))) {
+        throw new QuoteVerificationException("Signed quote is not the same as RA quote: " + Hex.encodeHexString(responseBody.getIsvEnclaveQuoteBody()) + " vs " + Hex.encodeHexString(quote));
+      }
+
       if ("SIGRL_VERSION_MISMATCH".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new StaleRevocationListException(responseBodyString);
       } else if ("GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus()) ||
@@ -117,6 +133,12 @@ public class IntelClient {
         throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
       } else if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new QuoteVerificationException("Bad response: " + responseBodyString);
+      }
+
+      if (Instant.from(ZonedDateTime.of(LocalDateTime.from(DateTimeFormatter.ofPattern("yyy-MM-dd'T'HH:mm:ss.SSSSSS").parse(responseBody.getTimestamp())), ZoneId.of("UTC")))
+                 .plus(Period.ofDays(1))
+                 .isBefore(Instant.now())) {
+        throw new QuoteVerificationException("Response signature is expired: " + responseBody.getTimestamp());
       }
 
       return new QuoteSignatureResponse(signature, responseBodyString, certificate, responseBody.getPlatformInfoBlob());

@@ -36,6 +36,14 @@ class QuoteSignatureResponseBody {
   private byte[] isvEnclaveQuoteBody;
 
   @JsonProperty
+  @NotNull
+  private Long version;
+
+  @JsonProperty
+  @NotEmpty
+  private String timestamp;
+
+  @JsonProperty
   private String platformInfoBlob;
 
   public QuoteSignatureResponseBody() {
@@ -47,6 +55,14 @@ class QuoteSignatureResponseBody {
 
   public byte[] getIsvEnclaveQuoteBody() {
     return isvEnclaveQuoteBody;
+  }
+
+  public Long getVersion() {
+    return version;
+  }
+
+  public String getTimestamp() {
+    return timestamp;
   }
 
   public String getPlatformInfoBlob() {
