@@ -6,147 +6,51 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.codec.binary.Hex;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
-import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
-import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
-import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
-import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
-import org.whispersystems.contactdiscovery.util.ByteUtils;
-import org.whispersystems.contactdiscovery.util.IntegerUtil;
-import org.whispersystems.contactdiscovery.util.StreamUtils;
-import org.whispersystems.contactdiscovery.util.SystemMapper;
-import org.whispersystems.curve25519.Curve25519;
-import org.whispersystems.curve25519.Curve25519KeyPair;
-import org.whispersystems.dispatch.util.Util;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.whispersystems.signalservice.api.SignalServiceAccountManager;
+import org.whispersystems.signalservice.api.push.TrustStore;
+import org.whispersystems.signalservice.internal.configuration.SignalCdnUrl;
+import org.whispersystems.signalservice.internal.configuration.SignalContactDiscoveryUrl;
+import org.whispersystems.signalservice.internal.configuration.SignalServiceConfiguration;
+import org.whispersystems.signalservice.internal.configuration.SignalServiceUrl;
+import org.whispersystems.signalservice.internal.util.Base64;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.Mac;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.core.Cookie;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SignatureException;
-import java.security.cert.CertPathValidatorException;
+import java.security.Security;
 import java.security.cert.CertificateException;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.Period;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAccessor;
-import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class ContactDiscoveryClient {
 
-  private static final int MAX_REQUEST_SIZE = 2048;
-
-  public RemoteAttestation getRemoteAttestation(String keyStorePath, String url, String mrenclave, boolean acceptDebugQuote, String authorizationHeader)
-      throws UnauthenticatedQuoteException, SignatureException, KeyStoreException, Quote.InvalidQuoteFormatException, UnauthenticatedResponseException
-  {
-    try {
-      KeyStore          keyStore = loadKeyStore(keyStorePath);
-      Curve25519        curve    = Curve25519.getInstance(Curve25519.BEST);
-      Curve25519KeyPair keyPair  = curve.generateKeyPair();
-
-      RemoteAttestationRequest  request  = new RemoteAttestationRequest(keyPair.getPublicKey());
-      Response                  rawResp  = ClientBuilder.newClient()
-                                                        .target(url)
-                                                        .path("/v1/attestation/" + mrenclave)
-                                                        .request(MediaType.APPLICATION_JSON_TYPE)
-                                                        .header("Connection", "close")
-                                                        .header("Authorization", authorizationHeader)
-                                                        .put(Entity.json(request));
-      RemoteAttestationResponse response = rawResp.readEntity(RemoteAttestationResponse.class);
-      Set<Cookie>               cookies  = Optional.ofNullable(rawResp.getCookies())
-                                                   .orElse(Collections.emptyMap())
-                                                   .values()
-                                                   .stream()
-                                                   .map(NewCookie::toCookie)
-                                                   .collect(Collectors.toSet());
-
-      if (rawResp.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL) {
-        throw new WebApplicationException(rawResp);
-      }
-
-      RemoteAttestationKeys keys      = new RemoteAttestationKeys(keyPair, response.getServerEphemeralPublic(), response.getServerStaticPublic());
-      Quote                 quote     = new Quote(response.getQuote());
-      byte[]                requestId = getPlaintext(keys.getServerKey(), response.getIv(), response.getCiphertext(), response.getTag());
-
-      verifyServerQuote(quote, response.getServerStaticPublic(), mrenclave, acceptDebugQuote);
-      verifyIasSignature(keyStore, response.getCertificates(), response.getSignatureBody(), response.getSignature(), quote);
-
-      return new RemoteAttestation(requestId, keys, cookies);
-    } catch (BadPaddingException e) {
-      throw new UnauthenticatedResponseException(e);
-    }
-  }
-
-  public Stream<String> getRegisteredUsers(List<String> addressBook, RemoteAttestation remoteAttestation, String url, String mrenclave, String authorizationHeader)
-      throws IOException
-  {
-    DiscoveryRequest   request    = createDiscoveryRequest(addressBook, remoteAttestation);
-
-    Invocation.Builder reqBuilder = ClientBuilder.newClient()
-                                                 .target(url)
-                                                 .path("/v1/discovery/" + mrenclave)
-                                                 .request(MediaType.APPLICATION_JSON_TYPE)
-                                                 .header("Connection", "close")
-                                                 .header("Authorization", authorizationHeader);
-
-    remoteAttestation.getCookies()
-                     .stream()
-                     .forEach(cookie -> reqBuilder.cookie(cookie));
-
-    DiscoveryResponse response = reqBuilder.put(Entity.json(request), DiscoveryResponse.class);
-
-    List<Byte> responseData = Arrays.asList(ArrayUtils.toObject(getDiscoveryResponseData(response, remoteAttestation)));
-
-    return StreamUtils.zip(addressBook.stream(), responseData.stream(), ImmutablePair::new)
-                      .filter(pair -> pair.getRight() != 0)
-                      .map(Pair::getLeft);
-  }
+  private static final int    MAX_REQUEST_SIZE     = 2048;
+  private static final String TRUST_STORE_PASSWORD = "insecure";
+  private static final String USER_AGENT           = "ContactDiscoveryClient";
 
   public void setRegisteredUser(String url, String authorizationHeader, String user) {
     Response response = ClientBuilder.newClient()
@@ -170,65 +74,10 @@ public class ContactDiscoveryClient {
     System.out.println(response.getStatusInfo());
   }
 
-
-  private void verifyServerQuote(Quote quote, byte[] serverPublicStatic, String mrenclave, boolean acceptDebugQuote)
-      throws UnauthenticatedQuoteException
-  {
+  private static KeyStore loadKeyStore(String path) throws KeyStoreException {
     try {
-      byte[] theirServerPublicStatic = new byte[serverPublicStatic.length];
-      System.arraycopy(quote.getReportData(), 0, theirServerPublicStatic, 0, theirServerPublicStatic.length);
-
-      if (!MessageDigest.isEqual(theirServerPublicStatic, serverPublicStatic)) {
-        throw new UnauthenticatedQuoteException("Response quote has unauthenticated report data!");
-      }
-
-      if (!MessageDigest.isEqual(Hex.decodeHex(mrenclave.toCharArray()), quote.getMrenclave())) {
-        throw new UnauthenticatedQuoteException("The response quote has the wrong mrenclave value in it: " + Hex.encodeHexString(quote.getMrenclave()));
-      }
-
-      if (quote.isDebugQuote() && !acceptDebugQuote) {
-        throw new UnauthenticatedQuoteException("Quote had debug flag set!");
-      }
-    } catch (DecoderException e) {
-      throw new AssertionError(e);
-    }
-  }
-
-  private void verifyIasSignature(KeyStore trustStore, String certificates, String signatureBody, String signature, Quote quote)
-      throws SignatureException
-  {
-    try {
-      SigningCertificate signingCertificate = new SigningCertificate(certificates, trustStore);
-      signingCertificate.verifySignature(signatureBody, signature);
-
-      SignatureBodyEntity signatureBodyEntity = SystemMapper.getMapper().readValue(signatureBody, SignatureBodyEntity.class);
-
-      if (!MessageDigest.isEqual(ByteUtils.truncate(signatureBodyEntity.getIsvEnclaveQuoteBody(), 432), ByteUtils.truncate(quote.getQuoteBytes(), 432))) {
-        throw new SignatureException("Signed quote is not the same as RA quote: " + Hex.encodeHexString(signatureBodyEntity.getIsvEnclaveQuoteBody()) + " vs " + Hex.encodeHexString(quote.getQuoteBytes()));
-      }
-
-      if (!"OK".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus()) &&
-          // Remove in production
-          !"GROUP_OUT_OF_DATE".equals(signatureBodyEntity.getIsvEnclaveQuoteStatus())) {
-        throw new SignatureException("Quote status is: " + signatureBodyEntity.getIsvEnclaveQuoteStatus());
-      }
-
-      if (Instant.from(ZonedDateTime.of(LocalDateTime.from(DateTimeFormatter.ofPattern("yyy-MM-dd'T'HH:mm:ss.SSSSSS").parse(signatureBodyEntity.getTimestamp())), ZoneId.of("UTC")))
-                 .plus(Period.ofDays(1))
-                 .isBefore(Instant.now()))
-      {
-        throw new SignatureException("Signature is expired");
-      }
-      
-    } catch (CertificateException | CertPathValidatorException | IOException e) {
-      throw new SignatureException(e);
-    }
-  }
-
-  private KeyStore loadKeyStore(String path) throws KeyStoreException{
-    try {
-      KeyStore keyStore = KeyStore.getInstance("JKS");
-      keyStore.load(new FileInputStream(path), "insecure".toCharArray());
+      KeyStore keyStore = KeyStore.getInstance("BKS");
+      keyStore.load(new FileInputStream(path), TRUST_STORE_PASSWORD.toCharArray());
 
       return keyStore;
     } catch (NoSuchAlgorithmException e) {
@@ -251,60 +100,6 @@ public class ContactDiscoveryClient {
     return results;
   }
 
-  private DiscoveryRequest createDiscoveryRequest(List<String> addressBook, RemoteAttestation remoteAttestation) {
-    try {
-      ByteArrayOutputStream requestDataStream = new ByteArrayOutputStream();
-      addressBook.forEach(address -> requestDataStream.write(IntegerUtil.longToByteArray(Long.parseLong(address)), 0, 8));
-
-      byte[]           requestData      = requestDataStream.toByteArray();
-      byte[]           iv               = ByteUtils.getRandomBytes(12);
-      Cipher           cipher           = Cipher.getInstance("AES/GCM/NoPadding");
-      GCMParameterSpec cipherParamaters = new GCMParameterSpec(16 * 8, iv);
-
-      cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(remoteAttestation.getKeys().getClientKey(), "AES"), cipherParamaters);
-
-      cipher.updateAAD(remoteAttestation.getRequestId());
-
-      byte[] combinedCiphertext = cipher.doFinal(requestData);
-      byte[] ciphertext         = ByteUtils.truncate(combinedCiphertext, combinedCiphertext.length - 16);
-      byte[] mac                = ByteUtils.reverseTruncate(combinedCiphertext, 16);
-
-      return new DiscoveryRequest(addressBook.size(), remoteAttestation.getRequestId(), iv, ciphertext, mac);
-    } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-      throw new AssertionError(e);
-    }
-  }
-
-  private byte[] getDiscoveryResponseData(DiscoveryResponse response, RemoteAttestation remoteAttestation) {
-    try {
-      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-      GCMParameterSpec cipherParameters = new GCMParameterSpec(16 * 8, response.getIv());
-
-      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(remoteAttestation.getKeys().getServerKey(), "AES"), cipherParameters);
-
-      byte[] ciphertext = Util.combine(response.getData(), response.getMac());
-
-      return cipher.doFinal(ciphertext);
-    } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
-      throw new AssertionError(e);
-    }
-  }
-
-  private byte[] getPlaintext(byte[] serverKey, byte[] iv, byte[] ciphertext, byte[] tag) throws BadPaddingException {
-    try {
-      Cipher           cipher           = Cipher.getInstance("AES/GCM/NoPadding");
-      GCMParameterSpec cipherParameters = new GCMParameterSpec(16 * 8, iv);
-
-      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(serverKey, "AES"), cipherParameters);
-
-      byte[] combinedCipherText = Util.combine(ciphertext, tag);
-
-      return cipher.doFinal(combinedCipherText);
-    } catch (NoSuchAlgorithmException | IllegalBlockSizeException | InvalidAlgorithmParameterException | NoSuchPaddingException | InvalidKeyException e) {
-      throw new AssertionError(e);
-    }
-  }
-
   private static void printUsageAndExit(Options options) {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("ContactDiscoveryClient", options);
@@ -313,42 +108,49 @@ public class ContactDiscoveryClient {
 
   private static CommandLine getCommandLine(String[] argv) throws ParseException {
     Options options = new Options();
-    options.addOption("c", true, "[register|discover]");
-    options.addOption("h", true, "Contact discovery service URL");
-    options.addOption("u", true, "Username");
-    options.addOption("p", true, "Password");
-    options.addOption("s", true, "Address to set as registered");
-    options.addOption("d", true, "Address to delete from registered");
-    options.addOption("a", true, "File containing addresses to lookup");
-    options.addOption("S", true, String.format("Size of discovery requests, in addresses (%d default)", MAX_REQUEST_SIZE));
-    options.addOption("m", true, "MRENCLAVE value");
-    options.addOption("t", true, "Path to trust store");
-    options.addOption("T", true, "Number of threads used for sending discovery requests");
+    options.addOption("c",  "command",     true, "[register|discover]");
+    options.addOption("u",  "username",    true, "Username");
+    options.addOption("p",  "password",    true, "Password");
+    options.addOption("h",  "host",        true, "Directory service URL");
+    options.addOption("s",  "set",         true, "Address to set as registered");
+    options.addOption("d",  "delete",      true, "Address to delete from registered");
+    options.addOption("a",  "address-file",true, "File containing addresses to lookup");
+    options.addOption("S",  "request-size",true, String.format("Maximum number of addresses per discovery request (default %d)", MAX_REQUEST_SIZE));
+    options.addOption("m",  "mrenclave",   true, "MRENCLAVE value");
+    options.addOption("T",  "threads",     true, "Number of threads used for sending discovery requests");
+
+    options.addOption(null, "signal-host",        true, "Signal service URL");
+    options.addOption(null, "signal-trust-store", true, "Path to signal service trust store");
+    options.addOption(null, "intel-trust-store",  true, "Path to intel attestation signature trust store");
 
     CommandLineParser parser      = new DefaultParser();
     CommandLine       commandLine = parser.parse(options, argv);
 
-    if (!commandLine.hasOption("c") ||
-        !commandLine.hasOption("h") ||
-        !commandLine.hasOption("u") ||
-        !commandLine.hasOption("p"))
-    {
+    if (!commandLine.hasOption("command") ||
+        !commandLine.hasOption("host") ||
+        !commandLine.hasOption("username") ||
+        !commandLine.hasOption("password")) {
       HelpFormatter formatter = new HelpFormatter();
       formatter.printHelp("ContactDiscoveryClient", options);
       System.exit(1);
     }
 
-    String commandType = commandLine.getOptionValue("c");
+    String commandType = commandLine.getOptionValue("command");
 
-    if (!commandType.equals("register") && !commandType.equals("discover")) {
-      printUsageAndExit(options);
-    }
-
-    if (commandType.equals("register")  && !commandLine.hasOption("s") && !commandLine.hasOption("d")) {
-      printUsageAndExit(options);
-    }
-
-    if (commandType.equals("discover")  && !commandLine.hasOption("a")) {
+    if (commandType.equals("register")) {
+      if (!commandLine.hasOption("set") &&
+          !commandLine.hasOption("delete")) {
+        printUsageAndExit(options);
+      }
+    } else if (commandType.equals("discover")) {
+      if (!commandLine.hasOption("address-file") ||
+          !commandLine.hasOption("signal-host") ||
+          !commandLine.hasOption("signal-trust-store") ||
+          !commandLine.hasOption("intel-trust-store") ||
+          !commandLine.hasOption("mrenclave")) {
+        printUsageAndExit(options);
+      }
+    } else {
       printUsageAndExit(options);
     }
 
@@ -356,65 +158,105 @@ public class ContactDiscoveryClient {
   }
 
   private static void handleDiscoverCommand(CommandLine commandLine) throws Throwable {
-    String       authorizationHeader = "Basic " + Base64.encodeBase64String((commandLine.getOptionValue("u") + ":" + commandLine.getOptionValue("p")).getBytes());
-    List<String> addressBook         = loadAddressBook(commandLine.getOptionValue("a"));
-    String       keyStorePath        = commandLine.getOptionValue("t");
-    String       url                 = commandLine.getOptionValue("h");
-    String       mrenclave           = commandLine.getOptionValue("m");
-    boolean      acceptDebugQuote    = commandLine.hasOption("d");
-    int          threadCount         = Integer.parseInt(commandLine.getOptionValue("T", "1"));
-    int          maxRequestSize      = Integer.parseInt(commandLine.getOptionValue("S", String.valueOf(MAX_REQUEST_SIZE)));
-    ForkJoinPool attestationPool     = new ForkJoinPool(threadCount);
-    ForkJoinPool requestPool         = new ForkJoinPool(threadCount);
+    String                      username         = commandLine.getOptionValue("username");
+    String                      password         = commandLine.getOptionValue("password");
+    List<String>                addressBook      = loadAddressBook(commandLine.getOptionValue("address-file"));
+    KeyStore                    intelTrustStore  = loadKeyStore(commandLine.getOptionValue("intel-trust-store"));
+    TrustStore                  signalTrustStore = SignalTrustStore.fromFile(commandLine.getOptionValue("signal-trust-store"));
+    SignalServiceUrl[]          serviceUrls      = {new SignalServiceUrl(commandLine.getOptionValue("signal-host"), signalTrustStore)};
+    SignalContactDiscoveryUrl[] directoryUrls    = {new SignalContactDiscoveryUrl(commandLine.getOptionValue("host"), signalTrustStore)};
+    String                      mrenclave        = commandLine.getOptionValue("mrenclave");
+    int                         threadCount      = Integer.parseInt(commandLine.getOptionValue("threads", "1"));
+    int                         maxRequestSize   = Integer.parseInt(commandLine.getOptionValue("request-size", String.valueOf(MAX_REQUEST_SIZE)));
+    SignalServiceConfiguration  serviceConfig    = new SignalServiceConfiguration(serviceUrls, new SignalCdnUrl[0], directoryUrls);
 
-    List<CompletableFuture<Stream<String>>> futures = new ArrayList<>();
+    ForkJoinPool                            requestPool = new ForkJoinPool(threadCount);
+    List<CompletableFuture<Stream<String>>> futures     = new ArrayList<>();
+
+    BlockingQueue<SignalServiceAccountManager> serviceManagers =
+        IntStream.range(0, threadCount)
+                 .mapToObj(threadIndex -> new SignalServiceAccountManager(serviceConfig, username, password, USER_AGENT))
+                 .collect(Collectors.toCollection(() -> new ArrayBlockingQueue<>(threadCount)));
+
     for (int addressBookIdx = 0; addressBookIdx < addressBook.size(); addressBookIdx += maxRequestSize) {
-      ContactDiscoveryClient client            = new ContactDiscoveryClient();
-      int                    addressBookEndIdx = Math.min(addressBookIdx + maxRequestSize, addressBook.size());
-      List<String>           addressBookChunk  = addressBook.subList(addressBookIdx, addressBookEndIdx);
+      int         addressBookEndIdx = Math.min(addressBookIdx + maxRequestSize, addressBook.size());
+      Set<String> addressBookChunk  = new HashSet<>(addressBook.subList(addressBookIdx, addressBookEndIdx));
       CompletableFuture<Stream<String>> future =
-        CompletableFuture
-        .supplyAsync(() -> {
-            try {
-              return client.getRemoteAttestation(keyStorePath, url, mrenclave, acceptDebugQuote, authorizationHeader);
-            } catch (Exception ex) {
-              throw new CompletionException(ex);
-            }
-          }, attestationPool)
-        .thenApplyAsync(remoteAttestation -> {
-            try {
-              return client.getRegisteredUsers(addressBookChunk, remoteAttestation, url, mrenclave, authorizationHeader);
-            } catch (Exception ex) {
-              throw new CompletionException(ex);
-            }
-          }, requestPool);
+          CompletableFuture
+              .supplyAsync(() -> {
+                try {
+                  SignalServiceAccountManager serviceManager = serviceManagers.take();
+                  try {
+                    return serviceManager.getRegisteredUsers(intelTrustStore, addressBookChunk, mrenclave).stream();
+                  } finally {
+                    serviceManagers.add(serviceManager);
+                  }
+                } catch (Throwable t) {
+                  t.printStackTrace();
+                  throw new CompletionException(t);
+                }
+              }, requestPool);
       futures.add(future);
     }
 
     System.out.println("Registered users:");
     futures.stream()
-           .flatMap(future -> future.join())
+           .flatMap(future -> {
+             try {
+               return future.join();
+             } catch (Throwable t) {
+               return Stream.empty();
+             }
+           })
            .forEach(System.out::println);
   }
 
   private static void handleRegisterCommand(CommandLine commandLine) throws Throwable {
-    String                 authorizationHeader = "Basic " + Base64.encodeBase64String((commandLine.getOptionValue("u") + ":" + commandLine.getOptionValue("p")).getBytes());
+    String                 username            = commandLine.getOptionValue("username");
+    String                 password            = commandLine.getOptionValue("password");
+    String                 authorizationHeader = "Basic " + Base64.encodeBytes((username + ":" + password).getBytes());
     ContactDiscoveryClient client              = new ContactDiscoveryClient();
 
-    if (commandLine.hasOption("s")) {
-      client.setRegisteredUser(commandLine.getOptionValue("h"), authorizationHeader, commandLine.getOptionValue("s"));
+    if (commandLine.hasOption("set")) {
+      client.setRegisteredUser(commandLine.getOptionValue("host"), authorizationHeader, commandLine.getOptionValue("set"));
     } else {
-      client.removeRegisteredUser(commandLine.getOptionValue("h"), authorizationHeader, commandLine.getOptionValue("d"));
+      client.removeRegisteredUser(commandLine.getOptionValue("host"), authorizationHeader, commandLine.getOptionValue("delete"));
     }
   }
 
   public static void main(String[] argv) throws Throwable {
+    Security.addProvider(new BouncyCastleProvider());
+
     CommandLine commandLine = getCommandLine(argv);
 
-    if (commandLine.getOptionValue("c").equals("discover")) {
+    if (commandLine.getOptionValue("command").equals("discover")) {
       handleDiscoverCommand(commandLine);
     } else {
       handleRegisterCommand(commandLine);
+    }
+
+  }
+
+  private static class SignalTrustStore implements TrustStore {
+
+    private final byte[] trustStore;
+
+    private SignalTrustStore(byte[] trustStore) {
+      this.trustStore = trustStore;
+    }
+
+    public static SignalTrustStore fromFile(String trustStorePath) throws IOException {
+      return new SignalTrustStore(Files.readAllBytes(Paths.get(trustStorePath)));
+    }
+
+    @Override
+    public InputStream getKeyStoreInputStream() {
+      return new ByteArrayInputStream(trustStore);
+    }
+
+    @Override
+    public String getKeyStorePassword() {
+      return TRUST_STORE_PASSWORD;
     }
 
   }
