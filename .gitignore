@@ -25,5 +25,8 @@
 .idea
 *.iml
 target
-config/local.yml
+/service/config/production.yml
+/service/config/staging.yml
+/service/config/testing.yml
+/service/config/local.yml
 dependency-reduced-pom.xml
