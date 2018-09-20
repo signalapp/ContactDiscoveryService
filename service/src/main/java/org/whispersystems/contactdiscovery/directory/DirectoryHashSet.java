@@ -61,6 +61,10 @@ public class DirectoryHashSet {
     return (float) (((double) usedSlotCount) / ((double) capacity()));
   }
 
+  public float getLoadFactor() {
+    return loadFactor;
+  }
+
   public boolean add(long element) {
     if (element <= 0) {
       throw new IllegalArgumentException("bad number: " + element);

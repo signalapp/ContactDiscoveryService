@@ -88,10 +88,14 @@ public class DirectoryManagementResource {
                                                    @Valid DirectoryReconciliationRequest request)
       throws InvalidAddressException
   {
-    directoryManager.reconcile(Optional.ofNullable(request.getFromNumber()),
-                               Optional.ofNullable(request.getToNumber()),
-                               request.getNumbers());
-    return new DirectoryReconciliationResponse(DirectoryReconciliationResponse.Status.OK);
+    boolean found = directoryManager.reconcile(Optional.ofNullable(request.getFromNumber()),
+                                               Optional.ofNullable(request.getToNumber()),
+                                               request.getNumbers());
+    if (found) {
+      return new DirectoryReconciliationResponse(DirectoryReconciliationResponse.Status.OK);
+    } else {
+      return new DirectoryReconciliationResponse(DirectoryReconciliationResponse.Status.MISSING);
+    }
   }
 
 }

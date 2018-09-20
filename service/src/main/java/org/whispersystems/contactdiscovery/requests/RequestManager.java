@@ -28,10 +28,10 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
+import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclave;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
-import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxsdMessage;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
@@ -79,8 +79,11 @@ public class RequestManager implements Managed {
   }
 
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
-      throws NoSuchEnclaveException
+      throws NoSuchEnclaveException, DirectoryUnavailableException
   {
+    if (!directoryManager.isReady()) {
+      throw new DirectoryUnavailableException();
+    }
     return pending.put(enclaveId, request);
   }
 

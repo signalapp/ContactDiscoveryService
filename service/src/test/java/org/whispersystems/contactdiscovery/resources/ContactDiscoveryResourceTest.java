@@ -4,11 +4,13 @@ import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
@@ -49,11 +51,12 @@ public class ContactDiscoveryResourceTest {
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
                                                             .addProvider(new RateLimitExceededExceptionMapper())
+                                                            .addProvider(new DirectoryUnavailableExceptionMapper())
                                                             .addResource(new ContactDiscoveryResource(rateLimiter, requestManager))
                                                             .build();
 
   @Before
-  public void setup() throws NoSuchEnclaveException, RateLimitExceededException {
+  public void setup() throws Exception {
     new SecureRandom().nextBytes(iv);
     new SecureRandom().nextBytes(data);
     new SecureRandom().nextBytes(mac);
@@ -71,7 +74,7 @@ public class ContactDiscoveryResourceTest {
 
 
   @Test
-  public void testDiscovery() throws NoSuchEnclaveException, RateLimitExceededException {
+  public void testDiscovery() throws Exception {
     DiscoveryResponse response = resources.getJerseyTest()
                                           .target("/v1/discovery/" + validEnclaveId)
                                           .request(MediaType.APPLICATION_JSON_TYPE)
@@ -120,5 +123,19 @@ public class ContactDiscoveryResourceTest {
     assertEquals(429, response.getStatus());
   }
 
+  @Test
+  public void testDirectoryUnavailable() throws Exception {
+    CompletableFuture<DiscoveryResponse> exceptionFuture = new CompletableFuture<>();
+    exceptionFuture.completeExceptionally(new DirectoryUnavailableException());
+    when(requestManager.submit(eq(validEnclaveId), any())).thenReturn(exceptionFuture);
+
+    Response response = resources.getJerseyTest()
+                                 .target("/v1/discovery/" + validEnclaveId)
+                                 .request(MediaType.APPLICATION_JSON_TYPE)
+                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                 .put(Entity.entity(new DiscoveryRequest(50, new byte[32], new byte[12], new byte[512], new byte[16]), MediaType.APPLICATION_JSON_TYPE));
+
+    assertEquals(503, response.getStatus());
+  }
 
 }

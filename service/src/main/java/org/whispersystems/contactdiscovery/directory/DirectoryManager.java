@@ -22,37 +22,31 @@ import com.codahale.metrics.SharedMetricRegistries;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import org.apache.commons.lang3.tuple.Pair;
+import io.dropwizard.lifecycle.Managed;
 import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
-import org.whispersystems.contactdiscovery.redis.LuaScript;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.redis.PubSubReply;
 import org.whispersystems.dispatch.util.Util;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ScanResult;
+import redis.clients.jedis.Tuple;
+import redis.clients.util.Pool;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-
-import io.dropwizard.lifecycle.Managed;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.ScanResult;
-import redis.clients.jedis.Tuple;
-import redis.clients.util.Pool;
+import java.util.stream.Stream;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -68,99 +62,92 @@ public class DirectoryManager implements Managed {
   private static final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter          reconciledNumbersMeter = metricRegistry.meter(name(DirectoryManager.class, "reconciledNumbers"));
 
-  private static final String CHANNEL     = "signal_address_update";
-  private static final String ADDRESS_SET = "signal_addresses_sorted::1";
-
-  private final ExecutorService rebuildExecutor = Executors.newSingleThreadExecutor();
+  private static final String CHANNEL = "signal_address_update";
 
   private final RedisClientFactory redisFactory;
-  private final DirectoryHashSet   directory;
+  private final DirectoryHashSets  directories;
+
+  private final AtomicBoolean connected = new AtomicBoolean(false);
+  private final AtomicBoolean built     = new AtomicBoolean(false);
 
   private Pool<Jedis>      jedisPool;
+  private DirectoryCache   directoryCache;
   private PubSubConnection pubSubConnection;
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
 
   public DirectoryManager(RedisClientFactory redisFactory, long initialCapacity, float loadFactor) {
-    this.redisFactory = redisFactory;
-    this.directory    = new DirectoryHashSet(initialCapacity, loadFactor);
+    this.redisFactory   = redisFactory;
+    this.directoryCache = new DirectoryCache();
+    this.directories    = new DirectoryHashSets(new DirectoryHashSet(initialCapacity, loadFactor));
   }
 
   @VisibleForTesting
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryHashSet directory) {
-    this.redisFactory = redisFactory;
-    this.directory    = directory;
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSet directory) {
+    this.redisFactory   = redisFactory;
+    this.directoryCache = directoryCache;
+    this.directories    = new DirectoryHashSets(directory);
+  }
+
+  public boolean isReady() {
+    return connected.get() && built.get();
   }
 
   public void addAddress(String address) throws InvalidAddressException {
-    long directoryAddress = parseAddress(address);
-
     try (Jedis jedis = jedisPool.getResource()) {
-      if (1L == jedis.zadd(ADDRESS_SET, 0, address)) {
-        jedis.publish(CHANNEL.getBytes(),
-                      PubSubMessage.newBuilder()
-                                   .setContent(ByteString.copyFrom(address.getBytes()))
-                                   .setType(PubSubMessage.Type.ADDED)
-                                   .build()
-                                   .toByteArray());
-      }
+      addAddress(jedis, address);
     }
-
-    directory.add(directoryAddress);
   }
 
   public void removeAddress(String address) throws InvalidAddressException {
-    long directoryAddress = parseAddress(address);
-
     try (Jedis jedis = jedisPool.getResource()) {
-      if (1L == jedis.zrem(ADDRESS_SET, address)) {
-        jedis.publish(CHANNEL.getBytes(),
-                      PubSubMessage.newBuilder()
-                                   .setContent(ByteString.copyFrom(address.getBytes()))
-                                   .setType(PubSubMessage.Type.REMOVED)
-                                   .build()
-                                   .toByteArray());
-      }
+      removeAddress(jedis, address);
     }
-
-    directory.remove(directoryAddress);
   }
 
-  public void reconcile(Optional<String> fromNumber, Optional<String> toNumber, List<String> addresses)
+  public boolean reconcile(Optional<String> fromNumber, Optional<String> toNumber, List<String> addresses)
       throws InvalidAddressException
   {
-    addresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
-
-    Set<String> removeAddresses = getAddressesInRange(fromNumber, toNumber);
-    Set<String> addAddresses    = new HashSet<>(addresses);
-
-    addAddresses.removeAll(removeAddresses);
-    removeAddresses.removeAll(addresses);
-
-    for (String removeAddress : removeAddresses) {
-      try {
-        removeAddress(removeAddress);
-        reconciledNumbersMeter.mark();
-      } catch (InvalidAddressException ex) {
-        logger.error("invalid address: ", removeAddress);
-      }
-    }
-
-    for (String addAddress : addAddresses) {
-      addAddress(addAddress);
-      reconciledNumbersMeter.mark();
-    }
-  }
-
-  private Set<String> getAddressesInRange(Optional<String> fromNumber, Optional<String> toNumber) {
     try (Jedis jedis = jedisPool.getResource()) {
-      String lowerBound = fromNumber.map(number -> "(" + number).orElse("-");
-      String upperBound = toNumber.map(number -> "[" + number).orElse("+");
-      return jedis.zrangeByLex(ADDRESS_SET, lowerBound, upperBound);
+      addresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
+
+      if (fromNumber.isPresent()) {
+        Optional<String> lastNumberReconciled = directoryCache.getAddressLastReconciled(jedis);
+        if (!lastNumberReconciled.isPresent() ||
+            fromNumber.get().compareTo(lastNumberReconciled.get()) > 0) {
+          logger.warn("reconciliation data was skipped; triggering reconciliation restart");
+          return false;
+        }
+      }
+
+      Set<String> removeAddresses = directoryCache.getAddressesInRange(jedis, fromNumber, toNumber);
+      Set<String> addAddresses    = new HashSet<>(addresses);
+
+      addAddresses.removeAll(removeAddresses);
+      removeAddresses.removeAll(addresses);
+
+      for (String removeAddress : removeAddresses) {
+        try {
+          removeAddress(jedis, removeAddress);
+          reconciledNumbersMeter.mark();
+        } catch (InvalidAddressException ex) {
+          logger.error("invalid address: ", removeAddress);
+        }
+      }
+
+      for (String addAddress : addAddresses) {
+        addAddress(jedis, addAddress);
+        reconciledNumbersMeter.mark();
+      }
+
+      directoryCache.setAddressLastReconciled(jedis, toNumber);
+
+      return true;
     }
   }
 
   public Pair<ByteBuffer, Long> getAddressList() {
+    DirectoryHashSet directory = directories.getDirectory();
     return new ImmutablePair<>(directory.getDirectByteBuffer(), directory.capacity());
   }
 
@@ -185,17 +172,50 @@ public class DirectoryManager implements Managed {
     pubSubConnection.close();
   }
 
+  private void addAddress(Jedis jedis, String address) throws InvalidAddressException {
+    long directoryAddress = parseAddress(address);
+
+    if (directoryCache.addAddress(jedis, address)) {
+      jedis.publish(CHANNEL.getBytes(),
+                    PubSubMessage.newBuilder()
+                                 .setContent(ByteString.copyFrom(address.getBytes()))
+                                 .setType(PubSubMessage.Type.ADDED)
+                                 .build()
+                                 .toByteArray());
+    }
+
+    directories.getDirectories().forEach(directory -> directory.add(directoryAddress));
+  }
+
+  private void removeAddress(Jedis jedis, String address) throws InvalidAddressException {
+    long directoryAddress = parseAddress(address);
+
+    if (directoryCache.removeAddress(jedis, address)) {
+      jedis.publish(CHANNEL.getBytes(),
+                    PubSubMessage.newBuilder()
+                                 .setContent(ByteString.copyFrom(address.getBytes()))
+                                 .setType(PubSubMessage.Type.REMOVED)
+                                 .build()
+                                 .toByteArray());
+    }
+
+    directories.getDirectories().forEach(directory -> directory.remove(directoryAddress));
+  }
+
   private void rebuildLocalData() {
     try (Jedis jedis = jedisPool.getResource()) {
+      built.set(directoryCache.isDirectoryBuilt(jedis));
+
       String cursor = "0";
       do {
-        ScanResult<Tuple> result = jedis.zscan(ADDRESS_SET, cursor);
+        ScanResult<Tuple> result = directoryCache.getAllAddresses(jedis, cursor);
         cursor = result.getStringCursor();
 
         for (Tuple tuple : result.getResult()) {
           String address = tuple.getElement();
           try {
-            this.directory.add(parseAddress(address));
+            long directoryAddress = parseAddress(address);
+            directories.getDirectories().forEach(directory -> directory.add(directoryAddress));
           } catch (InvalidAddressException e) {
             logger.warn("Invalid address: " + address, e);
           }
@@ -219,6 +239,7 @@ public class DirectoryManager implements Managed {
     @Override
     public void run() {
       while (running.get()) {
+        connected.set(true);
         try {
           PubSubReply reply = pubSubConnection.read();
 
@@ -228,12 +249,16 @@ public class DirectoryManager implements Managed {
             case MESSAGE:     processMessage(reply);
           }
         } catch (IOException e) {
+          connected.set(false);
           logger.warn("PubSub error", e);
           pubSubConnection.close();
 
           if (running.get()) {
             pubSubConnection = redisFactory.connect();
-            rebuildExecutor.submit(DirectoryManager.this::rebuildLocalData);
+
+            directories.createNewDirectory();
+            rebuildLocalData();
+            directories.setDirectory();
           }
         }
       }
@@ -249,9 +274,9 @@ public class DirectoryManager implements Managed {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            directory.add(parseAddress(new String(update.getContent().toByteArray())));
+            directories.getDirectory().add(parseAddress(new String(update.getContent().toByteArray())));
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
-            directory.remove(parseAddress(new String(update.getContent().toByteArray())));
+            directories.getDirectory().remove(parseAddress(new String(update.getContent().toByteArray())));
           }
         }
       } catch (InvalidProtocolBufferException e) {
@@ -298,4 +323,36 @@ public class DirectoryManager implements Managed {
       }
     }
   }
+
+  private static class DirectoryHashSets {
+
+    private DirectoryHashSet           currentDirectory;
+    private Optional<DirectoryHashSet> newDirectory;
+
+    public DirectoryHashSets(DirectoryHashSet directory) {
+      this.currentDirectory = directory;
+      this.newDirectory = Optional.empty();
+    }
+
+    public synchronized void createNewDirectory() {
+      newDirectory = Optional.of(new DirectoryHashSet(currentDirectory.capacity(), currentDirectory.getLoadFactor()));
+    }
+
+    public synchronized DirectoryHashSet getDirectory() {
+      return currentDirectory;
+    }
+
+    public synchronized Stream<DirectoryHashSet> getDirectories() {
+      return Stream.concat(Stream.of(currentDirectory), newDirectory.map(Stream::of).orElse(Stream.empty()));
+    }
+
+    public synchronized void setDirectory() {
+      if (newDirectory.isPresent()) {
+        currentDirectory = newDirectory.get();
+        newDirectory = Optional.empty();
+      }
+    }
+
+  }
+
 }

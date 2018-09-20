@@ -18,6 +18,7 @@ package org.whispersystems.contactdiscovery.resources;
 
 import com.codahale.metrics.annotation.Timed;
 import org.whispersystems.contactdiscovery.auth.User;
+import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
@@ -68,7 +69,7 @@ public class ContactDiscoveryResource {
                                     @PathParam("enclaveId") String enclaveId,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
-      throws NoSuchEnclaveException, RateLimitExceededException
+      throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
 
@@ -90,7 +91,7 @@ public class ContactDiscoveryResource {
                                         @PathParam("enclaveId") String enclaveId,
                                         @Valid DiscoveryRequest request,
                                         @Suspended AsyncResponse asyncResponse)
-          throws NoSuchEnclaveException, RateLimitExceededException
+          throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
 
