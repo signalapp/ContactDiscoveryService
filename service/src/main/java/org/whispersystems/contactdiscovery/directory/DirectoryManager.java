@@ -142,6 +142,10 @@ public class DirectoryManager implements Managed {
 
       directoryCache.setAddressLastReconciled(jedis, toNumber);
 
+      if (!toNumber.isPresent()) {
+        built.set(true);
+      }
+
       return true;
     }
   }
