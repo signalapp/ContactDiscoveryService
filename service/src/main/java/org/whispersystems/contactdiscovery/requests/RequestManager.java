@@ -79,11 +79,8 @@ public class RequestManager implements Managed {
   }
 
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
-      throws NoSuchEnclaveException, DirectoryUnavailableException
+      throws NoSuchEnclaveException
   {
-    if (!directoryManager.isReady()) {
-      throw new DirectoryUnavailableException();
-    }
     return pending.put(enclaveId, request);
   }
 
