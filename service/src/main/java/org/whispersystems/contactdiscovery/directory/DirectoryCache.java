@@ -17,6 +17,7 @@
 package org.whispersystems.contactdiscovery.directory;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Tuple;
 
@@ -33,8 +34,9 @@ public class DirectoryCache {
     return jedis.exists(ADDRESS_SET_BUILT);
   }
 
-  public ScanResult<Tuple> getAllAddresses(Jedis jedis, String cursor) {
-    return jedis.zscan(ADDRESS_SET, cursor);
+  public ScanResult<Tuple> getAllAddresses(Jedis jedis, String cursor, int count) {
+    ScanParams scanParams = new ScanParams().count(count);
+    return jedis.zscan(ADDRESS_SET, cursor, scanParams);
   }
 
   public Set<String> getAddressesInRange(Jedis jedis, Optional<String> fromNumber, Optional<String> toNumber) {

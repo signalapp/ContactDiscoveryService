@@ -19,6 +19,7 @@ package org.whispersystems.contactdiscovery.directory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -30,9 +31,9 @@ import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.util.Constants;
+import org.whispersystems.contactdiscovery.util.Util;
 import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.redis.PubSubReply;
-import org.whispersystems.dispatch.util.Util;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Tuple;
@@ -61,8 +62,12 @@ public class DirectoryManager implements Managed {
 
   private static final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter          reconciledNumbersMeter = metricRegistry.meter(name(DirectoryManager.class, "reconciledNumbers"));
+  private static final Timer          getAllAddressesTimer   = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
+  private static final Timer          rebuildLocalDataTimer  = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
 
   private static final String CHANNEL = "signal_address_update";
+
+  private static final int SCAN_CHUNK_SIZE = 5_000;
 
   private final RedisClientFactory redisFactory;
   private final DirectoryHashSets  directories;
@@ -207,12 +212,18 @@ public class DirectoryManager implements Managed {
   }
 
   private void rebuildLocalData() {
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis         jedis = jedisPool.getResource();
+         Timer.Context timer = rebuildLocalDataTimer.time()) {
       built.set(directoryCache.isDirectoryBuilt(jedis));
+
+      logger.warn("starting directory cache rebuild, built=" + built.get());
 
       String cursor = "0";
       do {
-        ScanResult<Tuple> result = directoryCache.getAllAddresses(jedis, cursor);
+        ScanResult<Tuple> result;
+        try (Timer.Context getAllAddressesTimer = this.getAllAddressesTimer.time()) {
+          result = directoryCache.getAllAddresses(jedis, cursor, SCAN_CHUNK_SIZE);
+        }
         cursor = result.getStringCursor();
 
         for (Tuple tuple : result.getResult()) {
@@ -225,6 +236,8 @@ public class DirectoryManager implements Managed {
           }
         }
       } while (!cursor.equals("0"));
+
+      logger.info("finished directory cache rebuild");
     }
   }
 
@@ -257,13 +270,24 @@ public class DirectoryManager implements Managed {
           logger.warn("PubSub error", e);
           pubSubConnection.close();
 
-          if (running.get()) {
-            pubSubConnection = redisFactory.connect();
+          connect();
+        }
+      }
+    }
 
-            directories.createNewDirectory();
-            rebuildLocalData();
-            directories.setDirectory();
-          }
+    private void connect() {
+      while (running.get()) {
+        pubSubConnection = redisFactory.connect();
+
+        try {
+          directories.createNewDirectory();
+          rebuildLocalData();
+          directories.setDirectory();
+          return;
+        } catch (Throwable t) {
+          logger.warn("directory cache rebuild error", t);
+          pubSubConnection.close();
+          Util.sleep(30_000L);
         }
       }
     }

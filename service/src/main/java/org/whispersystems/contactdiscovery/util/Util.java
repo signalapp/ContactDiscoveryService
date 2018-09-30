@@ -18,6 +18,12 @@ package org.whispersystems.contactdiscovery.util;
 
 public class Util {
 
+  public static void sleep(long i) {
+    try {
+      Thread.sleep(i);
+    } catch (InterruptedException e) {}
+  }
+
   public static void wait(Object object, long timeoutMs) {
     try {
       object.wait(timeoutMs);

@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -68,7 +69,7 @@ public class DirectoryManagerTest {
 
   @Test
   public void testAdd() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any())).thenReturn(scanResult);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
     when(directoryCache.addAddress(any(), eq("+14154444444"))).thenReturn(true);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
@@ -103,7 +104,7 @@ public class DirectoryManagerTest {
 
   @Test
   public void testReconcileAll() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any())).thenReturn(scanResult);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
     when(directoryCache.removeAddress(any(), eq("+14152222222"))).thenReturn(true);
 
     Set<String> addressSet = new HashSet<>(Arrays.asList("+14151111111", "+14152222222"));
@@ -118,7 +119,7 @@ public class DirectoryManagerTest {
     verify(directoryCache).removeAddress(any(), eq("+14152222222"));
     verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.empty()));
 
-    verify(directoryCache).getAllAddresses(any(), any());
+    verify(directoryCache).getAllAddresses(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
 
@@ -128,7 +129,7 @@ public class DirectoryManagerTest {
 
   @Test
   public void testReconcileRange() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any())).thenReturn(scanResult);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
     when(directoryCache.addAddress(any(), eq("+14153333333"))).thenReturn(true);
 
     Set<String> addressSetOne = new HashSet<>(Arrays.asList("+14151111111"));
@@ -152,7 +153,7 @@ public class DirectoryManagerTest {
     verify(directoryCache).addAddress(any(), eq("+14153333333"));
     verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.empty()));
 
-    verify(directoryCache).getAllAddresses(any(), any());
+    verify(directoryCache).getAllAddresses(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
 
