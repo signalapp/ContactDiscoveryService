@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -112,12 +113,11 @@ public class DirectoryManagerTest {
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
     directoryManager.start();
-    directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList("+14151111111"));
+    boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList("+14151111111"));
+
+    assertThat(reconciled).isEqualTo(false);
 
     verify(directoryCache).isDirectoryBuilt(any());
-    verify(directoryCache).getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.empty()));
-    verify(directoryCache).removeAddress(any(), eq("+14152222222"));
-    verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.empty()));
 
     verify(directoryCache).getAllAddresses(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
@@ -139,10 +139,14 @@ public class DirectoryManagerTest {
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
     directoryManager.start();
-    directoryManager.reconcile(Optional.empty(), Optional.of("+14151111111"), Arrays.asList("+14151111111"));
+    boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of("+14151111111"), Arrays.asList("+14151111111"));
+
+    assertThat(reconciledOne).isEqualTo(true);
 
     when(directoryCache.getAddressLastReconciled(any())).thenReturn(Optional.of("+14151111111"));
-    directoryManager.reconcile(Optional.of("+14151111111"), Optional.empty(), Arrays.asList("+14152222222", "+14153333333"));
+    boolean reconciledTwo = directoryManager.reconcile(Optional.of("+14151111111"), Optional.empty(), Arrays.asList("+14152222222", "+14153333333"));
+
+    assertThat(reconciledTwo).isEqualTo(true);
 
     verify(directoryCache).isDirectoryBuilt(any());
     verify(directoryCache).getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.of("+14151111111")));

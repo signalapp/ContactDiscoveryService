@@ -125,6 +125,11 @@ public class DirectoryManager implements Managed {
         }
       }
 
+      if (!fromNumber.isPresent() && !toNumber.isPresent()) {
+        logger.warn("invalid reconciliation chunk with unbounded range; triggering reconciliation restart");
+        return false;
+      }
+
       Set<String> removeAddresses = directoryCache.getAddressesInRange(jedis, fromNumber, toNumber);
       Set<String> addAddresses    = new HashSet<>(addresses);
 
