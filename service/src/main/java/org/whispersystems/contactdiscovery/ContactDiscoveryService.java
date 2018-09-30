@@ -17,8 +17,13 @@
 package org.whispersystems.contactdiscovery;
 
 import com.codahale.metrics.SharedMetricRegistries;
+import io.dropwizard.Application;
+import io.dropwizard.setup.Bootstrap;
+import io.dropwizard.setup.Environment;
 import org.apache.commons.codec.DecoderException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.auth.SignalServiceAuthenticator;
 import org.whispersystems.contactdiscovery.auth.User;
@@ -57,11 +62,9 @@ import java.net.URISyntaxException;
 import java.security.KeyStoreException;
 import java.security.Security;
 import java.security.cert.CertificateException;
+import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import io.dropwizard.Application;
-import io.dropwizard.setup.Bootstrap;
-import io.dropwizard.setup.Environment;
 
 /**
  * Main entry point for the service
@@ -89,6 +92,10 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     NativeUtils.loadNativeResource("/enclave-jni.so");
     Security.addProvider(new BouncyCastleProvider());
     SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
+
+    Logger           logger  = LoggerFactory.getLogger(ContactDiscoveryService.class);
+    Optional<String> version = Optional.ofNullable(getClass().getPackage()).map(Package::getImplementationVersion);
+    logger.info("starting " + getName() + " version " + version.orElse("unknown"));
 
     UserAuthenticator          userAuthenticator          = new UserAuthenticator(configuration.getSignalServiceConfiguration().getUserAuthenticationToken());
     SignalServiceAuthenticator signalServiceAuthenticator = new SignalServiceAuthenticator(configuration.getSignalServiceConfiguration().getServerAuthenticationToken());

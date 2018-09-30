@@ -196,12 +196,20 @@ public class IntelClient {
   {
     PEMParser             certificateReader = new PEMParser(new InputStreamReader(new ByteArrayInputStream(pemCertificate.getBytes())));
     X509CertificateHolder certificateHolder = (X509CertificateHolder) certificateReader.readObject();
+    if (certificateHolder == null) {
+      throw new CertificateException("couldn't read pem certificate");
+    }
+
     X509Certificate       certificate       = new JcaX509CertificateConverter().getCertificate(certificateHolder);
     Certificate[]         certificateChain  = {certificate};
 
-    PEMParser keyReader = new PEMParser(new InputStreamReader(new ByteArrayInputStream(pemKey.getBytes())));
-    KeyPair   keyPair   = new JcaPEMKeyConverter().getKeyPair((PEMKeyPair) keyReader.readObject());
+    PEMParser  keyReader  = new PEMParser(new InputStreamReader(new ByteArrayInputStream(pemKey.getBytes())));
+    PEMKeyPair pemKeyPair = (PEMKeyPair) keyReader.readObject();
+    if (pemKeyPair == null) {
+      throw new KeyStoreException("couldn't read pem private key");
+    }
 
+    KeyPair               keyPair  = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
     KeyStore              keyStore = KeyStore.getInstance("pkcs12");
     ByteArrayOutputStream baos     = new ByteArrayOutputStream();
     try {
