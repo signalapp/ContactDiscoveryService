@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2017 Open Whisper Systems
+/*
+ * Copyright (C) 2018 Open Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,37 +17,40 @@
 package org.whispersystems.contactdiscovery.configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.hibernate.validator.constraints.NotEmpty;
 
-import javax.validation.constraints.NotNull;
+public class DirectorySqsConfiguration {
 
-/**
- * Configuration for directory hash table
- *
- * @author Moxie Marlinspike
- */
-public class DirectoryConfiguration {
-
+  @NotEmpty
   @JsonProperty
-  @NotNull
-  private int initialSize;
+  private String accessKey;
 
+  @NotEmpty
   @JsonProperty
-  @NotNull
-  private float loadFactor;
+  private String accessSecret;
 
+  @NotEmpty
   @JsonProperty
-  @NotNull
-  private DirectorySqsConfiguration sqs;
+  private String queueUrl;
 
-  public int getInitialSize() {
-    return initialSize;
+  @NotEmpty
+  @JsonProperty
+  private String queueRegion;
+
+  public String getAccessKey() {
+    return accessKey;
   }
 
-  public float getLoadFactor() {
-    return loadFactor;
+  public String getAccessSecret() {
+    return accessSecret;
   }
 
-  public DirectorySqsConfiguration getSqsConfiguration() {
-    return sqs;
+  public String getQueueUrl() {
+    return queueUrl;
   }
+
+  public String getQueueRegion() {
+    return queueRegion;
+  }
+
 }

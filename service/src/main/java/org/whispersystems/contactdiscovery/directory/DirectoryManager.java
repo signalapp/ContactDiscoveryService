@@ -62,6 +62,8 @@ public class DirectoryManager implements Managed {
 
   private static final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter          reconciledNumbersMeter = metricRegistry.meter(name(DirectoryManager.class, "reconciledNumbers"));
+  private static final Timer          addAddressTimer        = metricRegistry.timer(name(DirectoryManager.class, "addAddress"));
+  private static final Timer          removeAddressTimer     = metricRegistry.timer(name(DirectoryManager.class, "removeAddress"));
   private static final Timer          getAllAddressesTimer   = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
   private static final Timer          rebuildLocalDataTimer  = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
 
@@ -94,18 +96,24 @@ public class DirectoryManager implements Managed {
     this.directories    = new DirectoryHashSets(directory);
   }
 
+  public boolean isConnected() {
+    return connected.get();
+  }
+
   public boolean isReady() {
     return connected.get() && built.get();
   }
 
   public void addAddress(String address) throws InvalidAddressException {
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis         jedis = jedisPool.getResource();
+         Timer.Context timer = addAddressTimer.time()) {
       addAddress(jedis, address);
     }
   }
 
   public void removeAddress(String address) throws InvalidAddressException {
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool.getResource();
+         Timer.Context timer = removeAddressTimer.time()) {
       removeAddress(jedis, address);
     }
   }

@@ -30,6 +30,8 @@ import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
+import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
+import org.whispersystems.contactdiscovery.directory.DirectoryQueueManager;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
@@ -111,6 +113,8 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getLoadFactor());
     RequestManager           requestManager           = new RequestManager(directoryManager, sgxEnclaveManager, configuration.getEnclaveConfiguration().getTargetBatchSize());
+    DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());
+    DirectoryQueueManager    directoryQueueManager    = new DirectoryQueueManager(directoryQueue, directoryManager);
 
     RateLimiter discoveryRateLimiter   = new RateLimiter(cacheClientFactory.getRedisClientPool(), "contactDiscovery", configuration.getLimitsConfiguration().getContactQueries().getBucketSize(), configuration.getLimitsConfiguration().getContactQueries().getLeakRatePerMinute()         );
     RateLimiter attestationRateLimiter = new RateLimiter(cacheClientFactory.getRedisClientPool(), "remoteAttestation", configuration.getLimitsConfiguration().getRemoteAttestations().getBucketSize(), configuration.getLimitsConfiguration().getRemoteAttestations().getLeakRatePerMinute());
@@ -124,6 +128,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.lifecycle().manage(sgxHandshakeManager);
     environment.lifecycle().manage(requestManager);
     environment.lifecycle().manage(directoryManager);
+    environment.lifecycle().manage(directoryQueueManager);
 
     environment.jersey().register(new AuthDynamicFeature(new BasicCredentialAuthFilter.Builder<User>()
                                                              .setAuthenticator(userAuthenticator)
