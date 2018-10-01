@@ -15,6 +15,7 @@ import redis.clients.jedis.Tuple;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -33,12 +34,13 @@ import static org.mockito.Mockito.when;
 
 public class DirectoryManagerTest {
 
-  private final RedisClientFactory redisClientFactory = mock(RedisClientFactory.class);
-  private final PubSubConnection   pubSubConnection   = mock(PubSubConnection.class);
-  private final JedisPool          jedisPool          = mock(JedisPool.class);
-  private final Jedis              jedis              = mock(Jedis.class);
-  private final DirectoryCache     directoryCache     = mock(DirectoryCache.class);
-  private final DirectoryHashSet   directoryHashSet   = mock(DirectoryHashSet.class);
+  private final RedisClientFactory      redisClientFactory      = mock(RedisClientFactory.class);
+  private final PubSubConnection        pubSubConnection        = mock(PubSubConnection.class);
+  private final JedisPool               jedisPool               = mock(JedisPool.class);
+  private final Jedis                   jedis                   = mock(Jedis.class);
+  private final DirectoryCache          directoryCache          = mock(DirectoryCache.class);
+  private final DirectoryHashSet        directoryHashSet        = mock(DirectoryHashSet.class);
+  private final DirectoryHashSetFactory directoryHashSetFactory = mock(DirectoryHashSetFactory.class);
 
   private ScanResult<Tuple>  scanResult;
 
@@ -52,6 +54,11 @@ public class DirectoryManagerTest {
     when(jedisPool.getResource()).thenReturn(jedis);
     when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
+
+    when(directoryHashSetFactory.createDirectoryHashSet()).thenReturn(directoryHashSet);
+
+    when(directoryCache.isDirectoryBuilt(any())).thenReturn(true);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
 
     when(pubSubConnection.read()).thenAnswer(new Answer<PubSubReply>() {
       @Override
@@ -67,13 +74,27 @@ public class DirectoryManagerTest {
     return tuple;
   }
 
+  @Test(expected = DirectoryUnavailableException.class)
+  public void testGetAddressListDirectoryUnavailable() throws Exception {
+    when(directoryCache.isDirectoryBuilt(any())).thenReturn(false);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    directoryManager.start();
+    directoryManager.getAddressList();
+  }
+
+  @Test
+  public void testGetAddressList() throws Exception {
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    directoryManager.start();
+    directoryManager.getAddressList();
+  }
 
   @Test
   public void testAdd() throws Exception {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
     when(directoryCache.addAddress(any(), eq("+14154444444"))).thenReturn(true);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
 
     verify(directoryHashSet).add(eq(Long.parseLong("14152222222")));
@@ -111,7 +132,7 @@ public class DirectoryManagerTest {
     Set<String> addressSet = new HashSet<>(Arrays.asList("+14151111111", "+14152222222"));
     when(directoryCache.getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressSet);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
     boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList("+14151111111"));
 
@@ -137,7 +158,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.of("+14151111111")))).thenReturn(addressSetOne);
     when(directoryCache.getAddressesInRange(any(), eq(Optional.of("+14151111111")), eq(Optional.empty()))).thenReturn(addressSetTwo);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSet);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
     boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of("+14151111111"), Arrays.asList("+14151111111"));
 

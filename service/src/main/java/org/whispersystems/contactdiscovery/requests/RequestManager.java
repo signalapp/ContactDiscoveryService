@@ -121,13 +121,15 @@ public class RequestManager implements Managed {
           SgxEnclave                             enclave  = work.getLeft();
           List<PendingRequest>                   requests = work.getRight();
 
-          processBatch(enclave, requests, directoryManager.getAddressList());
+          processBatch(enclave, requests);
         }
       }
     }
 
-    private void processBatch(SgxEnclave enclave, List<PendingRequest> requests, Pair<ByteBuffer, Long> registeredUsers) {
+    private void processBatch(SgxEnclave enclave, List<PendingRequest> requests) {
       try {
+        Pair<ByteBuffer, Long> registeredUsers = directoryManager.getAddressList();
+
         int                   batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
         SgxEnclave.SgxsdBatch batch     = enclave.newBatch(threadId, batchSize);
 

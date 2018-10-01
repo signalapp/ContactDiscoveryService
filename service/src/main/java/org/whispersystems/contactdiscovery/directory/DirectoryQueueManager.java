@@ -86,7 +86,7 @@ public class DirectoryQueueManager implements Managed, Runnable {
   }
 
   @VisibleForTesting
-  public boolean processQueue() {
+  public boolean processQueue() throws DirectoryUnavailableException {
     deleteMessages();
 
     if (!directoryManager.isConnected()) {
@@ -126,7 +126,9 @@ public class DirectoryQueueManager implements Managed, Runnable {
     }
   }
 
-  private void processMessage(Message message) throws InvalidQueueMessageException, InvalidAddressException {
+  private void processMessage(Message message)
+      throws InvalidQueueMessageException, InvalidAddressException, DirectoryUnavailableException
+  {
     Map<String, MessageAttributeValue> messageAttributes = message.getMessageAttributes();
 
     Optional<String> number = Optional.ofNullable(messageAttributes.get("id"))

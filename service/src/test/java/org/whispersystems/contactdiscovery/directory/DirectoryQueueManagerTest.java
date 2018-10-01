@@ -90,7 +90,7 @@ public class DirectoryQueueManagerTest {
   }
 
   @Test
-  public void testDirectoryManagerDisconnected() {
+  public void testDirectoryManagerDisconnected() throws Exception {
     when(directoryManager.isConnected()).thenReturn(false);
 
     DirectoryQueueManager queueManager = new DirectoryQueueManager(directoryQueue, directoryManager);

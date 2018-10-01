@@ -20,7 +20,6 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.dropwizard.lifecycle.Managed;
@@ -47,7 +46,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -71,11 +70,12 @@ public class DirectoryManager implements Managed {
 
   private static final int SCAN_CHUNK_SIZE = 5_000;
 
-  private final RedisClientFactory redisFactory;
-  private final DirectoryHashSets  directories;
+  private final RedisClientFactory      redisFactory;
+  private final DirectoryHashSetFactory directoryHashSetFactory;
 
-  private final AtomicBoolean connected = new AtomicBoolean(false);
-  private final AtomicBoolean built     = new AtomicBoolean(false);
+  private final AtomicBoolean built = new AtomicBoolean(false);
+
+  private final AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet = new AtomicReference(Optional.empty());
 
   private Pool<Jedis>      jedisPool;
   private DirectoryCache   directoryCache;
@@ -83,35 +83,24 @@ public class DirectoryManager implements Managed {
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
 
-  public DirectoryManager(RedisClientFactory redisFactory, long initialCapacity, float loadFactor) {
-    this.redisFactory   = redisFactory;
-    this.directoryCache = new DirectoryCache();
-    this.directories    = new DirectoryHashSets(new DirectoryHashSet(initialCapacity, loadFactor));
-  }
-
-  @VisibleForTesting
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSet directory) {
-    this.redisFactory   = redisFactory;
-    this.directoryCache = directoryCache;
-    this.directories    = new DirectoryHashSets(directory);
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSetFactory directoryHashSetFactory) {
+    this.redisFactory            = redisFactory;
+    this.directoryCache          = directoryCache;
+    this.directoryHashSetFactory = directoryHashSetFactory;
   }
 
   public boolean isConnected() {
-    return connected.get();
+    return currentDirectoryHashSet.get().isPresent();
   }
 
-  public boolean isReady() {
-    return connected.get() && built.get();
-  }
-
-  public void addAddress(String address) throws InvalidAddressException {
+  public void addAddress(String address) throws InvalidAddressException, DirectoryUnavailableException {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = addAddressTimer.time()) {
       addAddress(jedis, address);
     }
   }
 
-  public void removeAddress(String address) throws InvalidAddressException {
+  public void removeAddress(String address) throws InvalidAddressException, DirectoryUnavailableException {
     try (Jedis jedis = jedisPool.getResource();
          Timer.Context timer = removeAddressTimer.time()) {
       removeAddress(jedis, address);
@@ -119,7 +108,7 @@ public class DirectoryManager implements Managed {
   }
 
   public boolean reconcile(Optional<String> fromNumber, Optional<String> toNumber, List<String> addresses)
-      throws InvalidAddressException
+      throws InvalidAddressException, DirectoryUnavailableException
   {
     try (Jedis jedis = jedisPool.getResource()) {
       addresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
@@ -160,17 +149,16 @@ public class DirectoryManager implements Managed {
 
       directoryCache.setAddressLastReconciled(jedis, toNumber);
 
-      if (!toNumber.isPresent()) {
-        built.set(true);
-      }
-
       return true;
     }
   }
 
-  public Pair<ByteBuffer, Long> getAddressList() {
-    DirectoryHashSet directory = directories.getDirectory();
-    return new ImmutablePair<>(directory.getDirectByteBuffer(), directory.capacity());
+  public Pair<ByteBuffer, Long> getAddressList() throws DirectoryUnavailableException {
+    if (!isBuilt()) {
+      throw new DirectoryUnavailableException();
+    }
+    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
+    return new ImmutablePair<>(directoryHashSet.getDirectByteBuffer(), directoryHashSet.capacity());
   }
 
   @Override
@@ -194,8 +182,27 @@ public class DirectoryManager implements Managed {
     pubSubConnection.close();
   }
 
-  private void addAddress(Jedis jedis, String address) throws InvalidAddressException {
+  private DirectoryHashSet getCurrentDirectoryHashSet() throws DirectoryUnavailableException {
+    return currentDirectoryHashSet.get().orElseThrow(DirectoryUnavailableException::new);
+  }
+
+  private boolean isBuilt() {
+    if (!built.get()) {
+      try (Jedis jedis = jedisPool.getResource()) {
+        if (directoryCache.isDirectoryBuilt(jedis)) {
+          built.set(true);
+          logger.info("directory cache is now built");
+        }
+      }
+    }
+
+    return built.get();
+  }
+
+  private void addAddress(Jedis jedis, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
+
+    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
 
     if (directoryCache.addAddress(jedis, address)) {
       jedis.publish(CHANNEL.getBytes(),
@@ -206,11 +213,13 @@ public class DirectoryManager implements Managed {
                                  .toByteArray());
     }
 
-    directories.getDirectories().forEach(directory -> directory.add(directoryAddress));
+    directoryHashSet.add(directoryAddress);
   }
 
-  private void removeAddress(Jedis jedis, String address) throws InvalidAddressException {
+  private void removeAddress(Jedis jedis, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
+
+    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
 
     if (directoryCache.removeAddress(jedis, address)) {
       jedis.publish(CHANNEL.getBytes(),
@@ -221,12 +230,14 @@ public class DirectoryManager implements Managed {
                                  .toByteArray());
     }
 
-    directories.getDirectories().forEach(directory -> directory.remove(directoryAddress));
+    directoryHashSet.remove(directoryAddress);
   }
 
   private void rebuildLocalData() {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = rebuildLocalDataTimer.time()) {
+      DirectoryHashSet directoryHashSet = directoryHashSetFactory.createDirectoryHashSet();
+
       built.set(directoryCache.isDirectoryBuilt(jedis));
 
       logger.warn("starting directory cache rebuild, built=" + built.get());
@@ -243,7 +254,7 @@ public class DirectoryManager implements Managed {
           String address = tuple.getElement();
           try {
             long directoryAddress = parseAddress(address);
-            directories.getDirectories().forEach(directory -> directory.add(directoryAddress));
+            directoryHashSet.add(directoryAddress);
           } catch (InvalidAddressException e) {
             logger.warn("Invalid address: " + address, e);
           }
@@ -251,6 +262,8 @@ public class DirectoryManager implements Managed {
       } while (!cursor.equals("0"));
 
       logger.info("finished directory cache rebuild");
+
+      this.currentDirectoryHashSet.set(Optional.of(directoryHashSet));
     }
   }
 
@@ -269,7 +282,6 @@ public class DirectoryManager implements Managed {
     @Override
     public void run() {
       while (running.get()) {
-        connected.set(true);
         try {
           PubSubReply reply = pubSubConnection.read();
 
@@ -278,9 +290,10 @@ public class DirectoryManager implements Managed {
             case UNSUBSCRIBE: break;
             case MESSAGE:     processMessage(reply);
           }
-        } catch (IOException e) {
-          connected.set(false);
-          logger.warn("PubSub error", e);
+        } catch (Throwable t) {
+          currentDirectoryHashSet.set(Optional.empty());
+
+          logger.warn("PubSub error", t);
           pubSubConnection.close();
 
           connect();
@@ -293,9 +306,7 @@ public class DirectoryManager implements Managed {
         pubSubConnection = redisFactory.connect();
 
         try {
-          directories.createNewDirectory();
           rebuildLocalData();
-          directories.setDirectory();
           return;
         } catch (Throwable t) {
           logger.warn("directory cache rebuild error", t);
@@ -309,15 +320,15 @@ public class DirectoryManager implements Managed {
       running.set(false);
     }
 
-    private void processMessage(PubSubReply message) {
+    private void processMessage(PubSubReply message) throws DirectoryUnavailableException {
       try {
         if (message.getContent().isPresent()) {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            directories.getDirectory().add(parseAddress(new String(update.getContent().toByteArray())));
+            getCurrentDirectoryHashSet().add(parseAddress(new String(update.getContent().toByteArray())));
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
-            directories.getDirectory().remove(parseAddress(new String(update.getContent().toByteArray())));
+            getCurrentDirectoryHashSet().remove(parseAddress(new String(update.getContent().toByteArray())));
           }
         }
       } catch (InvalidProtocolBufferException e) {
@@ -363,37 +374,6 @@ public class DirectoryManager implements Managed {
         return result > 0;
       }
     }
-  }
-
-  private static class DirectoryHashSets {
-
-    private DirectoryHashSet           currentDirectory;
-    private Optional<DirectoryHashSet> newDirectory;
-
-    public DirectoryHashSets(DirectoryHashSet directory) {
-      this.currentDirectory = directory;
-      this.newDirectory = Optional.empty();
-    }
-
-    public synchronized void createNewDirectory() {
-      newDirectory = Optional.of(new DirectoryHashSet(currentDirectory.capacity(), currentDirectory.getLoadFactor()));
-    }
-
-    public synchronized DirectoryHashSet getDirectory() {
-      return currentDirectory;
-    }
-
-    public synchronized Stream<DirectoryHashSet> getDirectories() {
-      return Stream.concat(Stream.of(currentDirectory), newDirectory.map(Stream::of).orElse(Stream.empty()));
-    }
-
-    public synchronized void setDirectory() {
-      if (newDirectory.isPresent()) {
-        currentDirectory = newDirectory.get();
-        newDirectory = Optional.empty();
-      }
-    }
-
   }
 
 }

@@ -44,7 +44,7 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryAdd() throws InvalidAddressException {
+  public void testDirectoryAdd() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target("/v1/directory/+14152222222")
                                  .request(MediaType.APPLICATION_JSON_TYPE)
@@ -56,7 +56,7 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryRemove() throws InvalidAddressException {
+  public void testDirectoryRemove() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target("/v1/directory/+14151111111")
                                  .request(MediaType.APPLICATION_JSON_TYPE)
@@ -68,7 +68,7 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryReconcileAll() throws InvalidAddressException {
+  public void testDirectoryReconcileAll() throws Exception {
     List<String> addresses = Arrays.asList("+14151111111");
 
     DirectoryReconciliationRequest  reconciliationRequest  = new DirectoryReconciliationRequest(null, null, addresses);
@@ -83,7 +83,7 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryReconcilePart() throws InvalidAddressException {
+  public void testDirectoryReconcilePart() throws Exception {
     List<String> addresses = Arrays.asList("+14151111111");
 
     DirectoryReconciliationRequest  requestOne  = new DirectoryReconciliationRequest(null, "+14151111111", addresses);
@@ -108,7 +108,7 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryReconcileMissing() throws InvalidAddressException {
+  public void testDirectoryReconcileMissing() throws Exception {
     when(directoryManager.reconcile(any(), any(), any())).thenReturn(false);
 
     DirectoryReconciliationRequest  request  = new DirectoryReconciliationRequest(null, null, Arrays.asList());

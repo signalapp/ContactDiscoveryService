@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
+import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 
 import javax.validation.Valid;
@@ -64,7 +65,7 @@ public class DirectoryManagementResource {
   @Path("/{address}")
   public void addAddress(@Auth SignalService signalService,
                          @PathParam("address") String address)
-      throws InvalidAddressException
+      throws InvalidAddressException, DirectoryUnavailableException
   {
     directoryManager.addAddress(address);
   }
@@ -74,7 +75,7 @@ public class DirectoryManagementResource {
   @Path("/{address}")
   public void removeAddress(@Auth SignalService signalService,
                             @PathParam("address") String address)
-      throws InvalidAddressException
+      throws InvalidAddressException, DirectoryUnavailableException
   {
     directoryManager.removeAddress(address);
   }
@@ -86,7 +87,7 @@ public class DirectoryManagementResource {
   @Path("/reconcile")
   public DirectoryReconciliationResponse reconcile(@Auth SignalService signalService,
                                                    @Valid DirectoryReconciliationRequest request)
-      throws InvalidAddressException
+      throws InvalidAddressException, DirectoryUnavailableException
   {
     boolean found = directoryManager.reconcile(Optional.ofNullable(request.getFromNumber()),
                                                Optional.ofNullable(request.getToNumber()),
