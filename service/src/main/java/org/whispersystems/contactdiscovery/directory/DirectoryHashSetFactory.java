@@ -26,8 +26,9 @@ public class DirectoryHashSetFactory {
     this.loadFactor      = loadFactor;
   }
 
-  public DirectoryHashSet createDirectoryHashSet() {
-    return new DirectoryHashSet(initialCapacity, loadFactor);
+  public DirectoryHashSet createDirectoryHashSet(long minimumCapacity) {
+    long capacity = Math.max(initialCapacity, minimumCapacity * 2L);
+    return new DirectoryHashSet(capacity, loadFactor);
   }
 
 }

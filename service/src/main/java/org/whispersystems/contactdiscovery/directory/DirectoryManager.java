@@ -236,11 +236,12 @@ public class DirectoryManager implements Managed {
   private void rebuildLocalData() {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = rebuildLocalDataTimer.time()) {
-      DirectoryHashSet directoryHashSet = directoryHashSetFactory.createDirectoryHashSet();
+      long             directorySize    = directoryCache.getAddressCount(jedis);
+      DirectoryHashSet directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
 
       built.set(directoryCache.isDirectoryBuilt(jedis));
 
-      logger.warn("starting directory cache rebuild, built=" + built.get());
+      logger.warn("starting directory cache rebuild of " + directorySize + " addresses, built=" + built.get());
 
       String cursor = "0";
       do {

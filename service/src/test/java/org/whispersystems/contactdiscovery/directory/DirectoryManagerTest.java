@@ -3,6 +3,7 @@ package org.whispersystems.contactdiscovery.directory;
 import com.google.protobuf.ByteString;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
@@ -23,9 +24,11 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -55,7 +58,7 @@ public class DirectoryManagerTest {
     when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
 
-    when(directoryHashSetFactory.createDirectoryHashSet()).thenReturn(directoryHashSet);
+    when(directoryHashSetFactory.createDirectoryHashSet(anyLong())).thenReturn(directoryHashSet);
 
     when(directoryCache.isDirectoryBuilt(any())).thenReturn(true);
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
@@ -140,6 +143,7 @@ public class DirectoryManagerTest {
 
     verify(directoryCache).isDirectoryBuilt(any());
 
+    verify(directoryCache, atLeast(0)).getAddressCount(any());
     verify(directoryCache).getAllAddresses(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
@@ -178,6 +182,7 @@ public class DirectoryManagerTest {
     verify(directoryCache).addAddress(any(), eq("+14153333333"));
     verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.empty()));
 
+    verify(directoryCache, atLeast(0)).getAddressCount(any());
     verify(directoryCache).getAllAddresses(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();

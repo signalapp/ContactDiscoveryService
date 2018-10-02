@@ -65,4 +65,8 @@ public class DirectoryCache {
       jedis.set(ADDRESS_SET_BUILT, "1");
     }
   }
+
+  public long getAddressCount(Jedis jedis) {
+    return jedis.zcard(ADDRESS_SET);
+  }
 }
