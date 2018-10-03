@@ -40,6 +40,7 @@ import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.AEADBadTagExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.IOExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.InvalidAddressExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
@@ -148,6 +149,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(contactDiscoveryResource);
     environment.jersey().register(directoryManagementResource);
 
+    environment.jersey().register(new IOExceptionMapper());
     environment.jersey().register(new NoSuchEnclaveExceptionMapper());
     environment.jersey().register(new RateLimitExceededExceptionMapper());
     environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
