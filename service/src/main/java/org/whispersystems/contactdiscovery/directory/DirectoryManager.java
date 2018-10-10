@@ -127,11 +127,12 @@ public class DirectoryManager implements Managed {
         return false;
       }
 
-      Set<String> removeAddresses = directoryCache.getAddressesInRange(jedis, fromNumber, toNumber);
-      Set<String> addAddresses    = new HashSet<>(addresses);
+      Set<String> addressesInRange = directoryCache.getAddressesInRange(jedis, fromNumber, toNumber);
+      Set<String> removeAddresses  = new HashSet<>(addressesInRange);
+      Set<String> addAddresses     = new HashSet<>(addresses);
 
-      addAddresses.removeAll(removeAddresses);
       removeAddresses.removeAll(addresses);
+      addAddresses.removeAll(addressesInRange);
 
       for (String removeAddress : removeAddresses) {
         try {
