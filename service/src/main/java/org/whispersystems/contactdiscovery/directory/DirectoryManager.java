@@ -170,10 +170,11 @@ public class DirectoryManager implements Managed {
     this.keepAliveSender  = new KeepAliveSender();
 
     this.pubSubConnection.subscribe(CHANNEL);
-    this.pubSubConsumer.start();
     this.keepAliveSender.start();
 
     rebuildLocalData();
+
+    this.pubSubConsumer.start();
   }
 
   @Override
@@ -308,6 +309,7 @@ public class DirectoryManager implements Managed {
         pubSubConnection = redisFactory.connect();
 
         try {
+          pubSubConnection.subscribe(CHANNEL);
           rebuildLocalData();
           return;
         } catch (Throwable t) {
