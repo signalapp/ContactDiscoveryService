@@ -142,7 +142,7 @@ foreach my $pkg (@inst_build_deps) {
     my $pkg_name = $pkg->{name};
     my $pkg_ver = $pkg->{version};
     my $pkg_arch = $pkg->{architecture};
-    if ($pkg_arch eq "all" || $pkg_arch eq $build_arch || $pkg_arch eq "") {
+    if (($pkg_arch // "") eq "" || $pkg_arch eq "all" || $pkg_arch eq $build_arch) {
 	print $build_deps_fd "$pkg_name=$pkg_ver\n";
     } else {
 	print $build_deps_fd "$pkg_name:$pkg_arch=$pkg_ver\n";
