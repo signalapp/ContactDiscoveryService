@@ -117,7 +117,8 @@ public class DirectoryManager implements Managed {
         Optional<String> lastNumberReconciled = directoryCache.getAddressLastReconciled(jedis);
         if (!lastNumberReconciled.isPresent() ||
             fromNumber.get().compareTo(lastNumberReconciled.get()) > 0) {
-          logger.warn("reconciliation data was skipped; triggering reconciliation restart");
+          logger.warn("reconciliation data was skipped; triggering reconciliation restart: " +
+                      "got chunk " + fromNumber + "-" + toNumber + " expected " + lastNumberReconciled);
           return false;
         }
       }
