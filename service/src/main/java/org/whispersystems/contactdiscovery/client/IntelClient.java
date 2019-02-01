@@ -126,6 +126,7 @@ public class IntelClient {
         throw new StaleRevocationListException(responseBodyString);
       } else if ("GROUP_OUT_OF_DATE".equals(responseBody.getIsvEnclaveQuoteStatus()) ||
                  "CONFIGURATION_NEEDED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
+        logger.warn("Platform needs update: " + responseBody.getIsvEnclaveQuoteStatus());
         if (!acceptGroupOutOfDate) {
           throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
         }
