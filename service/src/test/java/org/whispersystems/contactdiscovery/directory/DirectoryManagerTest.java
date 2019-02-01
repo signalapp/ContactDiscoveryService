@@ -145,7 +145,7 @@ public class DirectoryManagerTest {
 
     verify(directoryCache, atLeast(0)).getAddressCount(any());
     verify(directoryCache).getAllAddresses(any(), any(), anyInt());
-    verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
+    verify(jedis, atLeast(0)).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
 
     verifyNoMoreInteractions(directoryCache);

@@ -115,7 +115,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryCache           directoryCache           = new DirectoryCache();
-    DirectoryHashSetFactory  directoryHashSetFactory  = new DirectoryHashSetFactory(configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getLoadFactor());
+    DirectoryHashSetFactory  directoryHashSetFactory  = new DirectoryHashSetFactory(configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
     DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryHashSetFactory);
     RequestManager           requestManager           = new RequestManager(directoryManager, sgxEnclaveManager, configuration.getEnclaveConfiguration().getTargetBatchSize());
     DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());

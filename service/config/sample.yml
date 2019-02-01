@@ -22,7 +22,8 @@ redis:
 
 directory:
   initialSize: 10000000
-  loadFactor:  0.75
+  minLoadFactor: 0.75
+  maxLoadFactor: 0.85
 
 limits:
   contactQueries:

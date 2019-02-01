@@ -33,7 +33,11 @@ public class DirectoryConfiguration {
 
   @JsonProperty
   @NotNull
-  private float loadFactor;
+  private float minLoadFactor;
+
+  @JsonProperty
+  @NotNull
+  private float maxLoadFactor;
 
   @JsonProperty
   @NotNull
@@ -43,8 +47,12 @@ public class DirectoryConfiguration {
     return initialSize;
   }
 
-  public float getLoadFactor() {
-    return loadFactor;
+  public float getMinLoadFactor() {
+    return minLoadFactor;
+  }
+
+  public float getMaxLoadFactor() {
+    return maxLoadFactor;
   }
 
   public DirectorySqsConfiguration getSqsConfiguration() {
