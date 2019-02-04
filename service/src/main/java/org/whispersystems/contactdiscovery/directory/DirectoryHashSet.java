@@ -16,8 +16,10 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import org.whispersystems.contactdiscovery.util.Util;
+
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.util.Optional;
 
 /**
  * Hash table that contains the directory of all registered users
@@ -26,27 +28,31 @@ import java.nio.ByteOrder;
  */
 public class DirectoryHashSet {
 
-  private final float loadFactor;
+  private final float minLoadFactor;
+  private final float maxLoadFactor;
   private final Object writeLock  = new Object();
 
-  private ByteBuffer curBuffer;
-  private ByteBuffer newBuffer;
-  private long       elementCount;
-  private long       usedSlotCount;
-  private long       newBufferUsedSlotCount;
-  private long       threshold;
+  private ByteBuffer           curBuffer;
+  private Optional<ByteBuffer> newBuffer;
 
-  public DirectoryHashSet(long initialCapacity, float loadFactor) {
-    if (loadFactor >= 1.0f || loadFactor <= 0.0f) {
-      throw new IllegalArgumentException("bad load factor: " + loadFactor);
+  private long elementCount;
+  private long usedSlotCount;
+  private long newBufferUsedSlotCount;
+
+  public DirectoryHashSet(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
+    if (minLoadFactor >= 1.0f || minLoadFactor <= 0.0f) {
+      throw new IllegalArgumentException("bad minimum load factor: " + minLoadFactor);
     }
-    this.loadFactor             = loadFactor;
+    if (maxLoadFactor >= 1.0f || maxLoadFactor <= 0.0f || maxLoadFactor <= minLoadFactor) {
+      throw new IllegalArgumentException("bad maximum load factor: " + maxLoadFactor);
+    }
+    this.minLoadFactor          = minLoadFactor;
+    this.maxLoadFactor          = maxLoadFactor;
     this.curBuffer              = allocateBuffer(initialCapacity);
-    this.newBuffer              = null;
+    this.newBuffer              = Optional.empty();
     this.elementCount           = 0;
     this.usedSlotCount          = 0;
     this.newBufferUsedSlotCount = 0;
-    this.threshold              = (long) (initialCapacity * loadFactor);
   }
 
   public ByteBuffer getDirectByteBuffer() {
@@ -57,12 +63,8 @@ public class DirectoryHashSet {
     return curBuffer.capacity() / 8;
   }
 
-  public float currentLoadFactor() {
-    return (float) (((double) usedSlotCount) / ((double) capacity()));
-  }
-
-  public float getLoadFactor() {
-    return loadFactor;
+  public long size() {
+    return elementCount;
   }
 
   public boolean add(long element) {
@@ -70,13 +72,10 @@ public class DirectoryHashSet {
       throw new IllegalArgumentException("bad number: " + element);
     }
     boolean added;
-    boolean needsRehash = false;
+    boolean needsRehash;
     synchronized (writeLock) {
-      if (usedSlotCount >= threshold) {
-        needsRehash = true;
-        if (usedSlotCount == capacity()) {
-          throw new IllegalStateException("hash_table_full");
-        }
+      if (elementCount >= capacity()) {
+        rehash();
       }
 
       long oldSlotValue = addToBuffer(curBuffer, element);
@@ -86,13 +85,14 @@ public class DirectoryHashSet {
       }
       if (added) {
         elementCount++;
-        if (newBuffer != null) {
-          long newBufferOldSlotValue = addToBuffer(newBuffer, element);
+        if (newBuffer.isPresent()) {
+          long newBufferOldSlotValue = addToBuffer(newBuffer.get(), element);
           if (newBufferOldSlotValue == 0) {
             newBufferUsedSlotCount++;
           }
         }
       }
+      needsRehash = needsRehash();
     }
     if (needsRehash) {
       rehash();
@@ -108,36 +108,52 @@ public class DirectoryHashSet {
       boolean removed = removeFromBuffer(curBuffer, element);
       if (removed) {
         elementCount--;
-        if (newBuffer != null) {
-          removeFromBuffer(newBuffer, element);
+        if (newBuffer.isPresent()) {
+          removeFromBuffer(newBuffer.get(), element);
         }
       }
       return removed;
     }
   }
 
-  public boolean rehash() {
-    long curBufferCapacity = curBuffer.capacity();
-    long slotCount = curBufferCapacity / 8;
-    long newSlotCount = slotCount <= Integer.MAX_VALUE / 8 / 2? slotCount * 2 : Integer.MAX_VALUE / 8;
-    if (newSlotCount == slotCount) {
-      return false;
-    }
+  private boolean needsRehash() {
+    long threshold = (long) (capacity() * maxLoadFactor);
+    return usedSlotCount >= threshold;
+  }
 
+  public boolean rehash() {
     synchronized (writeLock) {
-      if (newBuffer != null) {
+      while (newBuffer.isPresent()) {
+        Util.wait(writeLock, 5000);
+      }
+
+      if (!needsRehash()) {
         return false;
       }
-      newBuffer = allocateBuffer(newSlotCount);
+
+      long newSlotCount = (long) (elementCount / minLoadFactor);
+      if (newSlotCount > Integer.MAX_VALUE / 8) {
+        newSlotCount = Integer.MAX_VALUE / 8;
+      }
+      if (newSlotCount < capacity()) {
+        newSlotCount = capacity();
+      }
+
+      newBuffer              = Optional.of(allocateBuffer(newSlotCount));
       newBufferUsedSlotCount = 0;
     }
+
     boolean success = false;
     try {
+      long curBufferCapacity = curBuffer.capacity();
       for (long curBufferIdx = 0; curBufferIdx < curBufferCapacity; curBufferIdx += 8) {
         synchronized (writeLock) {
           long element = curBuffer.getLong((int) curBufferIdx);
           if (element > 0) {
-            addToBuffer(newBuffer, element);
+            long newBufferOldSlotValue = addToBuffer(newBuffer.get(), element);
+            if (newBufferOldSlotValue == 0) {
+              newBufferUsedSlotCount++;
+            }
           }
         }
       }
@@ -146,11 +162,11 @@ public class DirectoryHashSet {
     } finally {
       synchronized (writeLock) {
         if (success) {
-          curBuffer = newBuffer;
-          threshold = (long) (newSlotCount * loadFactor);
+          curBuffer     = newBuffer.get();
           usedSlotCount = newBufferUsedSlotCount;
         }
-        newBuffer = null;
+        newBuffer = Optional.empty();
+        writeLock.notifyAll();
       }
     }
   }
@@ -167,9 +183,10 @@ public class DirectoryHashSet {
   }
 
   private static long addToBuffer(ByteBuffer buffer, long element) {
-    int slotCount = buffer.capacity() / 8;
-    int slotIdx = hashElement(slotCount, element);
-    long slotValue = buffer.getLong(slotIdx * 8);
+    int  slotCount    = buffer.capacity() / 8;
+    int  slotIdx      = hashElement(slotCount, element);
+    int  startSlotIdx = slotIdx;
+    long slotValue    = buffer.getLong(slotIdx * 8);
     while (slotValue > 0) {
       if (slotValue == element) {
         return slotValue;
@@ -177,9 +194,13 @@ public class DirectoryHashSet {
       if (++slotIdx == slotCount) {
         slotIdx = 0;
       }
+      if (slotIdx == startSlotIdx) {
+        throw new AssertionError("DirectoryHashSet full");
+      }
       slotValue = buffer.getLong(slotIdx * 8);
     }
     int freeSlotIdx = slotIdx;
+    long freeSlotValue = slotValue;
     while (slotValue != 0) {
       if (slotValue == element) {
         return slotValue;
@@ -187,10 +208,13 @@ public class DirectoryHashSet {
       if (++slotIdx == slotCount) {
         slotIdx = 0;
       }
+      if (slotIdx == freeSlotIdx) {
+        break;
+      }
       slotValue = buffer.getLong(slotIdx * 8);
     }
     buffer.putLong(freeSlotIdx * 8, element);
-    return slotValue;
+    return freeSlotValue;
   }
 
   private static boolean removeFromBuffer(ByteBuffer buffer, long element) {

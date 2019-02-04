@@ -30,7 +30,7 @@ public class DirectoryHashSetFactory {
 
   public DirectoryHashSet createDirectoryHashSet(long minimumCapacity) {
     long capacity = Math.max(initialCapacity, (long) (minimumCapacity / minLoadFactor));
-    return new DirectoryHashSet(capacity, maxLoadFactor);
+    return new DirectoryHashSet(capacity, minLoadFactor, maxLoadFactor);
   }
 
 }
