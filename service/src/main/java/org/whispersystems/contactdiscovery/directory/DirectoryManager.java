@@ -59,12 +59,13 @@ public class DirectoryManager implements Managed {
 
   private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
 
-  private static final MetricRegistry metricRegistry         = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
-  private static final Meter          reconciledNumbersMeter = metricRegistry.meter(name(DirectoryManager.class, "reconciledNumbers"));
-  private static final Timer          addAddressTimer        = metricRegistry.timer(name(DirectoryManager.class, "addAddress"));
-  private static final Timer          removeAddressTimer     = metricRegistry.timer(name(DirectoryManager.class, "removeAddress"));
-  private static final Timer          getAllAddressesTimer   = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
-  private static final Timer          rebuildLocalDataTimer  = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
+  private static final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter          reconcileAddsMeter    = metricRegistry.meter(name(DirectoryManager.class, "reconcileAdds"));
+  private static final Meter          reconcileRemovesMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileRemoves"));
+  private static final Timer          addAddressTimer       = metricRegistry.timer(name(DirectoryManager.class, "addAddress"));
+  private static final Timer          removeAddressTimer    = metricRegistry.timer(name(DirectoryManager.class, "removeAddress"));
+  private static final Timer          getAllAddressesTimer  = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
+  private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
 
   private static final String CHANNEL = "signal_address_update";
 
@@ -138,7 +139,7 @@ public class DirectoryManager implements Managed {
       for (String removeAddress : removeAddresses) {
         try {
           removeAddress(jedis, removeAddress);
-          reconciledNumbersMeter.mark();
+          reconcileRemovesMeter.mark();
         } catch (InvalidAddressException ex) {
           logger.error("invalid address: ", removeAddress);
         }
@@ -146,7 +147,7 @@ public class DirectoryManager implements Managed {
 
       for (String addAddress : addAddresses) {
         addAddress(jedis, addAddress);
-        reconciledNumbersMeter.mark();
+        reconcileAddsMeter.mark();
       }
 
       directoryCache.setAddressLastReconciled(jedis, toNumber);
