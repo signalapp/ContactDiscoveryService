@@ -44,30 +44,6 @@ public class DirectoryManagementResourceTest {
   }
 
   @Test
-  public void testDirectoryAdd() throws Exception {
-    Response response = resources.getJerseyTest()
-                                 .target("/v1/directory/+14152222222")
-                                 .request(MediaType.APPLICATION_JSON_TYPE)
-                                 .header("Authorization", AuthHelper.getAuthHeader("foo", AuthHelper.VALID_SERVER_TOKEN))
-                                 .put(Entity.json(""));
-
-    assertEquals(204, response.getStatus());
-    verify(directoryManager, times(1)).addAddress("+14152222222");
-  }
-
-  @Test
-  public void testDirectoryRemove() throws Exception {
-    Response response = resources.getJerseyTest()
-                                 .target("/v1/directory/+14151111111")
-                                 .request(MediaType.APPLICATION_JSON_TYPE)
-                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                 .delete();
-
-    assertEquals(204, response.getStatus());
-    verify(directoryManager, times(1)).removeAddress("+14151111111");
-  }
-
-  @Test
   public void testDirectoryReconcileAll() throws Exception {
     List<String> addresses = Arrays.asList("+14151111111");
 

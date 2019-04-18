@@ -62,26 +62,6 @@ public class DirectoryManagementResource {
 
   @Timed
   @PUT
-  @Path("/{address}")
-  public void addAddress(@Auth SignalService signalService,
-                         @PathParam("address") String address)
-      throws InvalidAddressException, DirectoryUnavailableException
-  {
-    directoryManager.addAddress(address);
-  }
-
-  @Timed
-  @DELETE
-  @Path("/{address}")
-  public void removeAddress(@Auth SignalService signalService,
-                            @PathParam("address") String address)
-      throws InvalidAddressException, DirectoryUnavailableException
-  {
-    directoryManager.removeAddress(address);
-  }
-
-  @Timed
-  @PUT
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Path("/reconcile")
