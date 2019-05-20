@@ -47,6 +47,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.NewCookie;
+import javax.ws.rs.core.Response;
 
 import io.dropwizard.auth.Auth;
 
@@ -83,13 +85,16 @@ public class RemoteAttestationResource {
   @Path("/{enclaveId}")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  public RemoteAttestationResponse getAttestationHandshake(@Auth User user,
-                                                           @PathParam("enclaveId") String enclaveId,
-                                                           @Valid RemoteAttestationRequest request)
+  public Response getAttestationHandshake(@Auth User user,
+                                          @PathParam("enclaveId") String enclaveId,
+                                          @Valid RemoteAttestationRequest request)
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
-    return sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
+    // XXX 2019-05-17 remove cookie before going live
+    return Response.ok(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()))
+                   .cookie(new NewCookie("dummy", "dummy"))
+                   .build();
   }
 
   @PUT
