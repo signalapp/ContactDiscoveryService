@@ -227,7 +227,7 @@ public class SgxEnclave implements Runnable {
     return new SgxsdBatch(threadNo, maxBatchSize);
   }
 
-  public class SgxsdBatch {
+  public class SgxsdBatch implements AutoCloseable {
 
     private final long                            stateHandle;
     private final int                             maxJidCount;
@@ -275,6 +275,13 @@ public class SgxEnclave implements Runnable {
 
       jidCount += requestJidCount;
       return batchFuture.applyToEither(future, reply -> reply);
+    }
+
+    public synchronized void close() throws SgxException {
+      if (!processed) {
+        batchFuture.completeExceptionally(new SgxException("batch_closed"));
+        process(ByteBuffer.allocateDirect(8), 0);
+      }
     }
 
     public synchronized void process(ByteBuffer inJidsBuf, long inJidCount) throws SgxException {

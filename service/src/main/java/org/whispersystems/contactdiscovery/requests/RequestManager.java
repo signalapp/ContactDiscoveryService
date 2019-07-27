@@ -130,27 +130,28 @@ public class RequestManager implements Managed {
       try {
         Pair<ByteBuffer, Long> registeredUsers = directoryManager.getAddressList();
 
-        int                   batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
-        SgxEnclave.SgxsdBatch batch     = enclave.newBatch(threadId, batchSize);
+        int batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
+        try (SgxEnclave.SgxsdBatch batch = enclave.newBatch(threadId, batchSize)) {
 
-        for (PendingRequest request : requests) {
-          SgxsdMessage enclaveMessage = new SgxsdMessage(request.getRequest().getData(),
-                                                         request.getRequest().getIv(),
-                                                         request.getRequest().getMac(),
-                                                         request.getRequest().getRequestId());
+          for (PendingRequest request : requests) {
+            SgxsdMessage enclaveMessage = new SgxsdMessage(request.getRequest().getData(),
+                                                           request.getRequest().getIv(),
+                                                           request.getRequest().getMac(),
+                                                           request.getRequest().getRequestId());
 
-          batch.add(enclaveMessage, request.getRequest().getAddressCount())
-               .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(response.getIv(),
-                                                                                           response.getData(),
-                                                                                           response.getMac())))
-               .exceptionally(exception -> request.getResponse().completeExceptionally(exception));
-        }
+            batch.add(enclaveMessage, request.getRequest().getAddressCount())
+                 .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(response.getIv(),
+                                                                                             response.getData(),
+                                                                                             response.getMac())))
+                 .exceptionally(exception -> request.getResponse().completeExceptionally(exception));
+          }
 
-        processedNumbersMeter.mark(batchSize);
-        batchSizeHistogram.update(batchSize);
+          processedNumbersMeter.mark(batchSize);
+          batchSizeHistogram.update(batchSize);
 
-        try (Timer.Context timer = processBatchTimer.time()) {
-          batch.process(registeredUsers.getLeft(), registeredUsers.getRight());
+          try (Timer.Context timer = processBatchTimer.time()) {
+            batch.process(registeredUsers.getLeft(), registeredUsers.getRight());
+          }
         }
       } catch (Throwable t) {
         logger.warn("Exception processing request batch", t);
