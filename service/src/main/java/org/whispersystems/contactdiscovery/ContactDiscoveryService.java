@@ -40,6 +40,7 @@ import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.AEADBadTagExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.CompletionExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.IOExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.InvalidAddressExceptionMapper;
@@ -163,6 +164,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new AEADBadTagExceptionMapper());
     environment.jersey().register(new InvalidAddressExceptionMapper());
     environment.jersey().register(new DirectoryUnavailableExceptionMapper());
+    environment.jersey().register(new CompletionExceptionMapper());
 
     environment.metrics().register(name(CpuUsageGauge.class, "cpu"), new CpuUsageGauge());
     environment.metrics().register(name(FreeMemoryGauge.class, "free_memory"), new FreeMemoryGauge());
