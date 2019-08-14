@@ -17,6 +17,7 @@
 package org.whispersystems.contactdiscovery;
 
 import com.codahale.metrics.SharedMetricRegistries;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -98,6 +99,8 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     NativeUtils.loadNativeResource("/enclave-jni.so");
     Security.addProvider(new BouncyCastleProvider());
     SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
+
+    environment.getObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     Logger           logger  = LoggerFactory.getLogger(ContactDiscoveryService.class);
     Optional<String> version = Optional.ofNullable(getClass().getPackage()).map(Package::getImplementationVersion);
