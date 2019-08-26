@@ -23,7 +23,6 @@ import com.codahale.metrics.Timer;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.dropwizard.lifecycle.Managed;
-import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,13 +37,12 @@ import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Tuple;
 import redis.clients.util.Pool;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,9 +60,10 @@ public class DirectoryManager implements Managed {
   private static final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter          reconcileAddsMeter    = metricRegistry.meter(name(DirectoryManager.class, "reconcileAdds"));
   private static final Meter          reconcileRemovesMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileRemoves"));
-  private static final Timer          addAddressTimer       = metricRegistry.timer(name(DirectoryManager.class, "addAddress"));
-  private static final Timer          removeAddressTimer    = metricRegistry.timer(name(DirectoryManager.class, "removeAddress"));
+  private static final Timer          addUserTimer          = metricRegistry.timer(name(DirectoryManager.class, "addUser"));
+  private static final Timer          removeUserTimer       = metricRegistry.timer(name(DirectoryManager.class, "removeUser"));
   private static final Timer          getAllAddressesTimer  = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
+  private static final Timer          getAllUsersTimer      = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
   private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
 
   private static final String CHANNEL = "signal_address_update";
@@ -94,74 +93,72 @@ public class DirectoryManager implements Managed {
     return currentDirectoryHashSet.get().isPresent();
   }
 
-  public void addAddress(String address) throws InvalidAddressException, DirectoryUnavailableException {
+  public void addUser(Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     try (Jedis         jedis = jedisPool.getResource();
-         Timer.Context timer = addAddressTimer.time()) {
-      addAddress(jedis, address);
+         Timer.Context timer = addUserTimer.time()) {
+      addUser(jedis, uuid, address);
     }
   }
 
-  public void removeAddress(String address) throws InvalidAddressException, DirectoryUnavailableException {
-    try (Jedis jedis = jedisPool.getResource();
-         Timer.Context timer = removeAddressTimer.time()) {
-      removeAddress(jedis, address);
+  public void removeUser(Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+    try (Jedis jedis         = jedisPool.getResource();
+         Timer.Context timer = removeUserTimer.time()) {
+      removeUser(jedis, uuid, address);
     }
   }
 
-  public boolean reconcile(Optional<String> fromNumber, Optional<String> toNumber, List<String> addresses)
+  public boolean reconcile(Optional<UUID> fromUuid, Optional<UUID> toUuid, List<Pair<UUID, String>> users)
       throws InvalidAddressException, DirectoryUnavailableException
   {
     try (Jedis jedis = jedisPool.getResource()) {
-      addresses = Optional.ofNullable(addresses).orElse(Collections.emptyList());
-
-      if (fromNumber.isPresent()) {
-        Optional<String> lastNumberReconciled = directoryCache.getAddressLastReconciled(jedis);
-        if (!lastNumberReconciled.isPresent() ||
-            fromNumber.get().compareTo(lastNumberReconciled.get()) > 0) {
+      if (fromUuid.isPresent()) {
+        Optional<UUID> lastUuidReconciled = directoryCache.getUuidLastReconciled(jedis);
+        if (!lastUuidReconciled.isPresent() ||
+            fromUuid.get().toString().compareTo(lastUuidReconciled.get().toString()) > 0) {
           logger.warn("reconciliation data was skipped; triggering reconciliation restart: " +
-                      "got chunk " + fromNumber + "-" + toNumber + " expected " + lastNumberReconciled);
+                      "got chunk " + fromUuid + " to " + toUuid + " expected " + lastUuidReconciled);
           return false;
         }
       }
 
-      if (!fromNumber.isPresent() && !toNumber.isPresent()) {
+      if (!fromUuid.isPresent() && !toUuid.isPresent()) {
         logger.warn("invalid reconciliation chunk with unbounded range; triggering reconciliation restart");
         return false;
       }
 
-      Set<String> addressesInRange = directoryCache.getAddressesInRange(jedis, fromNumber, toNumber);
-      Set<String> removeAddresses  = new HashSet<>(addressesInRange);
-      Set<String> addAddresses     = new HashSet<>(addresses);
+      List<Pair<UUID, String>> usersInRange = directoryCache.getUsersInRange(jedis, fromUuid, toUuid);
+      Set<Pair<UUID, String>>  removeUsers  = new HashSet<>(usersInRange);
+      Set<Pair<UUID, String>>  addUsers     = new HashSet<>(users);
 
-      removeAddresses.removeAll(addresses);
-      addAddresses.removeAll(addressesInRange);
+      removeUsers.removeAll(users);
+      addUsers.removeAll(usersInRange);
 
-      for (String removeAddress : removeAddresses) {
+      for (Pair<UUID, String> removeUser : removeUsers) {
         try {
-          removeAddress(jedis, removeAddress);
+          removeUser(jedis, Optional.of(removeUser.getLeft()), removeUser.getRight());
           reconcileRemovesMeter.mark();
         } catch (InvalidAddressException ex) {
-          logger.error("invalid address: ", removeAddress);
+          logger.error("invalid user " + removeUser);
         }
       }
 
-      for (String addAddress : addAddresses) {
-        addAddress(jedis, addAddress);
+      for (Pair<UUID, String> addUser : addUsers) {
+        addUser(jedis, Optional.of(addUser.getLeft()), addUser.getRight());
         reconcileAddsMeter.mark();
       }
 
-      directoryCache.setAddressLastReconciled(jedis, toNumber);
+      directoryCache.setUuidLastReconciled(jedis, toUuid);
 
       return true;
     }
   }
 
-  public Pair<ByteBuffer, Long> getAddressList() throws DirectoryUnavailableException {
+  public Pair<Pair<ByteBuffer, ByteBuffer>, Long> getAddressList() throws DirectoryUnavailableException {
     if (!isBuilt()) {
       throw new DirectoryUnavailableException();
     }
     DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
-    return new ImmutablePair<>(directoryHashSet.getDirectByteBuffer(), directoryHashSet.capacity());
+    return Pair.of(directoryHashSet.getDirectByteBuffers(), directoryHashSet.capacity());
   }
 
   @Override
@@ -193,7 +190,7 @@ public class DirectoryManager implements Managed {
   private boolean isBuilt() {
     if (!built.get()) {
       try (Jedis jedis = jedisPool.getResource()) {
-        if (directoryCache.isDirectoryBuilt(jedis)) {
+        if (directoryCache.isAddressSetBuilt(jedis)) {
           built.set(true);
           logger.info("directory cache is now built");
         }
@@ -203,29 +200,47 @@ public class DirectoryManager implements Managed {
     return built.get();
   }
 
-  private void addAddress(Jedis jedis, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  private void addUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
     DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
 
-    if (directoryCache.addAddress(jedis, address)) {
-      jedis.publish(CHANNEL.getBytes(),
-                    PubSubMessage.newBuilder()
-                                 .setContent(ByteString.copyFrom(address.getBytes()))
-                                 .setType(PubSubMessage.Type.ADDED)
-                                 .build()
-                                 .toByteArray());
+    if (uuid.isPresent()) {
+      if (directoryCache.addUser(jedis, uuid.get(), address)) {
+        jedis.publish(CHANNEL.getBytes(),
+                      PubSubMessage.newBuilder()
+                                   .setContent(ByteString.copyFrom(DirectoryCache.encodeUser(uuid.get(), address).getBytes()))
+                                   .setType(PubSubMessage.Type.ADDED_USER)
+                                   .build()
+                                   .toByteArray());
+      }
+    } else {
+      if (directoryCache.addAddress(jedis, address)) {
+        jedis.publish(CHANNEL.getBytes(),
+                      PubSubMessage.newBuilder()
+                                   .setContent(ByteString.copyFrom(address.getBytes()))
+                                   .setType(PubSubMessage.Type.ADDED)
+                                   .build()
+                                   .toByteArray());
+      }
     }
 
-    directoryHashSet.add(directoryAddress);
+    directoryHashSet.insert(directoryAddress, uuid.orElse(null));
   }
 
-  private void removeAddress(Jedis jedis, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  private void removeUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
     DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
 
-    if (directoryCache.removeAddress(jedis, address)) {
+    boolean removedUser;
+    if (uuid.isPresent()) {
+      removedUser = directoryCache.removeUser(jedis, uuid.get(), address);
+    } else {
+      removedUser = directoryCache.removeAddress(jedis, address);
+    }
+
+    if (removedUser) {
       jedis.publish(CHANNEL.getBytes(),
                     PubSubMessage.newBuilder()
                                  .setContent(ByteString.copyFrom(address.getBytes()))
@@ -240,36 +255,73 @@ public class DirectoryManager implements Managed {
   private void rebuildLocalData() {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = rebuildLocalDataTimer.time()) {
-      long             directorySize    = directoryCache.getAddressCount(jedis);
-      DirectoryHashSet directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
+      boolean userSetBuilt    = directoryCache.isUserSetBuilt(jedis);
+      boolean addressSetBuilt = directoryCache.isAddressSetBuilt(jedis);
+      built.set(userSetBuilt || addressSetBuilt);
 
-      built.set(directoryCache.isDirectoryBuilt(jedis));
+      final long             directorySize;
+      final DirectoryHashSet directoryHashSet;
+      if (!userSetBuilt && addressSetBuilt) {
+        directorySize    = directoryCache.getAddressCount(jedis);
+        directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
 
-      logger.warn("starting directory cache rebuild of " + directorySize + " addresses, built=" + built.get());
+        logger.warn("starting directory cache rebuild of " + directorySize + " addresses, built=" + addressSetBuilt);
 
-      String cursor = "0";
-      do {
-        ScanResult<Tuple> result;
-        try (Timer.Context getAllAddressesTimer = this.getAllAddressesTimer.time()) {
-          result = directoryCache.getAllAddresses(jedis, cursor, SCAN_CHUNK_SIZE);
-        }
-        cursor = result.getStringCursor();
+        rebuildLocalAddresses(jedis, directoryHashSet);
+      } else {
+        directorySize    = directoryCache.getUserCount(jedis);
+        directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
 
-        for (Tuple tuple : result.getResult()) {
-          String address = tuple.getElement();
-          try {
-            long directoryAddress = parseAddress(address);
-            directoryHashSet.add(directoryAddress);
-          } catch (InvalidAddressException e) {
-            logger.warn("Invalid address: " + address, e);
-          }
-        }
-      } while (!cursor.equals("0"));
+        logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
+
+        rebuildLocalUsers(jedis, directoryHashSet);
+      }
 
       logger.info("finished directory cache rebuild");
 
       this.currentDirectoryHashSet.set(Optional.of(directoryHashSet));
     }
+  }
+
+  private void rebuildLocalAddresses(Jedis jedis, DirectoryHashSet directoryHashSet) {
+    String cursor = "0";
+    do {
+      ScanResult<Tuple> result;
+      try (Timer.Context timer = getAllAddressesTimer.time()) {
+        result = directoryCache.getAllAddresses(jedis, cursor, SCAN_CHUNK_SIZE);
+      }
+      cursor = result.getStringCursor();
+
+      for (Tuple tuple : result.getResult()) {
+        String address = tuple.getElement();
+        try {
+          long directoryAddress = parseAddress(address);
+          directoryHashSet.insert(directoryAddress, null);
+        } catch (InvalidAddressException e) {
+          logger.warn("Invalid address: " + address, e);
+        }
+      }
+    } while (!cursor.equals("0"));
+  }
+
+  private void rebuildLocalUsers(Jedis jedis, DirectoryHashSet directoryHashSet) {
+    String cursor = "0";
+    do {
+      ScanResult<Pair<UUID, String>> result;
+      try (Timer.Context timer = getAllUsersTimer.time()) {
+        result = directoryCache.getAllUsers(jedis, cursor, SCAN_CHUNK_SIZE);
+      }
+      cursor = result.getStringCursor();
+
+      for (Pair<UUID, String> user : result.getResult()) {
+        try {
+          long directoryAddress = parseAddress(user.getRight());
+          directoryHashSet.insert(directoryAddress, user.getLeft());
+        } catch (InvalidAddressException e) {
+          logger.warn("Invalid address for user: " + user, e);
+        }
+      }
+    } while (!cursor.equals("0"));
   }
 
   private long parseAddress(String address) throws InvalidAddressException {
@@ -332,7 +384,16 @@ public class DirectoryManager implements Managed {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            getCurrentDirectoryHashSet().add(parseAddress(new String(update.getContent().toByteArray())));
+            getCurrentDirectoryHashSet().insert(parseAddress(new String(update.getContent().toByteArray())), null);
+          } else if (update.getType() == PubSubMessage.Type.ADDED_USER) {
+            Pair<UUID, String> addedUser;
+            try {
+              addedUser = DirectoryCache.decodeUser(new String(update.getContent().toByteArray()));
+            } catch (Exception ex) {
+              logger.warn("Badly formatted user", ex);
+              return;
+            }
+            getCurrentDirectoryHashSet().insert(parseAddress(addedUser.getRight()), addedUser.getLeft());
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
             getCurrentDirectoryHashSet().remove(parseAddress(new String(update.getContent().toByteArray())));
           }

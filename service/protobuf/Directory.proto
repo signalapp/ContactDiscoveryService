@@ -21,10 +21,11 @@ option java_outer_classname = "DirectoryProtos";
 
 message PubSubMessage {
   enum Type {
-    UNKNOWN   = 0;
-    ADDED     = 1;
-    REMOVED   = 2;
-    KEEPALIVE = 3;
+    UNKNOWN    = 0;
+    ADDED      = 1;
+    REMOVED    = 2;
+    KEEPALIVE  = 3;
+    ADDED_USER = 4;
   }
 
   optional Type  type    = 1;

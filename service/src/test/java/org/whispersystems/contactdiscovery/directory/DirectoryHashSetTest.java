@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -100,16 +101,16 @@ public class DirectoryHashSetTest {
       long rehashThreshold = (long) (capacity * maxLoadFactor);
       while (addedCount < rehashThreshold - 1) {
         addedCount += 1;
-        assertThat(directoryHashSet.add(addedCount)).isTrue();
-        assertThat(directoryHashSet.add(addedCount)).isFalse();
+        assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
+        assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
       }
 
       assertThat(directoryHashSet.size()).isEqualTo(addedCount);
       assertThat(directoryHashSet.capacity()).isEqualTo(capacity);
 
       addedCount += 1;
-      assertThat(directoryHashSet.add(addedCount)).isTrue();
-      assertThat(directoryHashSet.add(addedCount)).isFalse();
+      assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
+      assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
 
       assertThat(directoryHashSet.size()).isEqualTo(addedCount);
       assertThat(directoryHashSet.capacity()).isEqualTo((long) (addedCount / minLoadFactor));
@@ -127,8 +128,8 @@ public class DirectoryHashSetTest {
 
     LongStream.rangeClosed(1, addedCount)
               .forEach(readdElement -> {
-                assertThat(directoryHashSet.add(readdElement)).isTrue();
-                assertThat(directoryHashSet.add(readdElement)).isFalse();
+                assertThat(directoryHashSet.insert(readdElement, null)).isTrue();
+                assertThat(directoryHashSet.insert(readdElement, null)).isFalse();
               });
 
     assertThat(directoryHashSet.size()).isEqualTo(addedCount);
@@ -142,10 +143,10 @@ public class DirectoryHashSetTest {
     Set<Long> randomElements = randomElements(1000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryHashSet.add(addElement)).isTrue();
-      assertThat(directoryHashSet.add(addElement)).isFalse();
+      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
+      assertThat(directoryHashSet.insert(addElement, null)).isFalse();
     });
-    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.add(addElement)).isFalse());
+    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
   }
 
   @Test
@@ -155,15 +156,15 @@ public class DirectoryHashSetTest {
     Set<Long> randomElements = randomElements(10000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryHashSet.add(addElement)).isTrue();
+      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
       assertThat(directoryHashSet.remove(addElement)).isTrue();
       assertThat(directoryHashSet.remove(addElement)).isFalse();
-      assertThat(directoryHashSet.add(addElement)).isTrue();
-      assertThat(directoryHashSet.add(addElement)).isFalse();
+      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
+      assertThat(directoryHashSet.insert(addElement, null)).isFalse();
     });
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
-    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.add(addElement)).isFalse());
+    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
@@ -172,14 +173,14 @@ public class DirectoryHashSetTest {
     randomElements.stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isFalse());
     assertThat(directoryHashSet.size()).isEqualTo(0);
 
-    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryHashSet.add(addElement)).isTrue());
+    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     Set<Long> moreRandomElements = randomElements(1000);
     Set<Long> allRandomElements  = new HashSet<>(randomElements);
     allRandomElements.addAll(moreRandomElements);
 
-    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryHashSet.add(addElement)).isTrue());
+    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
     assertThat(directoryHashSet.size()).isEqualTo(allRandomElements.size());
 
     shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
@@ -205,7 +206,7 @@ public class DirectoryHashSetTest {
         shuffledRandomElementLists
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
-              shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.add(addElement));
+                  shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.insert(addElement, null));
             }))
             .collect(Collectors.toList())
     );

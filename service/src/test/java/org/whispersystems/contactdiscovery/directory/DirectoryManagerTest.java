@@ -1,9 +1,10 @@
 package org.whispersystems.contactdiscovery.directory;
 
 import com.google.protobuf.ByteString;
+
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
@@ -18,8 +19,10 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +30,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
@@ -45,13 +49,19 @@ public class DirectoryManagerTest {
   private final DirectoryHashSet        directoryHashSet        = mock(DirectoryHashSet.class);
   private final DirectoryHashSetFactory directoryHashSetFactory = mock(DirectoryHashSetFactory.class);
 
-  private ScanResult<Tuple>  scanResult;
+  private final Pair<UUID, String> validUserOne   = Pair.of(UUID.fromString("1447ea61-f636-42b2-b6d2-97aa73760a60"), "+14151111111");
+  private final Pair<UUID, String> validUserTwo   = Pair.of(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc"), "+14152222222");
+  private final Pair<UUID, String> validUserThree = Pair.of(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5"), "+14153333333");
+
+  private ScanResult<Tuple>              addressesScanResult;
+  private ScanResult<Pair<UUID, String>> usersScanResult;
 
   private LinkedBlockingQueue<PubSubReply> queue = new LinkedBlockingQueue<>();
 
   @Before
   public void setup() throws IOException {
-    scanResult = new ScanResult<>("0".getBytes(), Arrays.asList(mockTuple("+14152222222"), mockTuple("+14151111111")));
+    addressesScanResult = new ScanResult<>("0".getBytes(), Arrays.asList(mockTuple("+14152222222"), mockTuple("+14151111111")));
+    usersScanResult     = new ScanResult<>("0".getBytes(), Arrays.asList(validUserTwo, validUserOne));
 
     when(redisClientFactory.getRedisClientPool()).thenReturn(jedisPool);
     when(jedisPool.getResource()).thenReturn(jedis);
@@ -60,8 +70,10 @@ public class DirectoryManagerTest {
 
     when(directoryHashSetFactory.createDirectoryHashSet(anyLong())).thenReturn(directoryHashSet);
 
-    when(directoryCache.isDirectoryBuilt(any())).thenReturn(true);
+    when(directoryCache.isAddressSetBuilt(any())).thenReturn(true);
+    when(directoryCache.isUserSetBuilt(any())).thenReturn(true);
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
+    when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
 
     when(pubSubConnection.read()).thenAnswer(new Answer<PubSubReply>() {
       @Override
@@ -79,7 +91,8 @@ public class DirectoryManagerTest {
 
   @Test(expected = DirectoryUnavailableException.class)
   public void testGetAddressListDirectoryUnavailable() throws Exception {
-    when(directoryCache.isDirectoryBuilt(any())).thenReturn(false);
+    when(directoryCache.isAddressSetBuilt(any())).thenReturn(false);
+    when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
     directoryManager.getAddressList();
@@ -94,57 +107,72 @@ public class DirectoryManagerTest {
 
   @Test
   public void testAdd() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
-    when(directoryCache.addAddress(any(), eq("+14154444444"))).thenReturn(true);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
+    when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
 
-    verify(directoryHashSet).add(eq(Long.parseLong("14152222222")));
-    verify(directoryHashSet).add(eq(Long.parseLong("14151111111")));
+    verify(directoryHashSet).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
+    verify(directoryHashSet).insert(eq(Long.parseLong("14151111111")), eq(validUserOne.getLeft()));
+
     verifyNoMoreInteractions(directoryHashSet);
 
     verify(pubSubConnection).subscribe(eq("signal_address_update"));
 
-    byte[] pubSubMessage = DirectoryProtos.PubSubMessage.newBuilder()
-                                                        .setType(DirectoryProtos.PubSubMessage.Type.ADDED)
-                                                        .setContent(ByteString.copyFrom("+14153333333".getBytes()))
-                                                        .build()
-                                                        .toByteArray();
+    byte[] pubSubMessageOne = DirectoryProtos.PubSubMessage.newBuilder()
+                                                           .setType(DirectoryProtos.PubSubMessage.Type.ADDED_USER)
+                                                           .setContent(ByteString.copyFrom("e29272d9-4146-45bf-b58f-f8fbf4597fc5:+14153333333".getBytes()))
+                                                           .build()
+                                                           .toByteArray();
+    byte[] pubSubMessageTwo = DirectoryProtos.PubSubMessage.newBuilder()
+                                                           .setType(DirectoryProtos.PubSubMessage.Type.ADDED)
+                                                           .setContent(ByteString.copyFrom("+14154444444".getBytes()))
+                                                           .build()
+                                                           .toByteArray();
+
     queue.add(new PubSubReply(PubSubReply.Type.MESSAGE,
                               "signal_address_update",
-                              com.google.common.base.Optional.of(pubSubMessage)));
+                              com.google.common.base.Optional.of(pubSubMessageOne)));
+    queue.add(new PubSubReply(PubSubReply.Type.MESSAGE,
+                              "signal_address_update",
+                              com.google.common.base.Optional.of(pubSubMessageTwo)));
 
     Thread.sleep(200);
 
-    verify(directoryHashSet).add(eq(Long.parseLong("14153333333")));
+    verify(directoryHashSet).insert(eq(Long.parseLong("14153333333")), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")));
+    verify(directoryHashSet).insert(eq(Long.parseLong("14154444444")), isNull());
 
-    directoryManager.addAddress("+14154444444");
+    directoryManager.addUser(Optional.empty(), "+14155555555");
+    directoryManager.addUser(Optional.of(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), "+14155555555");
 
-    verify(directoryHashSet).add(eq(Long.parseLong("14154444444")));
-    verify(directoryCache).addAddress(any(), eq("+14154444444"));
+    verify(directoryHashSet).insert(eq(Long.parseLong("14155555555")), isNull());
+    verify(directoryCache).addAddress(any(), eq("+14155555555"));
+    verify(directoryCache).addUser(any(), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), eq("+14155555555"));
 //    verify(jedis).publish(eq("signal_address_update".getBytes()), any());
 
   }
 
   @Test
   public void testReconcileAll() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
+    when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
     when(directoryCache.removeAddress(any(), eq("+14152222222"))).thenReturn(true);
 
-    Set<String> addressSet = new HashSet<>(Arrays.asList("+14151111111", "+14152222222"));
-    when(directoryCache.getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressSet);
+    List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
+    when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
-    boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList("+14151111111"));
+    boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList(validUserOne));
 
     assertThat(reconciled).isEqualTo(false);
 
-    verify(directoryCache).isDirectoryBuilt(any());
+    verify(directoryCache).isAddressSetBuilt(any());
+    verify(directoryCache).isUserSetBuilt(any());
 
-    verify(directoryCache, atLeast(0)).getAddressCount(any());
-    verify(directoryCache).getAllAddresses(any(), any(), anyInt());
+    verify(directoryCache, atLeast(0)).getUserCount(any());
+    verify(directoryCache).getAllUsers(any(), any(), anyInt());
     verify(jedis, atLeast(0)).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
 
@@ -154,36 +182,35 @@ public class DirectoryManagerTest {
 
   @Test
   public void testReconcileRange() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(scanResult);
-    when(directoryCache.addAddress(any(), eq("+14153333333"))).thenReturn(true);
+    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
+    when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
-    Set<String> addressSetOne = new HashSet<>(Arrays.asList("+14151111111"));
-    Set<String> addressSetTwo = new HashSet<>(Arrays.asList("+14152222222"));
-    when(directoryCache.getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.of("+14151111111")))).thenReturn(addressSetOne);
-    when(directoryCache.getAddressesInRange(any(), eq(Optional.of("+14151111111")), eq(Optional.empty()))).thenReturn(addressSetTwo);
+    when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
+    when(directoryCache.getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()))).thenReturn(Arrays.asList(validUserTwo));
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
     directoryManager.start();
-    boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of("+14151111111"), Arrays.asList("+14151111111"));
+    boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of(validUserOne.getLeft()), Arrays.asList(validUserOne));
 
     assertThat(reconciledOne).isEqualTo(true);
 
-    when(directoryCache.getAddressLastReconciled(any())).thenReturn(Optional.of("+14151111111"));
-    boolean reconciledTwo = directoryManager.reconcile(Optional.of("+14151111111"), Optional.empty(), Arrays.asList("+14152222222", "+14153333333"));
+    when(directoryCache.getUuidLastReconciled(any())).thenReturn(Optional.of(validUserOne.getLeft()));
+    boolean reconciledTwo = directoryManager.reconcile(Optional.of(validUserOne.getLeft()), Optional.empty(), Arrays.asList(validUserTwo, validUserThree));
 
     assertThat(reconciledTwo).isEqualTo(true);
 
-    verify(directoryCache).isDirectoryBuilt(any());
-    verify(directoryCache).getAddressesInRange(any(), eq(Optional.empty()), eq(Optional.of("+14151111111")));
-    verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.of("+14151111111")));
+    verify(directoryCache).isAddressSetBuilt(any());
+    verify(directoryCache).isUserSetBuilt(any());
+    verify(directoryCache).getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())));
+    verify(directoryCache).setUuidLastReconciled(any(), eq(Optional.of(validUserOne.getLeft())));
 
-    verify(directoryCache).getAddressLastReconciled(any());
-    verify(directoryCache).getAddressesInRange(any(), eq(Optional.of("+14151111111")), eq(Optional.empty()));
-    verify(directoryCache).addAddress(any(), eq("+14153333333"));
-    verify(directoryCache).setAddressLastReconciled(any(), eq(Optional.empty()));
+    verify(directoryCache).getUuidLastReconciled(any());
+    verify(directoryCache).getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()));
+    verify(directoryCache).addUser(any(), eq(validUserThree.getLeft()), eq("+14153333333"));
+    verify(directoryCache).setUuidLastReconciled(any(), eq(Optional.empty()));
 
-    verify(directoryCache, atLeast(0)).getAddressCount(any());
-    verify(directoryCache).getAllAddresses(any(), any(), anyInt());
+    verify(directoryCache, atLeast(0)).getUserCount(any());
+    verify(directoryCache).getAllUsers(any(), any(), anyInt());
     verify(jedis, atLeastOnce()).publish((byte[]) any(), (byte[]) any());
     verify(jedis, atLeastOnce()).close();
 

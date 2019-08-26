@@ -6,12 +6,18 @@ package org.whispersystems.contactdiscovery.directory;
 public final class DirectoryProtos {
   private DirectoryProtos() {}
   public static void registerAllExtensions(
-      com.google.protobuf.ExtensionRegistry registry) {
+      com.google.protobuf.ExtensionRegistryLite registry) {
   }
-  public interface PubSubMessageOrBuilder
-      extends com.google.protobuf.MessageOrBuilder {
 
-    // optional .textsecure.PubSubMessage.Type type = 1;
+  public static void registerAllExtensions(
+      com.google.protobuf.ExtensionRegistry registry) {
+    registerAllExtensions(
+        (com.google.protobuf.ExtensionRegistryLite) registry);
+  }
+  public interface PubSubMessageOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:textsecure.PubSubMessage)
+      com.google.protobuf.MessageOrBuilder {
+
     /**
      * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
      */
@@ -21,7 +27,6 @@ public final class DirectoryProtos {
      */
     org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type getType();
 
-    // optional bytes content = 2;
     /**
      * <code>optional bytes content = 2;</code>
      */
@@ -34,36 +39,29 @@ public final class DirectoryProtos {
   /**
    * Protobuf type {@code textsecure.PubSubMessage}
    */
-  public static final class PubSubMessage extends
-      com.google.protobuf.GeneratedMessage
-      implements PubSubMessageOrBuilder {
+  public  static final class PubSubMessage extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:textsecure.PubSubMessage)
+      PubSubMessageOrBuilder {
     // Use PubSubMessage.newBuilder() to construct.
-    private PubSubMessage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private PubSubMessage(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
-      this.unknownFields = builder.getUnknownFields();
     }
-    private PubSubMessage(boolean noInit) { this.unknownFields = com.google.protobuf.UnknownFieldSet.getDefaultInstance(); }
-
-    private static final PubSubMessage defaultInstance;
-    public static PubSubMessage getDefaultInstance() {
-      return defaultInstance;
+    private PubSubMessage() {
+      type_ = 0;
+      content_ = com.google.protobuf.ByteString.EMPTY;
     }
 
-    public PubSubMessage getDefaultInstanceForType() {
-      return defaultInstance;
-    }
-
-    private final com.google.protobuf.UnknownFieldSet unknownFields;
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
-        getUnknownFields() {
+    getUnknownFields() {
       return this.unknownFields;
     }
     private PubSubMessage(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-      initFields();
+      this();
       int mutable_bitField0_ = 0;
       com.google.protobuf.UnknownFieldSet.Builder unknownFields =
           com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -89,7 +87,7 @@ public final class DirectoryProtos {
                 unknownFields.mergeVarintField(1, rawValue);
               } else {
                 bitField0_ |= 0x00000001;
-                type_ = value;
+                type_ = rawValue;
               }
               break;
             }
@@ -104,7 +102,7 @@ public final class DirectoryProtos {
         throw e.setUnfinishedMessage(this);
       } catch (java.io.IOException e) {
         throw new com.google.protobuf.InvalidProtocolBufferException(
-            e.getMessage()).setUnfinishedMessage(this);
+            e).setUnfinishedMessage(this);
       } finally {
         this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
@@ -115,26 +113,11 @@ public final class DirectoryProtos {
       return org.whispersystems.contactdiscovery.directory.DirectoryProtos.internal_static_textsecure_PubSubMessage_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return org.whispersystems.contactdiscovery.directory.DirectoryProtos.internal_static_textsecure_PubSubMessage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
               org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.class, org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Builder.class);
-    }
-
-    public static com.google.protobuf.Parser<PubSubMessage> PARSER =
-        new com.google.protobuf.AbstractParser<PubSubMessage>() {
-      public PubSubMessage parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        return new PubSubMessage(input, extensionRegistry);
-      }
-    };
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<PubSubMessage> getParserForType() {
-      return PARSER;
     }
 
     /**
@@ -145,19 +128,23 @@ public final class DirectoryProtos {
       /**
        * <code>UNKNOWN = 0;</code>
        */
-      UNKNOWN(0, 0),
+      UNKNOWN(0),
       /**
        * <code>ADDED = 1;</code>
        */
-      ADDED(1, 1),
+      ADDED(1),
       /**
        * <code>REMOVED = 2;</code>
        */
-      REMOVED(2, 2),
+      REMOVED(2),
       /**
        * <code>KEEPALIVE = 3;</code>
        */
-      KEEPALIVE(3, 3),
+      KEEPALIVE(3),
+      /**
+       * <code>ADDED_USER = 4;</code>
+       */
+      ADDED_USER(4),
       ;
 
       /**
@@ -176,16 +163,31 @@ public final class DirectoryProtos {
        * <code>KEEPALIVE = 3;</code>
        */
       public static final int KEEPALIVE_VALUE = 3;
+      /**
+       * <code>ADDED_USER = 4;</code>
+       */
+      public static final int ADDED_USER_VALUE = 4;
 
 
-      public final int getNumber() { return value; }
+      public final int getNumber() {
+        return value;
+      }
 
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
       public static Type valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static Type forNumber(int value) {
         switch (value) {
           case 0: return UNKNOWN;
           case 1: return ADDED;
           case 2: return REMOVED;
           case 3: return KEEPALIVE;
+          case 4: return ADDED_USER;
           default: return null;
         }
       }
@@ -194,17 +196,17 @@ public final class DirectoryProtos {
           internalGetValueMap() {
         return internalValueMap;
       }
-      private static com.google.protobuf.Internal.EnumLiteMap<Type>
-          internalValueMap =
+      private static final com.google.protobuf.Internal.EnumLiteMap<
+          Type> internalValueMap =
             new com.google.protobuf.Internal.EnumLiteMap<Type>() {
               public Type findValueByNumber(int number) {
-                return Type.valueOf(number);
+                return Type.forNumber(number);
               }
             };
 
       public final com.google.protobuf.Descriptors.EnumValueDescriptor
           getValueDescriptor() {
-        return getDescriptor().getValues().get(index);
+        return getDescriptor().getValues().get(ordinal());
       }
       public final com.google.protobuf.Descriptors.EnumDescriptor
           getDescriptorForType() {
@@ -226,11 +228,9 @@ public final class DirectoryProtos {
         return VALUES[desc.getIndex()];
       }
 
-      private final int index;
       private final int value;
 
-      private Type(int index, int value) {
-        this.index = index;
+      private Type(int value) {
         this.value = value;
       }
 
@@ -238,9 +238,8 @@ public final class DirectoryProtos {
     }
 
     private int bitField0_;
-    // optional .textsecure.PubSubMessage.Type type = 1;
     public static final int TYPE_FIELD_NUMBER = 1;
-    private org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type type_;
+    private int type_;
     /**
      * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
      */
@@ -251,10 +250,10 @@ public final class DirectoryProtos {
      * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
      */
     public org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type getType() {
-      return type_;
+      org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type result = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.valueOf(type_);
+      return result == null ? org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN : result;
     }
 
-    // optional bytes content = 2;
     public static final int CONTENT_FIELD_NUMBER = 2;
     private com.google.protobuf.ByteString content_;
     /**
@@ -270,14 +269,11 @@ public final class DirectoryProtos {
       return content_;
     }
 
-    private void initFields() {
-      type_ = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN;
-      content_ = com.google.protobuf.ByteString.EMPTY;
-    }
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
-      if (isInitialized != -1) return isInitialized == 1;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
 
       memoizedIsInitialized = 1;
       return true;
@@ -285,40 +281,76 @@ public final class DirectoryProtos {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
-      getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
-        output.writeEnum(1, type_.getNumber());
+        output.writeEnum(1, type_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         output.writeBytes(2, content_);
       }
-      getUnknownFields().writeTo(output);
+      unknownFields.writeTo(output);
     }
 
-    private int memoizedSerializedSize = -1;
     public int getSerializedSize() {
-      int size = memoizedSerializedSize;
+      int size = memoizedSize;
       if (size != -1) return size;
 
       size = 0;
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         size += com.google.protobuf.CodedOutputStream
-          .computeEnumSize(1, type_.getNumber());
+          .computeEnumSize(1, type_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(2, content_);
       }
-      size += getUnknownFields().getSerializedSize();
-      memoizedSerializedSize = size;
+      size += unknownFields.getSerializedSize();
+      memoizedSize = size;
       return size;
     }
 
     private static final long serialVersionUID = 0L;
     @java.lang.Override
-    protected java.lang.Object writeReplace()
-        throws java.io.ObjectStreamException {
-      return super.writeReplace();
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage)) {
+        return super.equals(obj);
+      }
+      org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage other = (org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage) obj;
+
+      boolean result = true;
+      result = result && (hasType() == other.hasType());
+      if (hasType()) {
+        result = result && type_ == other.type_;
+      }
+      result = result && (hasContent() == other.hasContent());
+      if (hasContent()) {
+        result = result && getContent()
+            .equals(other.getContent());
+      }
+      result = result && unknownFields.equals(other.unknownFields);
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      if (hasType()) {
+        hash = (37 * hash) + TYPE_FIELD_NUMBER;
+        hash = (53 * hash) + type_;
+      }
+      if (hasContent()) {
+        hash = (37 * hash) + CONTENT_FIELD_NUMBER;
+        hash = (53 * hash) + getContent().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
     }
 
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseFrom(
@@ -344,46 +376,57 @@ public final class DirectoryProtos {
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseDelimitedFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return PARSER.parseFrom(input);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
     }
     public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return PARSER.parseFrom(input, extensionRegistry);
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
-    public static Builder newBuilder() { return Builder.create(); }
     public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder(org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage prototype) {
-      return newBuilder().mergeFrom(prototype);
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
     }
-    public Builder toBuilder() { return newBuilder(this); }
+    public static Builder newBuilder(org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -391,14 +434,15 @@ public final class DirectoryProtos {
      * Protobuf type {@code textsecure.PubSubMessage}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder>
-       implements org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessageOrBuilder {
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:textsecure.PubSubMessage)
+        org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
         return org.whispersystems.contactdiscovery.directory.DirectoryProtos.internal_static_textsecure_PubSubMessage_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return org.whispersystems.contactdiscovery.directory.DirectoryProtos.internal_static_textsecure_PubSubMessage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -411,29 +455,22 @@ public final class DirectoryProtos {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
-      private static Builder create() {
-        return new Builder();
-      }
-
       public Builder clear() {
         super.clear();
-        type_ = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN;
+        type_ = 0;
         bitField0_ = (bitField0_ & ~0x00000001);
         content_ = com.google.protobuf.ByteString.EMPTY;
         bitField0_ = (bitField0_ & ~0x00000002);
         return this;
-      }
-
-      public Builder clone() {
-        return create().mergeFrom(buildPartial());
       }
 
       public com.google.protobuf.Descriptors.Descriptor
@@ -470,6 +507,32 @@ public final class DirectoryProtos {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage) {
           return mergeFrom((org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage)other);
@@ -487,7 +550,8 @@ public final class DirectoryProtos {
         if (other.hasContent()) {
           setContent(other.getContent());
         }
-        this.mergeUnknownFields(other.getUnknownFields());
+        this.mergeUnknownFields(other.unknownFields);
+        onChanged();
         return this;
       }
 
@@ -504,7 +568,7 @@ public final class DirectoryProtos {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
           parsedMessage = (org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage) e.getUnfinishedMessage();
-          throw e;
+          throw e.unwrapIOException();
         } finally {
           if (parsedMessage != null) {
             mergeFrom(parsedMessage);
@@ -514,8 +578,7 @@ public final class DirectoryProtos {
       }
       private int bitField0_;
 
-      // optional .textsecure.PubSubMessage.Type type = 1;
-      private org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type type_ = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN;
+      private int type_ = 0;
       /**
        * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
        */
@@ -526,7 +589,8 @@ public final class DirectoryProtos {
        * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
        */
       public org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type getType() {
-        return type_;
+        org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type result = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.valueOf(type_);
+        return result == null ? org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN : result;
       }
       /**
        * <code>optional .textsecure.PubSubMessage.Type type = 1;</code>
@@ -536,7 +600,7 @@ public final class DirectoryProtos {
           throw new NullPointerException();
         }
         bitField0_ |= 0x00000001;
-        type_ = value;
+        type_ = value.getNumber();
         onChanged();
         return this;
       }
@@ -545,12 +609,11 @@ public final class DirectoryProtos {
        */
       public Builder clearType() {
         bitField0_ = (bitField0_ & ~0x00000001);
-        type_ = org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage.Type.UNKNOWN;
+        type_ = 0;
         onChanged();
         return this;
       }
 
-      // optional bytes content = 2;
       private com.google.protobuf.ByteString content_ = com.google.protobuf.ByteString.EMPTY;
       /**
        * <code>optional bytes content = 2;</code>
@@ -585,57 +648,95 @@ public final class DirectoryProtos {
         onChanged();
         return this;
       }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.setUnknownFields(unknownFields);
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return super.mergeUnknownFields(unknownFields);
+      }
+
 
       // @@protoc_insertion_point(builder_scope:textsecure.PubSubMessage)
     }
 
+    // @@protoc_insertion_point(class_scope:textsecure.PubSubMessage)
+    private static final org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage DEFAULT_INSTANCE;
     static {
-      defaultInstance = new PubSubMessage(true);
-      defaultInstance.initFields();
+      DEFAULT_INSTANCE = new org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage();
     }
 
-    // @@protoc_insertion_point(class_scope:textsecure.PubSubMessage)
+    public static org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    @java.lang.Deprecated public static final com.google.protobuf.Parser<PubSubMessage>
+        PARSER = new com.google.protobuf.AbstractParser<PubSubMessage>() {
+      public PubSubMessage parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new PubSubMessage(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<PubSubMessage> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<PubSubMessage> getParserForType() {
+      return PARSER;
+    }
+
+    public org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
   }
 
-  private static com.google.protobuf.Descriptors.Descriptor
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_textsecure_PubSubMessage_descriptor;
-  private static
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_textsecure_PubSubMessage_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
     return descriptor;
   }
-  private static com.google.protobuf.Descriptors.FileDescriptor
+  private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\017Directory.proto\022\ntextsecure\"\212\001\n\rPubSub" +
+      "\n\017Directory.proto\022\ntextsecure\"\232\001\n\rPubSub" +
       "Message\022,\n\004type\030\001 \001(\0162\036.textsecure.PubSu" +
-      "bMessage.Type\022\017\n\007content\030\002 \001(\014\":\n\004Type\022\013" +
+      "bMessage.Type\022\017\n\007content\030\002 \001(\014\"J\n\004Type\022\013" +
       "\n\007UNKNOWN\020\000\022\t\n\005ADDED\020\001\022\013\n\007REMOVED\020\002\022\r\n\tK" +
-      "EEPALIVE\020\003B@\n-org.whispersystems.contact" +
-      "discovery.directoryB\017DirectoryProtos"
+      "EEPALIVE\020\003\022\016\n\nADDED_USER\020\004B@\n-org.whispe" +
+      "rsystems.contactdiscovery.directoryB\017Dir" +
+      "ectoryProtos"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
-      new com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner() {
-        public com.google.protobuf.ExtensionRegistry assignDescriptors(
-            com.google.protobuf.Descriptors.FileDescriptor root) {
-          descriptor = root;
-          internal_static_textsecure_PubSubMessage_descriptor =
-            getDescriptor().getMessageTypes().get(0);
-          internal_static_textsecure_PubSubMessage_fieldAccessorTable = new
-            com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-              internal_static_textsecure_PubSubMessage_descriptor,
-              new java.lang.String[] { "Type", "Content", });
-          return null;
-        }
-      };
+        new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
+          public com.google.protobuf.ExtensionRegistry assignDescriptors(
+              com.google.protobuf.Descriptors.FileDescriptor root) {
+            descriptor = root;
+            return null;
+          }
+        };
     com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
+    internal_static_textsecure_PubSubMessage_descriptor =
+      getDescriptor().getMessageTypes().get(0);
+    internal_static_textsecure_PubSubMessage_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_textsecure_PubSubMessage_descriptor,
+        new java.lang.String[] { "Type", "Content", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

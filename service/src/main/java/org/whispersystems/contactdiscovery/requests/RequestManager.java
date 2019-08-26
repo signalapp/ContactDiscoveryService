@@ -128,7 +128,7 @@ public class RequestManager implements Managed {
 
     private void processBatch(SgxEnclave enclave, List<PendingRequest> requests) {
       try {
-        Pair<ByteBuffer, Long> registeredUsers = directoryManager.getAddressList();
+        Pair<Pair<ByteBuffer, ByteBuffer>, Long> registeredUsers = directoryManager.getAddressList();
 
         int batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
         try (SgxEnclave.SgxsdBatch batch = enclave.newBatch(threadId, batchSize)) {
@@ -150,7 +150,7 @@ public class RequestManager implements Managed {
           batchSizeHistogram.update(batchSize);
 
           try (Timer.Context timer = processBatchTimer.time()) {
-            batch.process(registeredUsers.getLeft(), registeredUsers.getRight());
+            batch.process(registeredUsers.getLeft().getLeft(), registeredUsers.getRight());
           }
         }
       } catch (Throwable t) {

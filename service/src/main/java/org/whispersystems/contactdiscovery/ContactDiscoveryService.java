@@ -57,6 +57,7 @@ import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.PingResource;
 import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
 import org.whispersystems.contactdiscovery.util.Constants;
@@ -129,10 +130,11 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     RateLimiter discoveryRateLimiter   = new RateLimiter(cacheClientFactory.getRedisClientPool(), "contactDiscovery", configuration.getLimitsConfiguration().getContactQueries().getBucketSize(), configuration.getLimitsConfiguration().getContactQueries().getLeakRatePerMinute()         );
     RateLimiter attestationRateLimiter = new RateLimiter(cacheClientFactory.getRedisClientPool(), "remoteAttestation", configuration.getLimitsConfiguration().getRemoteAttestations().getBucketSize(), configuration.getLimitsConfiguration().getRemoteAttestations().getLeakRatePerMinute());
 
-    RemoteAttestationResource   remoteAttestationResource   = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter);
-    ContactDiscoveryResource    contactDiscoveryResource    = new ContactDiscoveryResource(discoveryRateLimiter, requestManager);
-    DirectoryManagementResource directoryManagementResource = new DirectoryManagementResource(directoryManager);
-    PingResource                pingResource                = new PingResource();
+    RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter);
+    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager);
+    DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
+    LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
+    PingResource                      pingResource                      = new PingResource();
 
     environment.lifecycle().manage(sgxEnclaveManager);
     environment.lifecycle().manage(sgxRevocationListManager);
@@ -154,6 +156,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(remoteAttestationResource);
     environment.jersey().register(contactDiscoveryResource);
     environment.jersey().register(directoryManagementResource);
+    environment.jersey().register(legacyDirectoryManagementResource);
     environment.jersey().register(pingResource);
 
     environment.jersey().register(new IOExceptionMapper());

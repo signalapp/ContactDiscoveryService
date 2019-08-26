@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -131,20 +132,31 @@ public class DirectoryQueueManager implements Managed, Runnable {
   {
     Map<String, MessageAttributeValue> messageAttributes = message.getMessageAttributes();
 
-    Optional<String> number = Optional.ofNullable(messageAttributes.get("id"))
-                                      .map(MessageAttributeValue::getStringValue)
-                                      .filter(numberValue -> !numberValue.isEmpty());
-    Optional<String> action = Optional.ofNullable(messageAttributes.get("action"))
-                                      .map(MessageAttributeValue::getStringValue);
+    Optional<String> number     = Optional.ofNullable(messageAttributes.get("id"))
+                                          .map(MessageAttributeValue::getStringValue)
+                                          .filter(numberValue -> !numberValue.isEmpty());
+    Optional<String> uuidString = Optional.ofNullable(messageAttributes.get("uuid"))
+                                          .map(MessageAttributeValue::getStringValue)
+                                          .filter(uuidValue -> !uuidValue.isEmpty());
+    Optional<String> action     = Optional.ofNullable(messageAttributes.get("action"))
+                                          .map(MessageAttributeValue::getStringValue);
 
     if (!number.isPresent()) {
       throw new InvalidQueueMessageException("missing number");
     }
 
+    Optional<UUID> uuid;
+    try {
+      uuid = uuidString.map(UUID::fromString);
+    } catch (Exception ex) {
+      logger.error("invalid uuid: " + uuidString);
+      throw new InvalidQueueMessageException("invalid uuid: " + uuidString);
+    }
+
     if (Optional.of("add").equals(action)) {
-      directoryManager.addAddress(number.get());
+      directoryManager.addUser(uuid, number.get());
     } else if (Optional.of("delete").equals(action)) {
-      directoryManager.removeAddress(number.get());
+      directoryManager.removeUser(uuid, number.get());
     } else {
       throw new InvalidQueueMessageException("bad action " + action);
     }
