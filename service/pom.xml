@@ -10,7 +10,7 @@
 
     <properties>
         <dropwizard.version>1.3.9</dropwizard.version>
-        <jackson.api.version>2.9.8</jackson.api.version>
+        <jackson.api.version>2.9.10.1</jackson.api.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
