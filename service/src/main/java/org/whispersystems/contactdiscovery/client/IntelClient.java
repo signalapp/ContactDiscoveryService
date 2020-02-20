@@ -101,7 +101,8 @@ public class IntelClient {
 
       String responseBodyString = response.readEntity(String.class);
       String signature          = response.getHeaderString("X-IASReport-Signature");
-      String certificate        = response.getHeaderString("X-IASReport-Signing-Certificate");
+      String raw_certificate    = response.getHeaderString("X-IASReport-Signing-Certificate");
+      String certificate        = java.net.URLDecoder.decode(raw_certificate, java.nio.charset.StandardCharsets.UTF_8);
 
       if (response.getStatus() != 200) {
         throw new QuoteVerificationException("Non-successful quote verification response: " +
