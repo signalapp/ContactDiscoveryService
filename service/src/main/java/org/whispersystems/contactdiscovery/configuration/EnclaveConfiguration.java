@@ -57,7 +57,6 @@ public class EnclaveConfiguration {
   private boolean acceptGroupOutOfDate = false;
 
   @JsonProperty
-  @NotEmpty
   @Valid
   private List<EnclaveInstanceConfiguration> instances;
 
