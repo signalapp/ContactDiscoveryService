@@ -64,6 +64,7 @@ public class DirectoryManager implements Managed {
   private static final Timer          removeUserTimer       = metricRegistry.timer(name(DirectoryManager.class, "removeUser"));
   private static final Timer          getAllAddressesTimer  = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
   private static final Timer          getAllUsersTimer      = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
+  private static final Timer          reconcileGetUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getUsersInRange"));
   private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
 
   private static final String CHANNEL = "signal_address_update";
@@ -126,7 +127,11 @@ public class DirectoryManager implements Managed {
         return false;
       }
 
-      List<Pair<UUID, String>> usersInRange = directoryCache.getUsersInRange(jedis, fromUuid, toUuid);
+      List<Pair<UUID, String>> usersInRange;
+      try (final Timer.Context context = reconcileGetUsersTimer.time()) {
+        usersInRange = directoryCache.getUsersInRange(jedis, fromUuid, toUuid);
+      }
+
       Set<Pair<UUID, String>>  removeUsers  = new HashSet<>(usersInRange);
       Set<Pair<UUID, String>>  addUsers     = new HashSet<>(users);
 

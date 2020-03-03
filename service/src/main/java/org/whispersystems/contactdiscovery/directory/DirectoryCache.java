@@ -16,9 +16,13 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.util.Constants;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
@@ -30,9 +34,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 public class DirectoryCache {
 
-  private final Logger logger = LoggerFactory.getLogger(DirectoryCache.class);
+  private static final MetricRegistry METRIC_REGISTRY  = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Timer          GET_USERS_ZRANGE = METRIC_REGISTRY.timer(name(DirectoryCache.class, "getUsersInRange", "ZRANGEBYLEX"));
 
   private static final String ADDRESS_SET             = "signal_addresses_sorted::1";
   private static final String ADDRESS_SET_BUILT       = "signal_addresses_built";
@@ -43,6 +50,7 @@ public class DirectoryCache {
   private static final char USER_SEPARATOR          = ':';
   private static final char USER_SEPARATOR_PLUS_ONE = USER_SEPARATOR + 1;
 
+  private final Logger logger = LoggerFactory.getLogger(DirectoryCache.class);
 
   public boolean isAddressSetBuilt(Jedis jedis) {
     return jedis.exists(ADDRESS_SET_BUILT);
@@ -76,7 +84,10 @@ public class DirectoryCache {
     String lowerBound = fromUuid.map(uuid -> "(" + uuidBoundAfter(uuid)).orElse("-");
     String upperBound = toUuid.map(uuid -> "(" + uuidBoundAfter(uuid)).orElse("+");
 
-    Set<String> encodedUsers = jedis.zrangeByLex(USER_SET, lowerBound, upperBound);
+    Set<String> encodedUsers;
+    try(final Timer.Context context = GET_USERS_ZRANGE.time()) {
+      encodedUsers = jedis.zrangeByLex(USER_SET, lowerBound, upperBound);
+    }
 
     List<Pair<UUID, String>> users = new ArrayList<>(encodedUsers.size());
 
