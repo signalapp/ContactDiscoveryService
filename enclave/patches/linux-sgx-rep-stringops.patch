@@ -1,0 +1,52 @@
+diff --git a/sdk/tlibc/string/memcmp.c b/sdk/tlibc/string/memcmp.c
+index aab5c4133ca2..459228ea1745 100644
+--- a/sdk/tlibc/string/memcmp.c
++++ b/sdk/tlibc/string/memcmp.c
+@@ -60,6 +60,11 @@ memcmp(const void *s1, const void *s2, size_t n)
+ {
+ #ifdef _TLIBC_USE_INTEL_FAST_STRING_
+ 	return _intel_fast_memcmp((void*)s1, (void*)s2, n);
++#elif defined(_TLIBC_USE_REP_STRING_)
++        unsigned char s2_above, s2_below;
++        __asm__("repe cmpsb"
++                : "=@cca" (s2_above), "=@ccb" (s2_below), "+D" (s1), "+S" (s2), "+c" (n));
++        return -s2_above | s2_below;
+ #else
+ 	return __memcmp(s1, s2, n);
+ #endif
+diff --git a/sdk/tlibc/string/memcpy.c b/sdk/tlibc/string/memcpy.c
+index 25d0421e45a7..7f74a05bf28a 100644
+--- a/sdk/tlibc/string/memcpy.c
++++ b/sdk/tlibc/string/memcpy.c
+@@ -106,6 +106,13 @@ memcpy(void *dst0, const void *src0, size_t length)
+ {
+ #ifdef _TLIBC_USE_INTEL_FAST_STRING_
+  	return _intel_fast_memcpy(dst0, (void*)src0, length);
++#elif defined(_TLIBC_USE_REP_STRING_)
++        long new_dst0, new_src0, new_length;
++        __asm__ volatile("rep movsb"
++                         : "=&D" (new_dst0), "=&S" (new_src0), "=&c" (new_length)
++                         :   "0" (dst0),       "1" (src0),       "2" (length)
++                         : "memory");
++        return dst0;
+ #else
+ 	return __memcpy(dst0, src0, length);
+ #endif
+diff --git a/sdk/tlibc/string/memset.c b/sdk/tlibc/string/memset.c
+index c9676a9191b2..fb23c2b5bdd6 100644
+--- a/sdk/tlibc/string/memset.c
++++ b/sdk/tlibc/string/memset.c
+@@ -57,6 +57,13 @@ memset(void *dst, int c, size_t n)
+ {
+ #ifdef _TLIBC_USE_INTEL_FAST_STRING_
+ 	return _intel_fast_memset(dst, (void*)c, n);
++#elif defined(_TLIBC_USE_REP_STRING_)
++        long new_n, new_dst;
++	__asm__ volatile("rep stosb"
++                         : "=&c" (new_n), "=&D" (new_dst)
++                         :   "0" (n),       "1" (dst),     "a" (c)
++                         : "memory");
++        return dst;
+ #else
+ 	return __memset(dst, c, n);
+ #endif /* !_TLIBC_USE_INTEL_FAST_STRING_ */	

@@ -1,12 +1,26 @@
-Source: libsabd-enclave
+Source: cds-enclave
+Section: database
 Priority: optional
-Maintainer: Jeffrey Griffin <geogriffin@fastmail.com>
-Build-Depends: debhelper (>= 9), ocaml-native-compilers, g++-6, gcc-6
-Standards-Version: 3.9.8
-Section: libs
+Maintainer: Jeffrey Griffin <jeff@signal.org>
+Build-Depends:
+ debhelper (>= 10),
+ automake,
+ autoconf,
+ libtool,
+ curl,
+ wget,
+ git,
+ ocaml-native-compilers,
+ pkg-config,
+ libssl-dev,
+ libprotobuf-dev,
+ libcurl4-openssl-dev,
+Standards-Version: 4.0.0
 
-Package: libsabd-enclave1
+Package: cds-enclave
 Architecture: amd64
+Depends:
+ ${misc:Depends},
 Description: ContactDiscoveryService Enclave Library
  A package to reproducibly build the enclave library for
  ContactDiscoveryService.

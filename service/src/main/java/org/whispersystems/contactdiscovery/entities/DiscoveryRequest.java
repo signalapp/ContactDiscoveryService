@@ -23,9 +23,10 @@ import org.apache.commons.codec.binary.Hex;
 import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 import org.whispersystems.contactdiscovery.validation.ByteLength;
 
-import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+import java.util.List;
 
 /**
  * Entity representing an encrypted contact discovery request
@@ -37,14 +38,7 @@ public class DiscoveryRequest {
   @JsonProperty
   @NotNull
   @Min(1)
-  @Max(2048)
   private int addressCount;
-
-  @JsonProperty
-  @NotNull
-  @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
-  @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
-  private byte[] requestId;
 
   @JsonProperty
   @NotNull
@@ -66,20 +60,33 @@ public class DiscoveryRequest {
   @ByteLength(min = 16, max = 16)
   private byte[] mac;
 
+  @JsonProperty
+  @NotNull
+  @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
+  @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
+  @ByteLength(min = 32, max = 32)
+  private byte[] commitment;
+
+  @JsonProperty
+  @NotNull
+  @Size(min = 1, max = 3)
+  private List<DiscoveryRequestEnvelope> envelopes;
+
   public DiscoveryRequest() {
 
   }
 
-  public DiscoveryRequest(int addressCount, byte[] requestId, byte[] iv, byte[] data, byte[] mac) {
+  public DiscoveryRequest(int addressCount, byte[] iv, byte[] data, byte[] mac, byte[] commitment, List<DiscoveryRequestEnvelope> envelopes) {
     this.addressCount = addressCount;
-    this.requestId    = requestId;
     this.iv           = iv;
     this.data         = data;
     this.mac          = mac;
+    this.commitment   = commitment;
+    this.envelopes    = envelopes;
   }
 
-  public byte[] getRequestId() {
-    return requestId;
+  public int getAddressCount() {
+    return addressCount;
   }
 
   public byte[] getIv() {
@@ -94,12 +101,15 @@ public class DiscoveryRequest {
     return mac;
   }
 
-  public int getAddressCount() {
-    return addressCount;
+  public byte[] getCommitment() {
+    return commitment;
+  }
+
+  public List<DiscoveryRequestEnvelope> getEnvelopes() {
+    return envelopes;
   }
 
   public String toString() {
-    return "{ addressCount: " + addressCount + ", ticket: " + Hex.encodeHexString(requestId) + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + "}";
+    return "{ addressCount: " + addressCount + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + ", commitment: " + Hex.encodeHexString(commitment) + ", envelopes: " + envelopes + " }";
   }
-
 }

@@ -22,28 +22,27 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
+import io.dropwizard.lifecycle.Managed;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
-import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclave;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
 import org.whispersystems.contactdiscovery.enclave.SgxsdMessage;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
+import org.whispersystems.contactdiscovery.entities.DiscoveryRequestEnvelope;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
+import org.whispersystems.contactdiscovery.util.Constants;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
-import io.dropwizard.lifecycle.Managed;
-import org.whispersystems.contactdiscovery.util.Constants;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -134,13 +133,21 @@ public class RequestManager implements Managed {
         try (SgxEnclave.SgxsdBatch batch = enclave.newBatch(threadId, batchSize)) {
 
           for (PendingRequest request : requests) {
-            SgxsdMessage enclaveMessage = new SgxsdMessage(request.getRequest().getData(),
-                                                           request.getRequest().getIv(),
-                                                           request.getRequest().getMac(),
-                                                           request.getRequest().getRequestId());
+            int                      addressCount = request.getRequest().getAddressCount();
+            byte[]                   commitment   = request.getRequest().getCommitment();
+            DiscoveryRequestEnvelope envelope     = request.getRequest().getEnvelopes().get(0);
+            byte[]                   requestId    = envelope.getRequestId();
 
-            batch.add(enclaveMessage, request.getRequest().getAddressCount())
-                 .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(response.getIv(),
+            SgxsdMessage queryMessage    = new SgxsdMessage(request.getRequest().getData(),
+                                                            request.getRequest().getIv(),
+                                                            request.getRequest().getMac());
+            SgxsdMessage envelopeMessage = new SgxsdMessage(envelope.getData(),
+                                                            envelope.getIv(),
+                                                            envelope.getMac());
+
+            batch.add(envelopeMessage, requestId, queryMessage, addressCount, commitment)
+                 .thenApply(response -> request.getResponse().complete(new DiscoveryResponse(requestId,
+                                                                                             response.getIv(),
                                                                                              response.getData(),
                                                                                              response.getMac())))
                  .exceptionally(exception -> request.getResponse().completeExceptionally(exception));
@@ -150,7 +157,7 @@ public class RequestManager implements Managed {
           batchSizeHistogram.update(batchSize);
 
           try (Timer.Context timer = processBatchTimer.time()) {
-            batch.process(registeredUsers.getLeft().getLeft(), registeredUsers.getRight());
+            batch.process(registeredUsers.getLeft().getLeft(), registeredUsers.getLeft().getRight(), registeredUsers.getRight());
           }
         }
       } catch (Throwable t) {

@@ -1,0 +1,44 @@
+[package]
+authors = ["Open Whisper Systems"]
+name    = "cds_enclave"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[features]
+default = []
+test    = ["criterion", "sgx_ffi/test", "sgxsd_ffi/test"]
+
+[dependencies]
+hashbrown  = { version = "0.6", default-features = false, features = [] }
+libc       = { version = "0.2", default-features = false, features = [] }
+num-traits = { version = "0.2", default-features = false, features = [] }
+rand_core  = { version = "0.5", default-features = false, features = [] }
+sgx_ffi    = { path = "../sgx_ffi" }
+sgxsd_ffi  = { path = "../sgxsd_ffi" }
+spin       = "0.5"
+
+# optional dev-dependencies
+# criterion is optional because it will pull in libstd due to a cargo bug
+criterion = { version = "0.3", optional = true }
+
+[dev-dependencies]
+lazy_static = "1.4"
+mockers     = "0.21"
+test_ffi    = { path = "../test_ffi" }
+rand        = { version = "0.7", default-features = false, features = [] }
+rand_chacha = { version = "0.2", default-features = false, features = [] }
+
+[build-dependencies]
+cc       = "1.0"
+# cbindgen is optional because it will pull in libstd due to a cargo bug
+cbindgen = { version = "0.12", optional = true }
+
+[lib]
+crate-type = ["staticlib"]
+doctest    = false
+
+[[bench]]
+name    = "ratelimit_set"
+harness = false
+required-features = ["test"]

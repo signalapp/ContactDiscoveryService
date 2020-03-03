@@ -1,0 +1,10 @@
+[workspace]
+members = ["cds_enclave", "sgx_ffi", "sgxsd_ffi", "test_ffi"]
+exclude = ["build"]
+
+[profile.release]
+opt-level = 2
+debug = true
+codegen-units = 1
+panic = "abort"
+lto = "fat"

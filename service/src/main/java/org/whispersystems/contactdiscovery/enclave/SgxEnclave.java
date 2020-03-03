@@ -22,9 +22,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.crypto.AEADBadTagException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.CompletableFuture;
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Java interface for interacting with an SGX enclave
@@ -150,8 +150,8 @@ public class SgxEnclave implements Runnable {
   private void handleSgxException(SgxException ex) {
     if (ex.getCode() <= Integer.MAX_VALUE) {
       switch ((int) ex.getCode()) {
-        case SgxException.SGX_ERROR_INVALID_PARAMETER: throw new IllegalArgumentException(ex.getName());
-        case SgxException.SGX_ERROR_INVALID_STATE:     throw new IllegalStateException(ex.getName());
+        case SgxException.SGX_ERROR_INVALID_PARAMETER: throw new IllegalArgumentException(ex.getName(), ex);
+        case SgxException.SGX_ERROR_INVALID_STATE:     throw new IllegalStateException(ex.getName(), ex);
         case SgxException.SGX_ERROR_ENCLAVE_LOST:
         case SgxException.SGX_ERROR_ENCLAVE_CRASHED:
         case SgxException.SGX_ERROR_INVALID_ENCLAVE:
@@ -165,9 +165,10 @@ public class SgxEnclave implements Runnable {
     if (ex.getCode() <= Integer.MAX_VALUE) {
       switch ((int) ex.getCode()) {
         case SgxException.SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND: return new NoSuchPendingRequestException();
+        case SgxException.SABD_ERROR_INVALID_REQUEST_SIZE:       return new InvalidRequestSizeException();
         case SgxException.SGX_ERROR_MAC_MISMATCH:                return new AEADBadTagException();
-        case SgxException.SGX_ERROR_INVALID_PARAMETER:           return new IllegalArgumentException(ex.getName());
-        case SgxException.SGX_ERROR_INVALID_STATE:               return new IllegalStateException(ex.getName());
+        case SgxException.SGX_ERROR_INVALID_PARAMETER:           return new IllegalArgumentException(ex.getName(), ex);
+        case SgxException.SGX_ERROR_INVALID_STATE:               return new IllegalStateException(ex.getName(), ex);
       }
     }
     return ex;
@@ -249,41 +250,59 @@ public class SgxEnclave implements Runnable {
       }
     }
 
-    public synchronized CompletableFuture<SgxsdMessage> add(SgxsdMessage request, int requestPhoneCount) {
+    public synchronized CompletableFuture<SgxsdMessage> add(SgxsdMessage envelope,
+                                                            byte[] requestId,
+                                                            SgxsdMessage query,
+                                                            int queryPhoneCount,
+                                                            byte[] queryCommitment)
+    {
       if (processed) {
         throw new IllegalStateException("batch_already_processed");
       }
 
-      if (requestPhoneCount > maxPhoneCount - phoneCount) {
+      if (queryPhoneCount > maxPhoneCount - phoneCount) {
         throw new IllegalArgumentException("batch_full");
       }
 
-      final CompletableFuture<SgxsdMessage> future        = new CompletableFuture<>();
-      final byte[]                          requestTicket = request.getTicket();
+      CompletableFuture<SgxsdMessage> future   = new CompletableFuture<>();
+      NativeServerCallArgs            callArgs = new NativeServerCallArgs();
+
+      callArgs.msg_data           = envelope.getData();
+      callArgs.msg_iv             = envelope.getIv();
+      callArgs.msg_mac            = envelope.getMac();
+      callArgs.pending_request_id = requestId;
+      callArgs.query_data         = query.getData();
+      callArgs.query_iv           = query.getIv();
+      callArgs.query_mac          = query.getMac();
+      callArgs.query_phone_count  = queryPhoneCount;
+      callArgs.query_commitment   = queryCommitment;
 
       try {
-        nativeServerCall(getEnclaveState().id, stateHandle, requestPhoneCount,
-                         request.getData(), request.getIv(), request.getMac(), request.getTicket(),
+        nativeServerCall(getEnclaveState().id, stateHandle, callArgs,
                          (replyData, replyIv, replyMac) -> {
-                           future.complete(new SgxsdMessage(replyData, replyIv, replyMac, requestTicket));
+                           if (replyData != null) {
+                             future.complete(new SgxsdMessage(replyData, replyIv, replyMac));
+                           } else {
+                             future.completeExceptionally(new SgxException("request_cancelled"));
+                           }
                          });
       } catch (SgxException ex) {
         future.completeExceptionally(convertSgxException(ex));
         handleSgxException(ex);
       }
 
-      phoneCount += requestPhoneCount;
+      phoneCount += queryPhoneCount;
       return batchFuture.applyToEither(future, reply -> reply);
     }
 
     public synchronized void close() throws SgxException {
       if (!processed) {
         batchFuture.completeExceptionally(new SgxException("batch_closed"));
-        process(ByteBuffer.allocateDirect(8), 0);
+        process(null, null, 0);
       }
     }
 
-    public synchronized void process(ByteBuffer inPhonesBuf, long inPhoneCount) throws SgxException {
+    public synchronized void process(ByteBuffer inPhonesBuf, ByteBuffer inUuidsBuf, long inPhoneCount) throws SgxException {
       if (processed) {
         throw new IllegalStateException("batch_already_processed");
       }
@@ -291,7 +310,7 @@ public class SgxEnclave implements Runnable {
       processed = true;
 
       try {
-        nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inPhoneCount);
+        nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inUuidsBuf, inPhoneCount);
       } catch (SgxException ex) {
         batchFuture.completeExceptionally(convertSgxException(ex));
         handleSgxException(ex);
@@ -313,6 +332,18 @@ public class SgxEnclave implements Runnable {
     void receiveServerReply(byte[] data, byte[] iv, byte[] mac);
   }
 
+  private static class NativeServerCallArgs {
+    int    query_phone_count;
+    byte[] query_data;
+    byte[] query_iv;
+    byte[] query_mac;
+    byte[] query_commitment;
+    byte[] msg_data;
+    byte[] msg_iv;
+    byte[] msg_mac;
+    byte[] pending_request_id;
+  }
+
   private static native void nativeEnclaveStart(String enclavePath, boolean debug, byte[] launchToken, byte pendingRequestsTableOrder, EnclaveStartCallback callback) throws SgxException;
 
   private static native byte[] nativeGetNextQuote(long enclaveId, byte[] spid, byte[] sig_rl) throws SgxException;
@@ -320,7 +351,7 @@ public class SgxEnclave implements Runnable {
   private static native SgxRequestNegotiationResponse nativeNegotiateRequest(long enclaveId, byte[] client_pubkey_le) throws SgxException;
 
   private static native void nativeServerStart(long enclaveId, long stateHandle, int maxQueryPhones) throws SgxException;
-  private static native void nativeServerCall(long enclaveId, long stateHandle, int queryPhoneCount, byte[] msg_data, byte[] msg_iv, byte[] msg_mac, byte[] msg_ticket, NativeServerReplyCallback callback) throws SgxException;
-  private static native void nativeServerStop(long enclaveId, long stateHandle, ByteBuffer inPhonesBuf, long inPhoneCount) throws SgxException;
+  private static native void nativeServerCall(long enclaveId, long stateHandle, NativeServerCallArgs args, NativeServerReplyCallback callback) throws SgxException;
+  private static native void nativeServerStop(long enclaveId, long stateHandle, ByteBuffer inPhonesBuf, ByteBuffer inUuidsBuf, long inPhoneCount) throws SgxException;
   private static native int nativeReportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccessful);
 }

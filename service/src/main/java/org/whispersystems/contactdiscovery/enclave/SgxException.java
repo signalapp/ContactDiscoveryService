@@ -47,6 +47,10 @@ public class SgxException extends Exception {
   public static final int
     SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND = (0x10001);
 
+  // from sabd.h:
+  public static final int
+      SABD_ERROR_INVALID_REQUEST_SIZE = (0x20001);
+
   // from sgx_error.h:
   public static final int
     SGX_ERROR_UNEXPECTED         = (0x0001),      /* Unexpected error */

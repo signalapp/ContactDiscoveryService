@@ -1,0 +1,13 @@
+[package]
+authors = ["Open Whisper Systems"]
+name    = "test_ffi"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[dependencies]
+libc           = { version = "0.2", default-features = false, features = [] }
+mockers        = { version = "0.21" }
+mockers_derive = { version = "0.21" }
+rand           = { version = "0.7", default-features = false, features = [] }
+rand_chacha    = { version = "0.2", default-features = false, features = [] }

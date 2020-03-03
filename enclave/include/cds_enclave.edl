@@ -1,0 +1,4 @@
+enclave {
+    include "cds.h"
+    from "sgxsd.edl" import *;
+};

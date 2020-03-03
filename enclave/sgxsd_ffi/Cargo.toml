@@ -1,0 +1,34 @@
+[package]
+authors = ["Open Whisper Systems"]
+name    = "sgxsd_ffi"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[features]
+default = []
+test = ["lazy_static", "mockers", "mockers_derive", "rand", "test_ffi"]
+
+[dependencies]
+libc       = { version = "0.2", default-features = false, features = [] }
+rand_core  = { version = "0.5", default-features = false, features = [] }
+num-traits = { version = "0.2", default-features = false, features = [] }
+sgx_ffi    = { path = "../sgx_ffi" }
+
+# also need these as optional dependencies for the "test" feature
+lazy_static    = { version = "1.4",  optional = true }
+mockers        = { version = "0.21", optional = true }
+mockers_derive = { version = "0.21", optional = true }
+rand           = { version = "0.7",  optional = true, default-features = false, features = [] }
+test_ffi       = { path = "../test_ffi", optional = true }
+
+[dev-dependencies]
+lazy_static    = "1.4"
+mockers        = "0.21"
+mockers_derive = "0.21"
+rand           = { version = "0.7", default-features = false, features = [] }
+sgx_ffi        = { path = "../sgx_ffi", features = ["test"] }
+test_ffi       = { path = "../test_ffi" }
+
+[lib]
+doctest = false

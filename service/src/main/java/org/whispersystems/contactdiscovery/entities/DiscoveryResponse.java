@@ -35,6 +35,12 @@ public class DiscoveryResponse {
   @NotNull
   @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
   @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
+  private byte[] requestId;
+
+  @JsonProperty
+  @NotNull
+  @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
+  @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
   private byte[] iv;
 
   @JsonProperty
@@ -51,10 +57,15 @@ public class DiscoveryResponse {
 
   public DiscoveryResponse() {}
 
-  public DiscoveryResponse(byte[] iv, byte[] data, byte[] mac) {
-    this.iv   = iv;
-    this.data = data;
-    this.mac  = mac;
+  public DiscoveryResponse(byte[] requestId, byte[] iv, byte[] data, byte[] mac) {
+    this.requestId = requestId;
+    this.iv        = iv;
+    this.data      = data;
+    this.mac       = mac;
+  }
+
+  public byte[] getRequestId() {
+    return requestId;
   }
 
   public byte[] getIv() {

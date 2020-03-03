@@ -1,23 +1,13 @@
 *~
+/enclave/build/
 /enclave/debian/.debhelper/
 /enclave/debian/debhelper-build-stamp
 /enclave/debian/*.log
 /enclave/debian/*.substvars
 /enclave/debian/files
-/enclave/debian/libsabd-enclave*/
-/enclave/linux-sgx*/
-/enclave/**/*.so
-/enclave/**/*.a
-/enclave/**/*.o
-/enclave/**/*.deb
-/enclave/*.signdata
-/enclave/*.mrenclave
+/enclave/debian/cds-enclave/
+/enclave/debian/*.deb
 /enclave/*.key
-/enclave/*.pub
-/enclave/*.sig
-/enclave/sabd-enclave-test
-/enclave/sgxsd-enclave-test
-/enclave/debrebuild
 
 # java
 /src/**/*.class

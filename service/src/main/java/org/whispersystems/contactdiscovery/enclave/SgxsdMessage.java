@@ -25,16 +25,14 @@ public class SgxsdMessage {
   private final byte[] data;
   private final byte[] iv;
   private final byte[] mac;
-  private final byte[] ticket;
 
-  public SgxsdMessage(byte[] data, byte[] iv, byte[] mac, byte[] ticket) {
-    if (data == null || iv == null || mac == null || ticket == null) {
+  public SgxsdMessage(byte[] data, byte[] iv, byte[] mac) {
+    if (data == null || iv == null || mac == null) {
       throw new IllegalArgumentException();
     }
-    this.data   = data;
-    this.iv     = iv;
-    this.mac    = mac;
-    this.ticket = ticket;
+    this.data = data;
+    this.iv   = iv;
+    this.mac  = mac;
   }
 
   public byte[] getData() {
@@ -47,9 +45,5 @@ public class SgxsdMessage {
 
   public byte[] getMac() {
     return mac;
-  }
-
-  public byte[] getTicket() {
-    return ticket;
   }
 }

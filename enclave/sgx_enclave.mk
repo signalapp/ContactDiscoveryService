@@ -7,11 +7,12 @@ export USE_OPT_LIBS
 ## linux sdk
 ##
 
-SGX_SDK_SOURCE_GIT_TAG ?= sgx_2.1.3
-SGX_SDK_SOURCE_GIT_REV ?= sgx_2.1.3-g75dd558bdaff
-export SGX_SDK_SOURCE_DIR := linux-sgx-$(SGX_SDK_SOURCE_GIT_REV)
-export SGX_SDK_SOURCE_INCLUDEDIR := $(SGX_SDK_SOURCE_DIR)/common/inc
-export SGX_SDK_SOURCE_LIBDIR := $(SGX_SDK_SOURCE_DIR)/build/linux
+SGX_SDK_SOURCE_GIT_REV  ?= d166ff0c808e2f78d37eebf1ab614d944437eea3
+SGX_DCAP_SOURCE_GIT_REV ?= 1ac77919552d5409c28cc0cd8e88398851418ba6
+
+export SGX_SDK_SOURCE_DIR = $(builddir)/linux-sgx/linux-sgx-$(SGX_SDK_SOURCE_GIT_REV)
+export SGX_SDK_SOURCE_INCLUDEDIR = $(SGX_SDK_SOURCE_DIR)/common/inc
+export SGX_SDK_SOURCE_LIBDIR = $(SGX_SDK_SOURCE_DIR)/build/linux
 
 ifneq ($(SGX_SDK_DIR),)
 SGX_LIBDIR = $(SGX_SDK_DIR)/lib64
@@ -24,7 +25,7 @@ SGX_LIBDIR ?= $(SGX_SDK_SOURCE_LIBDIR)
 export SGX_LIBDIR
 SGX_SIGN ?= $(SGX_SDK_SOURCE_LIBDIR)/sgx_sign
 SGX_EDGER8R ?= $(SGX_SDK_SOURCE_LIBDIR)/sgx_edger8r
-SGX_SDK_MAKE = env -u CFLAGS -u LDFLAGS -u CPPFLAGS $(MAKE)
+SGX_SDK_MAKE = env -u LDFLAGS -u CPPFLAGS CFLAGS="-D_TLIBC_USE_REP_STRING_ -fno-jump-tables -Wno-error=implicit-fallthrough" $(MAKE)
 
 $(SGX_SDK_SOURCE_INCLUDEDIR): | $(SGX_SDK_SOURCE_DIR)
 
@@ -43,20 +44,28 @@ $(SGX_SDK_SOURCE_LIBDIR)/sgx_sign: | $(SGX_SDK_SOURCE_DIR)
 $(SGX_SDK_SOURCE_LIBDIR)/sgx_edger8r: | $(SGX_SDK_SOURCE_DIR)
 	$(SGX_SDK_MAKE) -C $(SGX_SDK_SOURCE_DIR)/sdk edger8r
 
-$(libdir)/libsgx_%.a: $(SGX_LIBDIR)/libsgx_%.a
+$(builddir)/libsgx_%.a: $(SGX_LIBDIR)/libsgx_%.a
 	ar mD $< $$(ar t $< | env -u LANG LC_ALL=C sort)
-	mkdir -p $(libdir)/
 	cp $< $@
-lib/libselib.a: $(SGX_SDK_SOURCE_DIR)/sdk/selib/linux/libselib.a
+$(builddir)/libsgx_%.so: $(SGX_LIBDIR)/libsgx_%.so
+	cp $< $@ #XXX Need to sort the symbols for reproducability.
+$(builddir)/libselib.a: $(SGX_SDK_SOURCE_DIR)/sdk/selib/linux/libselib.a
 	ar mD $< $$(ar t $< | env -u LANG LC_ALL=C sort)
-	mkdir -p lib/
 	cp $< $@
 
-linux-sgx-%.git:
-	git clone --depth 1 --branch $* --bare https://github.com/01org/linux-sgx.git $@
-linux-sgx-$(SGX_SDK_SOURCE_GIT_REV): linux-sgx-$(SGX_SDK_SOURCE_GIT_TAG).git
-	git --git-dir=$< fetch origin master
-	git --git-dir=$< archive --prefix=$@/ $(SGX_SDK_SOURCE_GIT_REV) | tar -x
+SGX_SDK_SOURCE_UNPACK_DIR  = $(builddir)/linux-sgx/unpack/linux-sgx-$(SGX_SDK_SOURCE_GIT_REV)
+SGX_DCAP_SOURCE_UNPACK_DIR = $(builddir)/linux-sgx/unpack/SGXDataCenterAttestationPrimitives-$(SGX_DCAP_SOURCE_GIT_REV)
+
+$(builddir)/linux-sgx/linux-sgx-$(SGX_SDK_SOURCE_GIT_REV):
+	rm -rf $(builddir)/linux-sgx/unpack/
+	mkdir -p $(builddir)/linux-sgx/unpack/
+	wget -O - https://github.com/intel/linux-sgx/archive/$(SGX_SDK_SOURCE_GIT_REV).tar.gz \
+		| tar -xzf - -C $(builddir)/linux-sgx/unpack/
+	wget -O - https://github.com/intel/SGXDataCenterAttestationPrimitives/archive/$(SGX_DCAP_SOURCE_GIT_REV).tar.gz \
+		| tar -xzf - -C $(builddir)/linux-sgx/unpack/
+	mv $(SGX_DCAP_SOURCE_UNPACK_DIR) $(SGX_SDK_SOURCE_UNPACK_DIR)/external/dcap_sources
+	patch -d $(SGX_SDK_SOURCE_UNPACK_DIR) -p 1 -T < $(patchdir)/linux-sgx-rep-stringops.patch
+	mv $(SGX_SDK_SOURCE_UNPACK_DIR) $@
 
 ##
 ## edger8r
@@ -74,35 +83,78 @@ linux-sgx-$(SGX_SDK_SOURCE_GIT_REV): linux-sgx-$(SGX_SDK_SOURCE_GIT_TAG).git
 %_u.h: %.edl | $(SGX_EDGER8R)
 	 $(SGX_EDGER8R) --untrusted --untrusted-dir $(dir $@) --search-path $(SGX_INCLUDEDIR) --search-path $(includedir) --header-only $<
 
-lib%_u.a: $(includedir)/%_u.o
-	$(AR) r $@ $<
+##
+## BOLT
+##
+
+LLVM_BOLT ?= $(builddir)/bin/llvm-bolt
+BOLT_DIR   = $(builddir)/bolt
+
+BOLT_GIT_REV      = 0655e9a71f43b3fc6a87e3c9be779dc76bc9efb9
+BOLT_SRC_DIR      = $(BOLT_DIR)/llvm-bolt-$(BOLT_GIT_REV)
+BOLT_LLVM_GIT_REV = f137ed238db11440f03083b1c88b7ffc0f4af65e
+BOLT_LLVM_SRC_DIR = $(BOLT_DIR)/llvm-$(BOLT_LLVM_GIT_REV)
+
+$(BOLT_SRC_DIR):
+	mkdir -p $(BOLT_DIR)
+	-rm -r $(BOLT_LLVM_SRC_DIR)
+	wget -O - https://github.com/llvm-mirror/llvm/archive/$(BOLT_LLVM_GIT_REV).tar.gz \
+		| tar -xzf -  -C $(BOLT_DIR)
+	wget -O - https://github.com/signalapp/BOLT/archive/$(BOLT_GIT_REV).tar.gz \
+		| tar -xzf - -C $(BOLT_LLVM_SRC_DIR)/tools
+	mv $(BOLT_LLVM_SRC_DIR)/tools/BOLT-$(BOLT_GIT_REV) $(BOLT_LLVM_SRC_DIR)/tools/llvm-bolt
+	patch -d $(BOLT_LLVM_SRC_DIR) -p 1 -T < $(BOLT_LLVM_SRC_DIR)/tools/llvm-bolt/llvm.patch
+	mv $(BOLT_LLVM_SRC_DIR) $@
+$(builddir)/bin/llvm-bolt: | $(BOLT_SRC_DIR)
+	mkdir -p $(BOLT_DIR)/build
+	@( cd $(BOLT_DIR)/build && \
+	   cmake -G Ninja $(CURDIR)/$(BOLT_SRC_DIR) -DLLVM_TARGETS_TO_BUILD="X86" -DCMAKE_BUILD_TYPE=Release && \
+	   ninja )
+	mkdir -p $(builddir)/bin
+	strip -o $@ $(BOLT_DIR)/build/bin/llvm-bolt
 
 ##
 ## linking
 ##
 
-ifeq ($(SGX_MODE), SIM)
-SGX_TRTS_LIB = sgx_trts_sim
-export SGX_URTS_LIB = sgx_urts_sim
-else
-SGX_TRTS_LIB = sgx_trts
-export SGX_URTS_LIB = sgx_urts
-endif
+ENCLAVE_CFLAGS = -fvisibility=hidden -fPIC -I$(SGX_INCLUDEDIR)/tlibc -fno-jump-tables -fno-builtin -ffreestanding
 
-ENCLAVE_CFLAGS = -fvisibility=hidden -fpie -I$(SGX_INCLUDEDIR)/tlibc
-
-ENCLAVE_LDFLAGS = -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(libdir) \
-	-Wl,--whole-archive -l$(SGX_TRTS_LIB) -Wl,--no-whole-archive \
+ENCLAVE_LDFLAGS = \
+	-Wl,-z,relro,-z,now,-z,noexecstack \
+	-Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(builddir) \
+	-Wl,--whole-archive -lsgx_trts -Wl,--no-whole-archive \
 	-Wl,--start-group -lsgx_tstdc -lselib -Wl,--end-group \
 	-Wl,-Bstatic -Wl,-Bsymbolic -Wl,--no-allow-shlib-undefined \
-	-Wl,-pie,-eenclave_entry -Wl,--export-dynamic -Wl,--build-id=none \
-	-Wl,--defsym,__ImageBase=0
+	-Wl,-eenclave_entry -Wl,--export-dynamic -Wl,--build-id=none \
+	-Wl,--defsym,__ImageBase=0 -Wl,--emit-relocs
 
-lib%.unstripped.so: CFLAGS += $(ENCLAVE_CFLAGS)
-lib%.unstripped.so: $(includedir)/%_t.o $(libdir)/lib$(SGX_TRTS_LIB).a $(libdir)/libselib.a $(libdir)/libsgx_tstdc.a
+$(builddir)/lib%.unstripped.so: CFLAGS += $(ENCLAVE_CFLAGS)
+$(builddir)/lib%.unstripped.so: $(builddir)/%_t.o $(builddir)/libsgx_trts.a $(builddir)/libselib.a $(builddir)/libsgx_tstdc.a
 	$(CC) $(LDFLAGS) -o $@ $(filter %.o,$^) $(LDLIBS) \
 		$(ENCLAVE_LDFLAGS) -Wl,--version-script=lib$*.lds -Wl,-soname,lib$*.so
-%.unsigned.so: %.unstripped.so
+
+$(builddir)/%.hardened.unstripped.so: $(builddir)/%.unstripped.so | $(LLVM_BOLT)
+	$(LLVM_BOLT) -trap-old-code -use-gnu-stack -update-debug-sections -update-end -v=2 \
+		-skip-funcs=$(shell cat bolt_skip_funcs.txt) \
+		-eliminate-unreachable=0 -strip-rep-ret=0 -simplify-conditional-tail-calls=0 \
+		-align-macro-fusion=none \
+		-insert-retpolines -insert-lfences \
+		-o $@ $<
+
+$(builddir)/%.hardened.unsigned.so: $(builddir)/%.hardened.unstripped.so
+	objdump -j .text --no-show-raw-insn -d $< | \
+	perl   -ne '$$cur{"branch"} = /^\s+[0-9a-f]+:\s+j[^m][a-z]*\s/;' \
+		-e '$$cur{"lfence"} = /^\s+[0-9a-f]+:\s+lfence/;' \
+		-e '$$fn = $$1 if /^[0-9a-f]+ <([^>]+)>:/;' \
+		-e 'if ($$cur{"branch"} && !$$prev{"branch"} && !$$prev{"lfence"}) { print "fn $$fn:\n$$prev$$_\n"; die if !grep(/$$fn\/1/, `cat bolt_skip_funcs.txt`); };' \
+		-e '%prev = %cur; $$prev = $$_;' \
+		-e '$$total{$$_} += $$cur{$$_} for (keys %cur);' \
+		-e 'END { print "$$_: ", $$total{$$_}, "\n" for (keys %total); }'
+	objdump -j .text --no-show-raw-insn -d $< | \
+	  egrep '^\s+[0-9a-f]+:\s+(cpuid|getsec|rdpmc|sgdt|sidt|sldt|str|vmcall|vmfunc|rdtscp?|int[0-9a-z]*|iret|syscall|sysenter)\s+' | \
+	  wc -l | grep -q '^0$$'
+	strip --strip-all $< -o $@
+$(builddir)/%.unsigned.so: $(builddir)/%.unstripped.so
 	strip --strip-all $< -o $@
 
 ##
@@ -111,34 +163,44 @@ lib%.unstripped.so: $(includedir)/%_t.o $(libdir)/lib$(SGX_TRTS_LIB).a $(libdir)
 
 %.debug.key:
 	openssl genrsa -out $@ -3 3072
-%.debug.pub: %.debug.key
+%.pub: %.key
 	openssl rsa -out $@ -in $< -pubout
-%.debug.sig: %.debug.signdata %.debug.key
-	openssl dgst -sha256 -out $@ -sign $*.debug.key $*.debug.signdata
 
+%.hardened.config.xml: %.config.xml
+	cp $< $@
 %.debug.config.xml: %.config.xml
 	sed -e 's@<DisableDebug>1</DisableDebug>@<DisableDebug>0</DisableDebug>@' $< > $@
-%.debug.signdata: %.unsigned.so %.debug.config.xml | $(SGX_SIGN)
-	$(SGX_SIGN) gendata -out $@ -enclave $*.unsigned.so -config $*.debug.config.xml
-%.debug.so: %.unsigned.so %.debug.signdata %.debug.config.xml %.debug.pub %.debug.sig | $(SGX_SIGN)
+$(builddir)/%.debug.signdata: $(builddir)/%.unsigned.so %.debug.config.xml | $(SGX_SIGN)
+	$(SGX_SIGN) gendata -out $@ -enclave $(builddir)/$*.unsigned.so -config $*.debug.config.xml
+$(builddir)/%.debug.so: $(builddir)/%.unsigned.so $(builddir)/%.debug.signdata %.debug.config.xml %.debug.pub $(builddir)/%.debug.sig | $(SGX_SIGN)
 	$(SGX_SIGN) catsig \
 		-out $@ \
-		-enclave $*.unsigned.so \
-		-unsigned $*.debug.signdata \
+		-enclave $(builddir)/$*.unsigned.so \
+		-unsigned $(builddir)/$*.debug.signdata \
 		-config $*.debug.config.xml \
 		-key $*.debug.pub \
-		-sig $*.debug.sig
+		-sig $(builddir)/$*.debug.sig
 
-%.signdata: %.unsigned.so %.config.xml | $(SGX_SIGN)
-	$(SGX_SIGN) gendata -out $@ -enclave $*.unsigned.so -config $*.config.xml
-%.mrenclave: %.signdata
+%.hardened.key: %.key
+	cp $< $@
+%.hardened.test.key: %.key
+	cp $< $@
+
+$(builddir)/%.test.unsigned.so: $(builddir)/%.unsigned.so
+	cp $< $@
+
+$(builddir)/%.signdata: $(builddir)/%.unsigned.so %.config.xml | $(SGX_SIGN)
+	$(SGX_SIGN) gendata -out $@ -enclave $(builddir)/$*.unsigned.so -config $*.config.xml
+$(builddir)/%.mrenclave: $(builddir)/%.signdata
 	perl -e 'undef $$/; print unpack("x188 H64", <>);' $< > $@
 	@echo mrenclave: $$(cat $@)
-%.signed.so: %.unsigned.so %.signdata %.config.xml %.pub %.sig | $(SGX_SIGN)
+$(builddir)/%.sig: $(builddir)/%.signdata %.key
+	openssl dgst -sha256 -out $@ -sign $*.key $(builddir)/$*.signdata
+$(builddir)/%.signed.so: $(builddir)/%.unsigned.so $(builddir)/%.signdata %.config.xml %.pub $(builddir)/%.sig | $(SGX_SIGN)
 	$(SGX_SIGN) catsig \
 		-out $@ \
-		-enclave $*.unsigned.so \
-		-unsigned $*.signdata \
+		-enclave $(builddir)/$*.unsigned.so \
+		-unsigned $(builddir)/$*.signdata \
 		-config $*.config.xml \
 		-key $*.pub \
-		-sig $*.sig
+		-sig $(builddir)/$*.sig

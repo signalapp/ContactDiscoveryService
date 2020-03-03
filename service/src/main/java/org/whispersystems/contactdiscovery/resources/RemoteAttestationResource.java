@@ -34,6 +34,7 @@ import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SignedQuoteUnavailableException;
+import org.whispersystems.contactdiscovery.entities.MultipleRemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
@@ -58,6 +59,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -92,7 +94,8 @@ public class RemoteAttestationResource {
   {
     rateLimiter.validate(user.getNumber());
     // XXX 2019-05-17 remove cookie before going live
-    return Response.ok(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()))
+    RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
+    return Response.ok(new MultipleRemoteAttestationResponse(List.of(attestation)))
                    .cookie(new NewCookie("dummy", "dummy"))
                    .build();
   }
@@ -101,10 +104,10 @@ public class RemoteAttestationResource {
   @Path("/test/{testName}/{enclaveId}")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  public RemoteAttestationResponse getAttestationHandshake(@Auth User user,
-                                                           @PathParam("testName") String testName,
-                                                           @PathParam("enclaveId") String enclaveId,
-                                                           @Valid RemoteAttestationRequest request)
+  public MultipleRemoteAttestationResponse getAttestationHandshake(@Auth User user,
+                                                                   @PathParam("testName") String testName,
+                                                                   @PathParam("enclaveId") String enclaveId,
+                                                                   @Valid RemoteAttestationRequest request)
           throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
@@ -194,7 +197,8 @@ public class RemoteAttestationResource {
       throw new WebApplicationException(404);
     }
 
-    return testFun.apply(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()));
+    RemoteAttestationResponse attestation = testFun.apply(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()));
+    return new MultipleRemoteAttestationResponse(List.of(attestation));
   }
 
   private static String readMockCertificate() {
@@ -205,10 +209,10 @@ public class RemoteAttestationResource {
     }
   }
 
-  private static RemoteAttestationResponse readMockRemoteAttestationResponse() {
+  private static MultipleRemoteAttestationResponse readMockRemoteAttestationResponse() {
     try {
       return new ObjectMapper().readValue(readResourceAsString("/test/mock_attestation_response.json"),
-                                          RemoteAttestationResponse.class);
+                                          MultipleRemoteAttestationResponse.class);
     } catch (IOException ex) {
       throw new AssertionError(ex);
     }

@@ -31,6 +31,7 @@ typedef struct sgxsd_msg_buf {
 } sgxsd_msg_buf_t;
 
 typedef struct sgxsd_msg_from {
+    bool valid;
     sgxsd_msg_tag_t tag;
     sgxsd_aes_gcm_key_t server_key;
 } sgxsd_msg_from_t;
@@ -58,7 +59,9 @@ sgx_status_t sgxsd_enclave_server_terminate(const sgxsd_server_terminate_args_t 
 //
 
 // sgxsd_enclave_server_reply sends a reply to the message corresponding to the given sgxsd_msg_from from handle_call
-sgx_status_t sgxsd_enclave_server_reply(sgxsd_msg_buf_t reply_buf, sgxsd_msg_from_t from);
+sgx_status_t sgxsd_enclave_server_reply(sgxsd_msg_buf_t reply_buf, sgxsd_msg_from_t *p_from);
+
+sgx_status_t sgxsd_enclave_server_noreply(sgxsd_msg_from_t *p_from);
 
 //
 // public utility apis
@@ -76,13 +79,15 @@ sgx_status_t sgxsd_aes_gcm_decrypt(const sgxsd_aes_gcm_key_t *p_key,
                                    const void *p_aad, uint32_t aad_len,
                                    const sgxsd_aes_gcm_mac_t *p_in_mac);
 
+typedef struct sgxsd_rand_buf {
+    uint8_t x[SGXSD_CURVE25519_KEY_SIZE];
+} sgxsd_rand_buf_t, sgxsd_curve25519_private_key_t;
+
+sgx_status_t sgxsd_enclave_read_rand(sgxsd_rand_buf_t *p_privkey);
+
 //
 // internal definitions
 //
-
-typedef struct sgxsd_curve25519_private_key {
-    uint8_t x[SGXSD_CURVE25519_KEY_SIZE];
-} sgxsd_curve25519_private_key_t;
 
 typedef struct sgxsd_curve25519_key_pair {
     sgxsd_curve25519_private_key_t privkey;

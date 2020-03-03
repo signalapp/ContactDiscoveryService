@@ -11,6 +11,7 @@ import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SignedQuoteUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.StaleRevocationListException;
+import org.whispersystems.contactdiscovery.entities.MultipleRemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
@@ -92,20 +93,25 @@ public class RemoteAttestationResourceTest {
     byte[] clientPublic = new byte[32];
     new SecureRandom().nextBytes(clientPublic);
 
-    RemoteAttestationResponse response = resources.getJerseyTest()
-                                                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
-                                                  .request(MediaType.APPLICATION_JSON_TYPE)
-                                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                                  .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
-                                                       RemoteAttestationResponse.class);
+    MultipleRemoteAttestationResponse response =
+        resources.getJerseyTest()
+                 .target("/v1/attestation/" + VALID_ENCLAVE_ID)
+                 .request(MediaType.APPLICATION_JSON_TYPE)
+                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
+                      MultipleRemoteAttestationResponse.class);
 
-    assertArrayEquals(response.getQuote(), this.quote);
-    assertArrayEquals(response.getTag(), this.tag);
-    assertArrayEquals(response.getIv(), this.iv);
+    assertEquals(response.getAttestations().size(), 1);
 
-    assertEquals(response.getCertificates(), "bar");
-    assertEquals(response.getSignature(), "foo");
-    assertEquals(response.getSignatureBody(), "baz");
+    RemoteAttestationResponse attestation = response.getAttestations().get(0);
+
+    assertArrayEquals(attestation.getQuote(), this.quote);
+    assertArrayEquals(attestation.getTag(), this.tag);
+    assertArrayEquals(attestation.getIv(), this.iv);
+
+    assertEquals(attestation.getCertificates(), "bar");
+    assertEquals(attestation.getSignature(), "foo");
+    assertEquals(attestation.getSignatureBody(), "baz");
 
     verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic));
   }

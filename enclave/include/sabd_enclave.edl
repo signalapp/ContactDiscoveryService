@@ -1,4 +1,0 @@
-enclave {
-    include "sabd.h"
-    from "sgxsd.edl" import *;
-};

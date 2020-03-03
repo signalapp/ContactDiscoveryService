@@ -1,142 +1,292 @@
-srcdir = src
+sgxsd_srcdir = sgxsd_enclave
 includedir = include
-libdir = lib
+patchdir = patches
+builddir = build
+targetdir = $(builddir)/target
 resourcedir = ../service/src/main/resources
 
-export NAME := sabd
-
-JDK_HOME ?= $(dir $(word 1,$(wildcard /usr/lib/jvm/*/include)))
-export JDK_HOME
-
+RUSTC ?= rustc
+CARGO ?= cargo
+RUSTUP ?= rustup
+BINDGEN ?= $(builddir)/bin/bindgen-0.51.1
 DOCKER ?= docker
+INSTALL ?= install
+
+RUSTUP_TOOLCHAIN_UNSTABLE ?= nightly
+
+FEATURES ?=
+
+INSTALL_PROGRAM = $(INSTALL) -m 755 $(INSTALL_PROGRAM_FLAGS)
+INSTALL_DATA    = $(INSTALL) -m 644
+
+DESTDIR ?=
 
 CFLAGS = \
-	-m64 -O2 -ggdb -march=skylake -pipe \
-	-std=c11 -D_DEFAULT_SOURCE \
-	-fstack-protector \
+	-m64 -O2 -ggdb -march=skylake -pipe -fPIC \
+	-D_FORTIFY_SOURCE=2 -std=c11 -D_DEFAULT_SOURCE \
+	-fstack-protector-strong -fcf-protection \
 	-Wall -Werror=all -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
 	-I$(includedir) -I$(includedir)/bearssl -I$(SGX_INCLUDEDIR)
 
+LDFLAGS =
+
+BINDGENFLAGS =
+CARGOBUILDFLAGS =
+export CARGO_TARGET_DIR = $(CURDIR)/$(targetdir)
+export CARGO_HOME = $(CURDIR)/$(builddir)/cargo
+
 TEST_CFLAGS += $(CFLAGS) \
-	-DUNIT_TESTING -fsanitize=undefined
+	-DUNIT_TESTING -fsanitize=address -static-libasan -fsanitize=undefined -static-libubsan
 
-ENCLAVE_NAME		:= lib$(NAME)_enclave
-TARGET			:= $(ENCLAVE_NAME).unsigned.so
-UNSTRIPPED_TARGET	:= $(ENCLAVE_NAME).unstripped.so
+##
+## sgxsd
+##
 
-SIGNDATA		:= $(ENCLAVE_NAME).signdata
-MRENCLAVE		:= $(ENCLAVE_NAME).mrenclave
-SIGNED_TARGET		:= $(ENCLAVE_NAME).signed.so
-ENCLAVE_CONFIG		:= $(ENCLAVE_NAME).config.xml
-
-DEBUG_ENCLAVE_NAME	:= $(ENCLAVE_NAME).debug
-DEBUG_SIGNDATA		:= $(DEBUG_ENCLAVE_NAME).signdata
-DEBUG_SIGNED_TARGET	:= $(DEBUG_ENCLAVE_NAME).so
-DEBUG_ENCLAVE_CONFIG	:= $(DEBUG_ENCLAVE_NAME).config.xml
-
-TEST_SABD_TARGET	:= sabd-enclave-test
-TEST_SGXSD_TARGET	:= sgxsd-enclave-test
+TEST_SGXSD_TARGET := $(builddir)/sgxsd-enclave-test
 
 BEARSSL_SOURCES := \
-	   $(srcdir)/bearssl/gcm.c $(srcdir)/bearssl/ghash_pclmul.c \
-	   $(srcdir)/bearssl/sha2small.c $(srcdir)/bearssl/dec32be.c $(srcdir)/bearssl/enc32be.c \
-	   $(srcdir)/bearssl/aes_x86ni_ctr.c $(srcdir)/bearssl/aes_x86ni.c
-BEARSSL_OBJECTS := $(BEARSSL_SOURCES:.c=.o)
+	   $(sgxsd_srcdir)/bearssl/gcm.c $(sgxsd_srcdir)/bearssl/ghash_pclmul.c \
+	   $(sgxsd_srcdir)/bearssl/sha2small.c $(sgxsd_srcdir)/bearssl/dec32be.c $(sgxsd_srcdir)/bearssl/enc32be.c \
+	   $(sgxsd_srcdir)/bearssl/aes_x86ni_ctr.c $(sgxsd_srcdir)/bearssl/aes_x86ni.c
+BEARSSL_OBJECTS := $(addprefix $(builddir)/,$(BEARSSL_SOURCES:.c=.o))
 
-SOURCES := $(srcdir)/sabd-enclave.c.s $(srcdir)/sgxsd-enclave.c $(srcdir)/curve25519-donna-c64.c $(BEARSSL_SOURCES) \
-	   $(srcdir)/sgx-tcrypto-stub.c
-OBJECTS := $(patsubst %.s,%.o,$(SOURCES:.c=.o))
+SGXSD_SOURCES   := $(sgxsd_srcdir)/sgxsd-enclave.c $(sgxsd_srcdir)/curve25519-donna-c64.c $(BEARSSL_SOURCES) \
+		   $(sgxsd_srcdir)/sgx-tcrypto-stub.c
+SGXSD_OBJECTS   := $(addprefix $(builddir)/,$(SGXSD_SOURCES:.c=.o))
 
-TEST_SABD_SOURCES := $(srcdir)/sabd-enclave.c $(srcdir)/sabd-enclave-test.c $(srcdir)/cmockery.c
-TEST_SABD_OBJECTS := $(TEST_SABD_SOURCES:.c=.o)
-
-TEST_SGXSD_SOURCES := $(srcdir)/sgxsd-enclave.c $(srcdir)/curve25519-donna-c64.c $(srcdir)/sgxsd-enclave-test.c $(srcdir)/cmockery.c
-TEST_SGXSD_OBJECTS := $(TEST_SGXSD_SOURCES:.c=.o)
+TEST_SGXSD_SOURCES := $(sgxsd_srcdir)/sgxsd-enclave.c $(sgxsd_srcdir)/curve25519-donna-c64.c $(sgxsd_srcdir)/sgxsd-enclave-test.c $(sgxsd_srcdir)/cmockery.c
+TEST_SGXSD_OBJECTS := $(addprefix $(builddir)/test/,$(TEST_SGXSD_SOURCES:.c=.o))
 
 TEST_LDFLAGS += $(TEST_CFLAGS)
 
-.PHONY: default docker-install all test debug signed jni-static jni debuild debuild-target debrebuild docker edger8r clean
+##
+## cds_enclave
+##
+
+CDS_ENCLAVE_NAME		:= libcds_enclave.hardened
+CDS_ENCLAVE_TARGET		:= $(builddir)/libcds_enclave.unstripped.so
+CDS_ENCLAVE_RUST_STATICLIB	:= $(targetdir)/release/libcds_enclave.a
+
+##
+## targets
+##
+
+.PHONY: default docker-install all unstripped hardened unsigned llvm-bolt doc check test test-asan benchmark clippy bindgen debug sign install edger8r distclean clean docker
+
+.SUFFIXES:
+.SUFFIXES: .s .c .o
+
 default: docker-install
 
 include sgx_enclave.mk
 
-docker-install: docker
-	$(MAKE) install
+docker-install: docker install
 
-all: $(TARGET) jni $(srcdir)/sabd-enclave.c.s $(SIGNDATA) $(MRENCLAVE) debug test
+all: $(CDS_ENCLAVE_TARGET) $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so $(builddir)/$(CDS_ENCLAVE_NAME).signdata $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave
 
-test: $(TEST_SABD_TARGET) $(TEST_SGXSD_TARGET)
-	./$(TEST_SABD_TARGET)
+unstripped: $(CDS_ENCLAVE_TARGET)
+
+hardened: $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so
+
+unsigned: $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so
+
+llvm-bolt: $(LLVM_BOLT)
+
+doc:
+	env -u CFLAGS \
+		$(CARGO) doc --package=cds_enclave --release --document-private-items --lib
+
+check:
+	$(CARGO) check --package=cds_enclave --lib --tests
+
+test: $(TEST_SGXSD_TARGET)
+	ASAN_OPTIONS="detect_leaks=0:$(ASAN_OPTIONS)" ./$(TEST_SGXSD_TARGET)
+	env -u CFLAGS \
+	RUST_BACKTRACE=full \
+	RUST_TEST_THREADS=1 \
+		$(CARGO) test --manifest-path=cds_enclave/Cargo.toml --lib --bins --features test -- --test-threads=1
+
+test-asan: $(TEST_SGXSD_TARGET)
 	./$(TEST_SGXSD_TARGET)
+	env -u CFLAGS \
+	RUST_BACKTRACE=full \
+	RUSTFLAGS="-Z sanitizer=address" RUST_TEST_THREADS=1 \
+	ASAN_OPTIONS="detect_odr_violation=1:detect_stack_use_after_return=true:check_initialization_order=true:strict_init_order=true:halt_on_error=false:$(ASAN_OPTIONS)" \
+	LSAN_OPTIONS="suppressions=$(CURDIR)/cds_enclave/lsan-ignore-test.txt:$(LSAN_OPTIONS)" \
+		$(RUSTUP) run $(RUSTUP_TOOLCHAIN_UNSTABLE) \
+		$(CARGO) test --manifest-path=cds_enclave/Cargo.toml --lib --bins --tests --features=test -- --test-threads=1
 
-benchmark: $(TEST_SABD_TARGET)
-	./$(TEST_SABD_TARGET) --benchmark
+clippy:
+	$(CARGO) clippy --manifest-path=cds_enclave/Cargo.toml --features=test
 
-debug: $(TARGET) $(DEBUG_SIGNED_TARGET)
+benchmark:
+	$(CARGO) bench --manifest-path=cds_enclave/Cargo.toml --all --features=test
 
-sign: $(SIGNED_TARGET)
+bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)
+	$(BINDGEN) --no-include-path-detection -o sgx_ffi/src/bindgen_wrapper.rs \
+		--rust-target 1.33 --use-core --ctypes-prefix libc --with-derive-default --with-derive-eq --no-prepend-enum-name \
+		sgx_ffi/src/bindgen_wrapper.h --rustfmt-configuration-file /dev/null -- \
+		$(filter-out -fvisibility=hidden,$(filter-out -std=%,$(CFLAGS) $(ENCLAVE_CFLAGS)))
+	$(BINDGEN) --no-include-path-detection -o sgxsd_ffi/src/bindgen_wrapper.rs \
+		--rust-target 1.33 --use-core --ctypes-prefix libc --with-derive-default --with-derive-eq --no-prepend-enum-name \
+		sgxsd_ffi/src/bindgen_wrapper.h --rustfmt-configuration-file /dev/null -- \
+		$(filter-out -fvisibility=hidden,$(filter-out -std=%,$(CFLAGS) $(ENCLAVE_CFLAGS)))
+	$(BINDGEN) -o cds_enclave/src/ffi/bindgen_wrapper.rs \
+		--rust-target 1.33 --use-core --ctypes-prefix libc --with-derive-default --with-derive-eq --no-prepend-enum-name \
+		--blacklist-type sgxsd_aes_gcm_key --blacklist-type sgxsd_aes_gcm_iv --blacklist-type sgxsd_aes_gcm_mac \
+		--raw-line "use sgxsd_ffi::{sgxsd_aes_gcm_key, sgxsd_aes_gcm_iv, sgxsd_aes_gcm_mac};" \
+		--blacklist-type "__m256i" \
+		--raw-line "use core::arch::x86_64::*;" \
+		cds_enclave/src/ffi/bindgen_wrapper.h --rustfmt-configuration-file /dev/null -- \
+		$(filter-out -fvisibility=hidden,$(filter-out -std=%,$(CFLAGS) $(ENCLAVE_CFLAGS)))
 
-install: jni $(DEBUG_SIGNED_TARGET) $(MRENCLAVE)
-	mkdir -p $(resourcedir)/enclave
-	cp jni/lib$(NAME)-jni.so $(resourcedir)/enclave-jni.so
-	cp $(DEBUG_SIGNED_TARGET) $(resourcedir)/enclave/$$(cat $(MRENCLAVE)).so
-	cp $(SIGNDATA) signdata/$$(cat $(MRENCLAVE)).signdata
-	if [ -e $(SIGNED_TARGET) ]; then cp $(SIGNED_TARGET) $(resourcedir)/enclave/$$(cat $(MRENCLAVE)).so; fi
+$(builddir)/bin/bindgen-%:
+	$(CARGO) install --force --version $* --bin bindgen bindgen
+	mkdir -p $(builddir)/bin
+	cp $(builddir)/cargo/bin/bindgen $@
 
-jni-static:
-	$(MAKE) -C jni static
+debug: $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so
 
-jni: $(SGX_LIBDIR)/lib$(SGX_URTS_LIB).so
-	$(MAKE) -C jni
+sign: $(builddir)/$(CDS_ENCLAVE_NAME).signed.so
 
-debuild:
-	env -u LANG LC_ALL=C debuild --no-lintian --build=binary -uc -us -j1
-	mv ../*.buildinfo debian/buildinfo
-	mv ../*.deb debian/
-debuild-target: all
-
-debrebuild: docker/debrebuild.pl
-	-@if perl docker/debrebuild.pl debian/buildinfo docker; then \
-		echo; echo Updated docker/build-deps, docker/sources.list, and debian/buildinfo. Please check them in if modified.; \
-	else \
-		echo; echo Failed to update docker/build-deps and docker/sources.list from debian/buildinfo. Continuing build anyway...; \
+install:
+	$(INSTALL_DATA) $(builddir)/$(CDS_ENCLAVE_NAME).debug.so \
+			$(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave).so
+	if [ -e $(builddir)/$(CDS_ENCLAVE_NAME).signed.so ]; then \
+		cp $(builddir)/$(CDS_ENCLAVE_NAME).signed.so \
+		   $(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave).so; \
 	fi
 
-docker: clean
-	$(DOCKER) build -t whispersystems/contactdiscovery-enclave:1.0 .
-	$(DOCKER) run --rm --volume $(CURDIR):/home/signal/enclave --workdir /home/signal/enclave \
-		--user $$(id -u):$$(id -g) \
-		whispersystems/contactdiscovery-enclave:1.0 \
-		env HOME=/home/signal make SGX_MODE=$(SGX_MODE) debuild debrebuild jni
-
-edger8r: $(includedir)/sabd_enclave.edl | $(SGX_EDGER8R)
-	 $(SGX_EDGER8R) --untrusted --untrusted-dir jni/src \
-			--trusted --trusted-dir $(srcdir) \
+edger8r: $(includedir)/cds_enclave.edl | $(SGX_EDGER8R)
+	 $(SGX_EDGER8R) --untrusted --untrusted-dir $(includedir) \
+			--trusted --trusted-dir $(includedir) \
 			--search-path $(SGX_INCLUDEDIR) \
-			$(includedir)/sabd_enclave.edl
+			--search-path $(includedir) \
+			$(includedir)/cds_enclave.edl
+
+distclean: clean
 
 clean:
-	rm -f	$(TARGET) $(UNSTRIPPED_TARGET) \
-		$(SIGNDATA) $(MRENCLAVE) $(SIGNED_TARGET) \
-		$(DEBUG_ENCLAVE_NAME).key $(DEBUG_ENCLAVE_NAME).pub $(DEBUG_ENCLAVE_NAME).sig \
-		$(DEBUG_SIGNDATA) $(DEBUG_SIGNED_TARGET) \
-		$(OBJECTS) lib/libsgx_*.a lib/libselib.a \
-		$(TEST_SABD_TARGET) $(TEST_SABD_OBJECTS) $(TEST_SGXSD_TARGET) $(TEST_SGXSD_OBJECTS)
-	-make -C jni clean
-	-$(SGX_SDK_MAKE) -C $(SGX_SDK_SOURCE_DIR) clean
+	rm -f	$(builddir)/$(CDS_ENCLAVE_NAME).debug.signdata \
+		$(builddir)/$(CDS_ENCLAVE_NAME).debug.key \
+		$(builddir)/$(CDS_ENCLAVE_NAME).debug.pub \
+		$(builddir)/$(CDS_ENCLAVE_NAME).debug.sig \
+		$(builddir)/$(CDS_ENCLAVE_NAME).test.sig \
+		$(builddir)/$(CDS_ENCLAVE_NAME).test.signdata \
+		$(builddir)/$(CDS_ENCLAVE_NAME).sig \
+		$(builddir)/$(CDS_ENCLAVE_NAME).signdata \
+		$(builddir)/$(CDS_ENCLAVE_NAME).mrenclave \
+		$(builddir)/*.o \
+		$(builddir)/*.a \
+		$(builddir)/*.so \
+		$(SGXSD_OBJECTS) $(TEST_SGXSD_TARGET) $(TEST_SGXSD_OBJECTS) \
+		debian/debhelper-build-stamp \
+		debian/cds-enclave.substvars \
+		debian/files \
+		debian/*.deb
+	-rm -r	$(targetdir)/release/ \
+		$(targetdir)/debug/ \
+		$(builddir)/bolt/build \
+		$(builddir)/cargo/bin \
+		$(SGX_SDK_SOURCE_DIR) \
+		debian/.debhelper/ \
+		debian/cds-enclave/
+	-$(CARGO) clean --release
+
+## rust
+
+.PHONY: FORCE
+FORCE:
+
+$(targetdir)/release/lib%.a: FORCE
+	env -u CFLAGS \
+		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
+
+## sgxsd
 
 $(BEARSSL_OBJECTS): $(wildcard $(includedir)/bearssl/%.h)
-$(OBJECTS): $(includedir)/sabd.h $(includedir)/sgxsd.h $(includedir)/sgxsd-enclave.h | $(SGX_INCLUDEDIR)
+$(SGXSD_OBJECTS): $(builddir)/%.o: %.c $(includedir)/sgxsd.h $(includedir)/sgxsd-enclave.h | $(SGX_INCLUDEDIR)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
+
+$(TEST_SGXSD_TARGET): $(TEST_SGXSD_OBJECTS)
+	$(CC) -o $@ $(TEST_SGXSD_OBJECTS) $(TEST_LDFLAGS)
+$(TEST_SGXSD_OBJECTS): $(builddir)/test/%.o: %.c $(includedir)/sgxsd.h $(includedir)/sgxsd-enclave.h $(includedir)/cmockery.h | $(SGX_INCLUDEDIR)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $(CFLAGS) $(TEST_CFLAGS) -c $<
+
+## cds_enclave
 
 %.c.s: %.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) -S -ggdb0 -fverbose-asm -o $@ $<
+	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -S -ggdb0 -fverbose-asm $<
 
-$(UNSTRIPPED_TARGET): $(OBJECTS)
+.PRECIOUS: cds_enclave/c_src/cds-enclave-hash.c.s
+cds_enclave/c_src/cds-enclave-hash.c.s: | $(SGX_INCLUDEDIR)
 
-$(TEST_SABD_TARGET): CFLAGS := $(TEST_CFLAGS)
-$(TEST_SABD_TARGET): $(TEST_SABD_SOURCES) $(includedir)/cmockery.h
-	$(CC) -o $@ $(TEST_SABD_SOURCES) $(TEST_LDFLAGS)
+.PRECIOUS: cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
+cds_enclave/c_src/cds-enclave-ratelimit-set.c.s: | $(SGX_INCLUDEDIR)
 
-$(TEST_SGXSD_TARGET): CFLAGS := $(TEST_CFLAGS)
-$(TEST_SGXSD_TARGET): $(TEST_SGXSD_SOURCES) $(includedir)/cmockery.h
-	$(CC) -o $@ $(TEST_SGXSD_SOURCES) $(TEST_LDFLAGS)
+$(includedir)/cds_enclave_t.h $(includedir)/cds_enclave_u.h: $(includedir)/sgxsd.edl
+
+$(builddir)/cds_enclave_t.o: $(includedir)/cds_enclave_t.c
+	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
+
+$(builddir)/cds_enclave_u.o: $(includedir)/cds_enclave_u.c
+	$(CC) -o $@ $(CFLAGS) -c $<
+
+$(builddir)/libcds_enclave_u.a: $(builddir)/cds_enclave_u.o
+	$(AR) r $@ $<
+
+$(CDS_ENCLAVE_RUST_STATICLIB): cds_enclave/c_src/cds-enclave-hash.c.s cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
+
+$(CDS_ENCLAVE_TARGET): $(SGXSD_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
+$(CDS_ENCLAVE_TARGET): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))
+$(CDS_ENCLAVE_TARGET): LDLIBS := -lcds_enclave
+
+
+## Reproducible enclave build via debian package
+
+MAKETARGET ?= bindgen debuild sign
+
+docker: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
+docker:
+	$(DOCKER) build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) \
+	  -t cds-enclave-builder ./docker
+	$(DOCKER) run -it --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE \
+		-v `pwd`/:/home/rust/src $(DOCKER_EXTRA) \
+		--env MAKEFLAGS="$(MAKEFLAGS)" \
+		cds-enclave-builder \
+		sh -c "cd src; make $(MAKETARGET)"
+
+.PHONY: debuild
+debuild:
+	env -u LANG LC_ALL=C debuild --preserve-envvar=PATH --no-lintian --build=binary -uc -us -j1
+	mv ../*.buildinfo debian/buildinfo
+	mv ../*.deb debian/
+
+.PHONY: debuild-cds-enclave-build
+debuild-cds-enclave-build: all
+
+.PHONY: debuild-cds-enclave-install
+debuild-cds-enclave-install: $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so
+	mkdir -p $(DESTDIR)/usr/lib/cds/enclave/
+	$(INSTALL_DATA) $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(DESTDIR)/usr/lib/cds/enclave/
+
+.PHONY: debuild-cds-enclave-test
+debuild-cds-enclave-test:
+	echo "not running tests in debuild" 1>&2
+
+.PHONY: tar
+tar:
+	tar -cjf $(builddir)/$(CDS_ENCLAVE_NAME).build.tar.bz2 \
+		$(LLVM_BOLT) \
+		--anchored --exclude-vcs \
+		--exclude='$(builddir)/bolt' \
+		--exclude='$(builddir)/cargo/registry/cache' \
+		--exclude='$(builddir)/cargo/registry/index' \
+		--exclude='$(builddir)/cargo/git/db' \
+		--exclude='*.git' \
+		--no-wildcards-match-slash \
+		--exclude='$(builddir)/*.tar.bz2' \
+		--verbose --totals \
+		'$(builddir)/'

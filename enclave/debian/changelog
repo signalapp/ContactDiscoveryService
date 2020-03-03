@@ -1,5 +1,5 @@
-libsabd-enclave (1.0) unstable; urgency=medium
+cds-enclave (1.0) unstable; urgency=medium
 
-  * Initial Release.
+  *
 
- -- Jeffrey Griffin <geogriffin@fastmail.com>  Wed, 21 Jun 2017 10:50:02 -0700
+ -- Jeffrey Griffin <jeff@signal.org>  Wed, 21 Jun 2017 10:50:02 -0700
