@@ -18,6 +18,7 @@
 use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::mem::size_of;
+use core::num::NonZeroU128;
 use core::{u32, u8};
 
 use sgx_ffi::sgx::*;
@@ -86,6 +87,19 @@ pub unsafe fn hash_lookup(
         }
     }
     Err(SGX_ERROR_UNEXPECTED)
+}
+
+//
+// Uuid impls
+//
+
+impl From<Uuid> for Option<NonZeroU128> {
+    fn from(from: Uuid) -> Self {
+        let mut uuid_data = [0; 16];
+        uuid_data[..8].copy_from_slice(&from.data64[0].to_ne_bytes());
+        uuid_data[8..].copy_from_slice(&from.data64[1].to_ne_bytes());
+        NonZeroU128::new(u128::from_ne_bytes(uuid_data))
+    }
 }
 
 //

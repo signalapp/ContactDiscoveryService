@@ -17,6 +17,7 @@ rand_core  = { version = "0.5", default-features = false, features = [] }
 sgx_ffi    = { path = "../sgx_ffi" }
 sgxsd_ffi  = { path = "../sgxsd_ffi" }
 spin       = "0.5"
+subtle     = { version = "2.2", default-features = false, features = [] }
 
 # optional dev-dependencies
 # criterion is optional because it will pull in libstd due to a cargo bug

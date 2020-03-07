@@ -1,0 +1,15 @@
+enclave {
+    include "cds.h"
+    trusted {
+        public sgx_status_t cds_enclave_update_ratelimit_state(
+            uuid_t ratelimit_state_uuid,
+            [in, size=ratelimit_state_size] uint8_t *ratelimit_state_data,
+            size_t ratelimit_state_size,
+            [in, count=query_phone_count] phone_t *query_phones,
+            size_t query_phone_count
+        );
+        public sgx_status_t cds_enclave_delete_ratelimit_state(
+            uuid_t ratelimit_state_uuid
+        );
+    };
+};

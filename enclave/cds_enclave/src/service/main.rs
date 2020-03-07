@@ -34,9 +34,11 @@ use sgx_ffi::sgx::*;
 use sgx_ffi::untrusted_slice::UntrustedSlice;
 use sgx_ffi::util::{memset_s, SecretValue, ToUsize};
 use sgxsd_ffi::ecalls::*;
-use sgxsd_ffi::{AesGcmIv, AesGcmKey, AesGcmMac, RdRand, SHA256Context};
+use sgxsd_ffi::{AesGcmIv, AesGcmKey, AesGcmMac, RdRand, SHA1Context, SHA256Context};
 use spin::*;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 
+use crate::ffi::cttk::*;
 use crate::ffi::hash_lookup::*;
 use crate::ffi::ratelimit_set::*;
 use crate::ffi::sgxsd::*;
@@ -93,6 +95,53 @@ struct RequestRatelimitState<'a> {
 }
 
 //
+// public free functions
+//
+
+pub fn update_ratelimit_state(
+    ratelimit_state_uuid: Uuid,
+    encrypted_ratelimit_state: &mut [u8],
+    query_phones: &[Phone],
+) -> Result<(), SgxStatus>
+{
+    let ratelimit_state_uuid: Option<NonZeroU128> = ratelimit_state_uuid.into();
+    let ratelimit_state_uuid = ratelimit_state_uuid.ok_or(SGX_ERROR_INVALID_PARAMETER)?;
+
+    let (ratelimit_state_data, ratelimit_state_mac_data) =
+        match encrypted_ratelimit_state.len().checked_sub(AesGcmMac::default().data.len()) {
+            Some(ratelimit_state_data_len) => encrypted_ratelimit_state.split_at_mut(ratelimit_state_data_len),
+            None                           => return Err(CDS_ERROR_INVALID_RATE_LIMIT_STATE),
+        };
+    let ratelimit_state_mac_data: &mut _ = ratelimit_state_mac_data.try_into().unwrap_or_else(|_| unreachable!());
+
+    let ratelimit_state_lock = RatelimitStateMap::global(0).get(&ratelimit_state_uuid);
+    let mut locked_ratelimit_state = ratelimit_state_lock.lock();
+
+    let ratelimit_state: &mut RatelimitState = locked_ratelimit_state.get_or_insert_with(Default::default);
+
+    let (new_ratelimit_state_data, new_ratelimit_state_mac) = ratelimit_state.update(
+        SecretValue::new(ratelimit_state_data.to_vec().into_boxed_slice()),
+        AesGcmMac {
+            data: *ratelimit_state_mac_data,
+        },
+        &query_phones,
+    )?;
+
+    ratelimit_state_data.copy_from_slice(&new_ratelimit_state_data);
+    *ratelimit_state_mac_data = new_ratelimit_state_mac.data;
+
+    Ok(())
+}
+
+pub fn delete_ratelimit_state(ratelimit_state_uuid: Uuid) -> Result<(), SgxStatus> {
+    let ratelimit_state_uuid: Option<_> = ratelimit_state_uuid.into();
+    let ratelimit_state_uuid = ratelimit_state_uuid.ok_or(SGX_ERROR_INVALID_PARAMETER)?;
+    let ratelimit_state_lock = RatelimitStateMap::global(0).get(&ratelimit_state_uuid);
+    *ratelimit_state_lock.lock() = None;
+    Ok(())
+}
+
+//
 // SgxsdServerState
 //
 
@@ -125,12 +174,7 @@ impl SgxsdServerState {
 
         Self::verify_commitment(&query_phones.data.get()[..], &args.query_commitment)?;
 
-        let mut ratelimit_state_uuid_data = [0; 16];
-        ratelimit_state_uuid_data[..8].copy_from_slice(&args.ratelimit_state_uuid.data64[0].to_ne_bytes());
-        ratelimit_state_uuid_data[8..].copy_from_slice(&args.ratelimit_state_uuid.data64[1].to_ne_bytes());
-        let maybe_ratelimit_state_uuid = NonZeroU128::new(u128::from_ne_bytes(ratelimit_state_uuid_data));
-
-        let ratelimit_state = if let Some(ratelimit_state_uuid) = maybe_ratelimit_state_uuid {
+        let ratelimit_state = if let Some(ratelimit_state_uuid) = args.ratelimit_state_uuid.into() {
             Some(RequestRatelimitState {
                 uuid: ratelimit_state_uuid,
                 data: UntrustedSlice::new(args.ratelimit_state_data, args.ratelimit_state_size.to_usize())
@@ -161,80 +205,50 @@ impl SgxsdServerState {
 
     fn update_ratelimit_state(
         &mut self,
-        query_phones: &PhoneList,
+        mut query_phones: PhoneList,
         request_ratelimit_state: RequestRatelimitState<'_>,
     ) -> Result<(), SgxStatus>
     {
-        let mut ratelimit_state_mac = AesGcmMac::default();
         let ratelimit_state_data_len = (request_ratelimit_state.data)
             .len()
-            .checked_sub(ratelimit_state_mac.data.len())
+            .checked_sub(AesGcmMac::default().data.len())
             .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        let mut ratelimit_state_data = SecretValue::new(
+        let ratelimit_state_data = SecretValue::new(
             (request_ratelimit_state.data)
                 .read_bytes(ratelimit_state_data_len)
                 .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?
                 .into_boxed_slice(),
         );
-        let ratelimit_state_mac_vec = (request_ratelimit_state.data)
-            .offset(ratelimit_state_data_len)
-            .read_bytes(ratelimit_state_mac.data.len())
-            .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        ratelimit_state_mac.data.copy_from_slice(&ratelimit_state_mac_vec[..]);
+
+        let ratelimit_state_mac = AesGcmMac {
+            data: (request_ratelimit_state.data)
+                .offset(ratelimit_state_data_len)
+                .read_bytes(AesGcmMac::default().data.len())
+                .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?[..]
+                .try_into()
+                .unwrap_or_else(|_| static_unreachable!()),
+        };
 
         let ratelimit_state_lock = (self.ratelimit_state_map.as_mut())
             .ok_or(SGX_ERROR_INVALID_STATE)?
             .get(&request_ratelimit_state.uuid);
         let mut locked_ratelimit_state = ratelimit_state_lock.lock();
 
-        let ratelimit_state: &mut RatelimitState = locked_ratelimit_state.get_or_insert_with(|| RatelimitState {
-            nonce: NonZeroU32::new(1).unwrap_or_else(|| unreachable!()),
-            key:   Default::default(),
-        });
+        let ratelimit_state: &mut RatelimitState = locked_ratelimit_state.get_or_insert_with(Default::default);
 
-        if !ratelimit_state_data.get().iter().all(|b: &u8| b == &0) {
-            (ratelimit_state.key)
-                .decrypt(ratelimit_state_data.get_mut(), &[], &ratelimit_state.get_iv(), &ratelimit_state_mac)
-                .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        } else {
-            let ratelimit_set_size_limit_data = (ratelimit_state_data.get_mut())
-                .get_mut(..mem::size_of::<u32>())
-                .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-            RdRand
-                .try_fill_bytes(ratelimit_set_size_limit_data)
-                .map_err(|_| SGX_ERROR_UNEXPECTED)?;
+        for query_phone in &mut query_phones[..] {
+            hash_query_phone(query_phone);
         }
 
-        let ratelimit_set_size_limit_data = ratelimit_state_data
-            .get()
-            .get(..mem::size_of::<u32>())
-            .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        let ratelimit_set_size_limit = u32::from_ne_bytes(ratelimit_set_size_limit_data.try_into().map_err(|_| SGX_ERROR_UNEXPECTED)?);
-        let ratelimit_state_slots_data = &mut ratelimit_state_data.get_mut()[mem::size_of::<u32>()..];
-        let query_phones_slice = &query_phones[..];
-
-        // increment nonce before revealing the result, to prevent replay of information leakage
-        let encrypt_nonce = (ratelimit_state.nonce.get())
-            .checked_add(1)
-            .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        ratelimit_state.nonce = NonZeroU32::new(encrypt_nonce).unwrap_or_else(|| unreachable!());
-
-        ratelimit_set_add(ratelimit_state_slots_data, query_phones_slice);
-        let set_size = ratelimit_set_size(ratelimit_state_slots_data);
-
-        if set_size > ratelimit_set_size_limit {
-            return Err(CDS_ERROR_RATE_LIMIT_EXCEEDED);
-        }
-
-        let mut encrypt_mac = AesGcmMac::default();
-        (ratelimit_state.key).encrypt(ratelimit_state_data.get_mut(), &[], &ratelimit_state.get_iv(), &mut encrypt_mac)?;
+        let (ratelimit_state_data, ratelimit_state_mac) =
+            ratelimit_state.update(ratelimit_state_data, ratelimit_state_mac, &query_phones)?;
 
         (request_ratelimit_state.data)
-            .write_bytes(ratelimit_state_data.get())
+            .write_bytes(&ratelimit_state_data)
             .map_err(|()| SGX_ERROR_UNEXPECTED)?;
         (request_ratelimit_state.data)
             .offset(ratelimit_state_data_len)
-            .write_bytes(&encrypt_mac.data)
+            .write_bytes(&ratelimit_state_mac.data)
             .map_err(|()| SGX_ERROR_UNEXPECTED)?;
 
         Ok(())
@@ -275,7 +289,7 @@ impl SgxsdServer for SgxsdServerState {
             let request_phones_iter = request.phones.iter();
             let mut request_phones = PhoneList::new(request_phones_iter.len());
             request_phones.extend(request_phones_iter);
-            self.update_ratelimit_state(&request_phones, ratelimit_state)
+            self.update_ratelimit_state(request_phones, ratelimit_state)
                 .map_err(|error: SgxStatus| (error, from))
         } else {
             let request_phones_iter = request.phones.iter();
@@ -413,6 +427,63 @@ impl RatelimitState {
         iv.data[..nonce_bytes.len()].copy_from_slice(&nonce_bytes);
         iv
     }
+
+    pub fn update(
+        &mut self,
+        mut ratelimit_state_data: SecretValue<Box<[u8]>>,
+        mut ratelimit_state_mac: AesGcmMac,
+        query_phones: &[u64],
+    ) -> Result<(Box<[u8]>, AesGcmMac), SgxStatus>
+    {
+        if !ratelimit_state_data.get().iter().all(|b: &u8| b == &0) {
+            self.key
+                .decrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &ratelimit_state_mac)
+                .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+        } else {
+            let ratelimit_set_size_limit_data = ratelimit_state_data
+                .get_mut()
+                .get_mut(..mem::size_of::<u32>())
+                .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+            RdRand
+                .try_fill_bytes(ratelimit_set_size_limit_data)
+                .map_err(|_| SGX_ERROR_UNEXPECTED)?;
+        }
+
+        let ratelimit_set_size_limit_data = ratelimit_state_data
+            .get()
+            .get(..mem::size_of::<u32>())
+            .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+        let ratelimit_set_size_limit = u32::from_ne_bytes(ratelimit_set_size_limit_data.try_into().map_err(|_| SGX_ERROR_UNEXPECTED)?);
+        let ratelimit_state_slots_data = &mut ratelimit_state_data
+            .get_mut()
+            .get_mut(mem::size_of::<u32>()..)
+            .unwrap_or_else(|| static_unreachable!());
+
+        // increment nonce before revealing the result, to prevent replay of information leakage
+        let encrypt_nonce = (self.nonce.get()).checked_add(1).ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+        self.nonce = NonZeroU32::new(encrypt_nonce).unwrap_or_else(|| unreachable!());
+
+        ratelimit_set_add(ratelimit_state_slots_data, query_phones);
+        let set_size = ratelimit_set_size(ratelimit_state_slots_data);
+
+        if set_size > ratelimit_set_size_limit {
+            return Err(CDS_ERROR_RATE_LIMIT_EXCEEDED);
+        }
+
+        self.key
+            .encrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &mut ratelimit_state_mac)?;
+
+        Ok((ratelimit_state_data.into_inner(), ratelimit_state_mac))
+    }
+}
+
+impl Default for RatelimitState {
+    fn default() -> Self {
+        Self {
+            nonce: NonZeroU32::new(1).unwrap_or_else(|| static_unreachable!()),
+            key:   Default::default(),
+        }
+    }
 }
 
 //
@@ -448,13 +519,65 @@ impl RequestPhoneList {
 }
 
 //
+// helpers
+//
+
+#[inline(never)]
+fn hash_query_phone(phone: &mut u64) {
+    // enough to hold 2^64 in decimal
+    let mut ascii_phone = SecretValue::new([0u8; 20]);
+
+    let mut divisor = CtU64::nan();
+    let mut quotient = CtU64::nan();
+    let mut remainder = CtU64::nan();
+
+    divisor.set(10);
+    quotient.set(*phone);
+    for ascii_digit in ascii_phone.get_mut().iter_mut().rev() {
+        quotient.divrem_assign(&divisor, &mut remainder);
+        *ascii_digit = ('0' as u8) + (u64::from(&remainder) as u8)
+    }
+
+    hash_ascii_phone(phone, ascii_phone.get())
+}
+
+#[inline(never)]
+fn hash_ascii_phone(phone: &mut u64, ascii_phone: &[u8; 20]) {
+    let mut leading_zeroes: Choice = 1.into();
+    let mut ascii_phone = &ascii_phone[..];
+    while let Some(leading_digit) = ascii_phone.get(0) {
+        let leading_zero = leading_digit.ct_eq(&('0' as u8));
+        hash_truncated(ascii_phone, phone, leading_zeroes & !leading_zero);
+        leading_zeroes &= leading_zero;
+        ascii_phone = &ascii_phone[1..];
+    }
+}
+
+#[inline(never)]
+fn hash_truncated(data: &[u8], phone: &mut u64, choice: Choice) {
+    let mut hash_context = SHA1Context::default();
+
+    hash_context.update(&['+' as u8]);
+    hash_context.update(data);
+
+    let mut hash_result = SecretValue::new([0; SHA1Context::hash_len()]);
+    hash_context.result(hash_result.get_mut());
+    hash_context.clear();
+
+    let truncated_hash = u64::from_ne_bytes(hash_result.get()[..8].try_into().unwrap_or_else(|_| static_unreachable!()));
+    phone.conditional_assign(&truncated_hash, choice);
+}
+
+//
 // tests
 //
 
 #[cfg(test)]
 mod tests {
+    use std::cell::*;
     use std::ffi::c_void;
     use std::mem;
+    use std::rc::*;
 
     use mockers::matchers::*;
     use mockers::*;
@@ -615,6 +738,78 @@ mod tests {
         server.terminate(Some(&empty_stop_args())).unwrap();
     }
 
+    #[test]
+    fn test_hash_query_phone_zero() {
+        for phone in 1..10 {
+            test_hash_query_phone(phone);
+        }
+    }
+
+    #[test]
+    fn test_hash_query_phone_1_digit() {
+        for phone in 1..10 {
+            test_hash_query_phone(phone);
+        }
+    }
+
+    #[test]
+    fn test_hash_query_phone_2_digit() {
+        for phone in 10..100 {
+            test_hash_query_phone(phone);
+        }
+    }
+
+    #[test]
+    fn test_hash_query_phone_13_digit() {
+        for phone in 1..10 {
+            test_hash_query_phone(1_000_000_000_000 * phone);
+            test_hash_query_phone(1_000_000_000_000 * phone + 234_567_890_123);
+        }
+    }
+
+    #[test]
+    fn test_hash_query_phone_too_large() {
+        test_hash_query_phone((std::u64::MAX >> 1) + 0);
+        test_hash_query_phone((std::u64::MAX >> 1) + 1);
+        test_hash_query_phone((std::u64::MAX >> 1) + 2);
+        test_hash_query_phone(std::u64::MAX - 1);
+        test_hash_query_phone(std::u64::MAX - 0);
+    }
+
+    fn test_hash_query_phone(mut phone: u64) {
+        let scenario = Scenario::new();
+        let mock = test_ffi::mock_for(&sgxsd_ffi::mocks::BEARSSL_SHA1, &scenario);
+
+        let is_correct_hash_shared = Rc::new(RefCell::new(false));
+
+        scenario.expect(mock.update(eq(&b"+"[..])).and_return_default().times(20));
+        let correct_hash_len = format!("{}", phone).into_bytes().len();
+        for len in 1..=20 {
+            let expected = format!("{:01$}", phone, len).into_bytes();
+            let is_correct_hash_shared = is_correct_hash_shared.clone();
+            scenario.expect(
+                mock.update(check(move |actual: &&[u8]| **actual == expected[expected.len() - len..]))
+                    .and_call(move |actual: &[u8]| {
+                        let is_correct_hash = actual.len() == correct_hash_len;
+                        assert!(!*is_correct_hash_shared.borrow() || !is_correct_hash);
+                        *is_correct_hash_shared.borrow_mut() = is_correct_hash;
+                    })
+            );
+        }
+
+        let mock_result = test_ffi::rand();
+        scenario.expect(mock.out().and_call_clone(move || {
+            if *is_correct_hash_shared.borrow() {
+                mock_result
+            } else {
+                Default::default()
+            }
+        }).times(20));
+
+        hash_query_phone(&mut phone);
+        assert_eq!(phone, u64::from_ne_bytes(mock_result[..8].try_into().unwrap()));
+    }
+
     //
     // TestQuery impls
     //
@@ -622,18 +817,12 @@ mod tests {
     impl TestQuery {
         pub fn new(phone_count: u32) -> Self {
             let query_data_size = COMMITMENT_NONCE_SIZE + phone_count as usize * mem::size_of::<Phone>();
-            let mut query = Self {
+            Self {
                 phone_count,
                 data: vec![0; query_data_size].into(),
                 commitment: [0; 32],
                 request_data: vec![0; SGXSD_AES_GCM_KEY_SIZE as usize].into(),
-            };
-
-            let mut query_commitment_hasher = SHA256Context::default();
-            query_commitment_hasher.update(&query.data);
-            query_commitment_hasher.result(&mut query.commitment);
-
-            query
+            }
         }
     }
 

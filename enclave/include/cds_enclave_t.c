@@ -70,6 +70,20 @@ typedef struct ms_sgxsd_enclave_server_stop_t {
 	sgxsd_server_state_handle_t ms_state_handle;
 } ms_sgxsd_enclave_server_stop_t;
 
+typedef struct ms_cds_enclave_update_ratelimit_state_t {
+	sgx_status_t ms_retval;
+	uuid_t ms_ratelimit_state_uuid;
+	uint8_t* ms_ratelimit_state_data;
+	size_t ms_ratelimit_state_size;
+	phone_t* ms_query_phones;
+	size_t ms_query_phone_count;
+} ms_cds_enclave_update_ratelimit_state_t;
+
+typedef struct ms_cds_enclave_delete_ratelimit_state_t {
+	sgx_status_t ms_retval;
+	uuid_t ms_ratelimit_state_uuid;
+} ms_cds_enclave_delete_ratelimit_state_t;
+
 typedef struct ms_sgxsd_ocall_reply_t {
 	sgx_status_t ms_retval;
 	const sgxsd_msg_header_t* ms_reply_header;
@@ -404,11 +418,100 @@ err:
 	return status;
 }
 
+static sgx_status_t SGX_CDECL sgx_cds_enclave_update_ratelimit_state(void* pms)
+{
+	CHECK_REF_POINTER(pms, sizeof(ms_cds_enclave_update_ratelimit_state_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+	ms_cds_enclave_update_ratelimit_state_t* ms = SGX_CAST(ms_cds_enclave_update_ratelimit_state_t*, pms);
+	sgx_status_t status = SGX_SUCCESS;
+	uint8_t* _tmp_ratelimit_state_data = ms->ms_ratelimit_state_data;
+	size_t _tmp_ratelimit_state_size = ms->ms_ratelimit_state_size;
+	size_t _len_ratelimit_state_data = _tmp_ratelimit_state_size;
+	uint8_t* _in_ratelimit_state_data = NULL;
+	phone_t* _tmp_query_phones = ms->ms_query_phones;
+	size_t _tmp_query_phone_count = ms->ms_query_phone_count;
+	size_t _len_query_phones = _tmp_query_phone_count * sizeof(phone_t);
+	phone_t* _in_query_phones = NULL;
+
+	if (sizeof(*_tmp_query_phones) != 0 &&
+		(size_t)_tmp_query_phone_count > (SIZE_MAX / sizeof(*_tmp_query_phones))) {
+		return SGX_ERROR_INVALID_PARAMETER;
+	}
+
+	CHECK_UNIQUE_POINTER(_tmp_ratelimit_state_data, _len_ratelimit_state_data);
+	CHECK_UNIQUE_POINTER(_tmp_query_phones, _len_query_phones);
+
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_ratelimit_state_data != NULL && _len_ratelimit_state_data != 0) {
+		if ( _len_ratelimit_state_data % sizeof(*_tmp_ratelimit_state_data) != 0)
+		{
+			status = SGX_ERROR_INVALID_PARAMETER;
+			goto err;
+		}
+		_in_ratelimit_state_data = (uint8_t*)malloc(_len_ratelimit_state_data);
+		if (_in_ratelimit_state_data == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_ratelimit_state_data, _len_ratelimit_state_data, _tmp_ratelimit_state_data, _len_ratelimit_state_data)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	if (_tmp_query_phones != NULL && _len_query_phones != 0) {
+		_in_query_phones = (phone_t*)malloc(_len_query_phones);
+		if (_in_query_phones == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_query_phones, _len_query_phones, _tmp_query_phones, _len_query_phones)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+
+	ms->ms_retval = cds_enclave_update_ratelimit_state(ms->ms_ratelimit_state_uuid, _in_ratelimit_state_data, _tmp_ratelimit_state_size, _in_query_phones, _tmp_query_phone_count);
+
+err:
+	if (_in_ratelimit_state_data) free(_in_ratelimit_state_data);
+	if (_in_query_phones) free(_in_query_phones);
+	return status;
+}
+
+static sgx_status_t SGX_CDECL sgx_cds_enclave_delete_ratelimit_state(void* pms)
+{
+	CHECK_REF_POINTER(pms, sizeof(ms_cds_enclave_delete_ratelimit_state_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+	ms_cds_enclave_delete_ratelimit_state_t* ms = SGX_CAST(ms_cds_enclave_delete_ratelimit_state_t*, pms);
+	sgx_status_t status = SGX_SUCCESS;
+
+
+
+	ms->ms_retval = cds_enclave_delete_ratelimit_state(ms->ms_ratelimit_state_uuid);
+
+
+	return status;
+}
+
 SGX_EXTERNC const struct {
 	size_t nr_ecall;
-	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[7];
+	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[9];
 } g_ecall_table = {
-	7,
+	9,
 	{
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_node_init, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_get_next_report, 0, 0},
@@ -417,16 +520,18 @@ SGX_EXTERNC const struct {
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_start, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_call, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_stop, 0, 0},
+		{(void*)(uintptr_t)sgx_cds_enclave_update_ratelimit_state, 0, 0},
+		{(void*)(uintptr_t)sgx_cds_enclave_delete_ratelimit_state, 0, 0},
 	}
 };
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[1][7];
+	uint8_t entry_table[1][9];
 } g_dyn_entry_table = {
 	1,
 	{
-		{0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, },
 	}
 };
 

@@ -12,6 +12,7 @@
 #include "sgx_quote.h"
 #include "sgx_report.h"
 #include "sgxsd.h"
+#include "cds.h"
 
 #include <stdlib.h> /* for size_t */
 
@@ -33,6 +34,8 @@ sgx_status_t sgxsd_enclave_negotiate_request(sgx_enclave_id_t eid, sgx_status_t*
 sgx_status_t sgxsd_enclave_server_start(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_init_args_t* p_args, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_call(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_handle_call_args_t* p_args, const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_size, sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_stop(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_terminate_args_t* p_args, sgxsd_server_state_handle_t state_handle);
+sgx_status_t cds_enclave_update_ratelimit_state(sgx_enclave_id_t eid, sgx_status_t* retval, uuid_t ratelimit_state_uuid, uint8_t* ratelimit_state_data, size_t ratelimit_state_size, phone_t* query_phones, size_t query_phone_count);
+sgx_status_t cds_enclave_delete_ratelimit_state(sgx_enclave_id_t eid, sgx_status_t* retval, uuid_t ratelimit_state_uuid);
 
 #ifdef __cplusplus
 }

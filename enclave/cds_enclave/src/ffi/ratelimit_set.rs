@@ -15,9 +15,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-use super::bindgen_wrapper::{cds_ratelimit_set_add, cds_ratelimit_set_size, phone_t};
+use super::bindgen_wrapper::{cds_ratelimit_set_add, cds_ratelimit_set_size};
 
-pub fn ratelimit_set_add(ratelimit_state_slots_data: &mut [u8], query_phones: &[phone_t]) {
+pub fn ratelimit_set_add(ratelimit_state_slots_data: &mut [u8], query_phones: &[u64]) {
     unsafe {
         cds_ratelimit_set_add(
             ratelimit_state_slots_data.as_mut_ptr(),

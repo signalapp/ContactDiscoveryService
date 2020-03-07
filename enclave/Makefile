@@ -1,4 +1,4 @@
-sgxsd_srcdir = sgxsd_enclave
+c_srcdir = c_src
 includedir = include
 patchdir = patches
 builddir = build
@@ -45,16 +45,28 @@ TEST_CFLAGS += $(CFLAGS) \
 TEST_SGXSD_TARGET := $(builddir)/sgxsd-enclave-test
 
 BEARSSL_SOURCES := \
-	   $(sgxsd_srcdir)/bearssl/gcm.c $(sgxsd_srcdir)/bearssl/ghash_pclmul.c \
-	   $(sgxsd_srcdir)/bearssl/sha2small.c $(sgxsd_srcdir)/bearssl/dec32be.c $(sgxsd_srcdir)/bearssl/enc32be.c \
-	   $(sgxsd_srcdir)/bearssl/aes_x86ni_ctr.c $(sgxsd_srcdir)/bearssl/aes_x86ni.c
+	$(c_srcdir)/bearssl/aead/gcm.c \
+	$(c_srcdir)/bearssl/hash/ghash_pclmul.c \
+	$(c_srcdir)/bearssl/hash/sha2small.c \
+	$(c_srcdir)/bearssl/hash/sha1.c \
+	$(c_srcdir)/bearssl/codec/dec32be.c \
+	$(c_srcdir)/bearssl/codec/enc32be.c \
+	$(c_srcdir)/bearssl/symcipher/aes_x86ni_ctr.c \
+	$(c_srcdir)/bearssl/symcipher/aes_x86ni.c
 BEARSSL_OBJECTS := $(addprefix $(builddir)/,$(BEARSSL_SOURCES:.c=.o))
 
-SGXSD_SOURCES   := $(sgxsd_srcdir)/sgxsd-enclave.c $(sgxsd_srcdir)/curve25519-donna-c64.c $(BEARSSL_SOURCES) \
-		   $(sgxsd_srcdir)/sgx-tcrypto-stub.c
-SGXSD_OBJECTS   := $(addprefix $(builddir)/,$(SGXSD_SOURCES:.c=.o))
+C_SOURCES := \
+	$(c_srcdir)/sgxsd-enclave.c \
+	$(c_srcdir)/curve25519-donna-c64.c \
+	$(BEARSSL_SOURCES) \
+	$(c_srcdir)/sgx-tcrypto-stub.c
+C_OBJECTS := $(addprefix $(builddir)/,$(SOURCES:.c=.o))
 
-TEST_SGXSD_SOURCES := $(sgxsd_srcdir)/sgxsd-enclave.c $(sgxsd_srcdir)/curve25519-donna-c64.c $(sgxsd_srcdir)/sgxsd-enclave-test.c $(sgxsd_srcdir)/cmockery.c
+TEST_SGXSD_SOURCES := \
+	$(c_srcdir)/sgxsd-enclave.c \
+	$(c_srcdir)/curve25519-donna-c64.c \
+	$(c_srcdir)/sgxsd-enclave-test.c \
+	$(c_srcdir)/cmockery.c
 TEST_SGXSD_OBJECTS := $(addprefix $(builddir)/test/,$(TEST_SGXSD_SOURCES:.c=.o))
 
 TEST_LDFLAGS += $(TEST_CFLAGS)
@@ -179,7 +191,7 @@ clean:
 		$(builddir)/*.o \
 		$(builddir)/*.a \
 		$(builddir)/*.so \
-		$(SGXSD_OBJECTS) $(TEST_SGXSD_TARGET) $(TEST_SGXSD_OBJECTS) \
+		$(C_OBJECTS) $(TEST_SGXSD_TARGET) $(TEST_SGXSD_OBJECTS) \
 		debian/debhelper-build-stamp \
 		debian/cds-enclave.substvars \
 		debian/files \
@@ -204,8 +216,8 @@ $(targetdir)/release/lib%.a: FORCE
 
 ## sgxsd
 
-$(BEARSSL_OBJECTS): $(wildcard $(includedir)/bearssl/%.h)
-$(SGXSD_OBJECTS): $(builddir)/%.o: %.c $(includedir)/sgxsd.h $(includedir)/sgxsd-enclave.h | $(SGX_INCLUDEDIR)
+$(BEARSSL_OBJECTS): $(wildcard $(includedir)/bearssl/%.h) $(c_srcdir)/bearssl/inner.h $(c_srcdir)/bearssl/config.h
+$(C_OBJECTS): $(builddir)/%.o: %.c $(includedir)/sgxsd.h $(includedir)/sgxsd-enclave.h | $(SGX_INCLUDEDIR)
 	@mkdir -p $(dir $@)
 	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
 
@@ -239,7 +251,7 @@ $(builddir)/libcds_enclave_u.a: $(builddir)/cds_enclave_u.o
 
 $(CDS_ENCLAVE_RUST_STATICLIB): cds_enclave/c_src/cds-enclave-hash.c.s cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
 
-$(CDS_ENCLAVE_TARGET): $(SGXSD_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
+$(CDS_ENCLAVE_TARGET): $(C_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
 $(CDS_ENCLAVE_TARGET): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))
 $(CDS_ENCLAVE_TARGET): LDLIBS := -lcds_enclave
 

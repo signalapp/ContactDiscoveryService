@@ -260,6 +260,35 @@ pub const CDS_HASH_LOOKUP_ERROR_LAST: u32 = 3;
 pub const CDS_HASH_LOOKUP_ERROR_RDRAND: u32 = 2;
 pub const CDS_HASH_LOOKUP_SUCCESS: u32 = 0;
 pub const CDS_MAX_HASH_TABLE_ORDER: u32 = 13;
+pub const CHAR_BIT: u32 = 8;
+pub const SCHAR_MAX: u32 = 127;
+pub const SCHAR_MIN: i32 = -128;
+pub const UCHAR_MAX: u32 = 255;
+pub const CHAR_MAX: u32 = 127;
+pub const CHAR_MIN: i32 = -128;
+pub const MB_LEN_MAX: u32 = 1;
+pub const USHRT_MAX: u32 = 65535;
+pub const SHRT_MAX: u32 = 32767;
+pub const SHRT_MIN: i32 = -32768;
+pub const UINT_MAX: u32 = 4294967295;
+pub const INT_MAX: u32 = 2147483647;
+pub const INT_MIN: i32 = -2147483648;
+pub const ULONG_MAX: i32 = -1;
+pub const LONG_MAX: u64 = 9223372036854775807;
+pub const LONG_MIN: i64 = -9223372036854775808;
+pub const ULLONG_MAX: i32 = -1;
+pub const LLONG_MAX: u64 = 9223372036854775807;
+pub const LLONG_MIN: i64 = -9223372036854775808;
+pub const LONG_BIT: u32 = 64;
+pub const CTTK_HEX_PAD_ODD: u32 = 1;
+pub const CTTK_HEX_SKIP_WS: u32 = 2;
+pub const CTTK_HEX_UPPERCASE: u32 = 1;
+pub const CTTK_B64DEC_NO_PAD: u32 = 1;
+pub const CTTK_B64DEC_NO_WS: u32 = 2;
+pub const CTTK_B64ENC_NO_PAD: u32 = 1;
+pub const CTTK_B64ENC_NEWLINE: u32 = 2;
+pub const CTTK_B64ENC_CRLF: u32 = 4;
+pub const CTTK_B64ENC_LINE64: u32 = 8;
 pub type __int8_t = libc::c_schar;
 pub type __uint8_t = libc::c_uchar;
 pub type __int16_t = libc::c_short;
@@ -3382,6 +3411,18 @@ extern "C" {
     ) -> sgx_status_t;
 }
 extern "C" {
+    pub fn cds_enclave_update_ratelimit_state(
+        ratelimit_state_uuid: uuid_t,
+        ratelimit_state_data: *mut u8,
+        ratelimit_state_size: usize,
+        query_phones: *mut phone_t,
+        query_phone_count: usize,
+    ) -> sgx_status_t;
+}
+extern "C" {
+    pub fn cds_enclave_delete_ratelimit_state(ratelimit_state_uuid: uuid_t) -> sgx_status_t;
+}
+extern "C" {
     pub fn sgxsd_ocall_reply(
         retval: *mut sgx_status_t,
         reply_header: *const sgxsd_msg_header_t,
@@ -3401,6 +3442,864 @@ extern "C" {
 extern "C" {
     pub fn cds_ratelimit_set_size(p_slots_data: *const u8, slots_data_size: usize) -> u32;
 }
+pub type errno_t = libc::c_int;
+extern "C" {
+    pub fn memchr(arg1: *const libc::c_void, arg2: libc::c_int, arg3: usize) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memcmp(arg1: *const libc::c_void, arg2: *const libc::c_void, arg3: usize)
+        -> libc::c_int;
+}
+extern "C" {
+    pub fn memcpy(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memmove(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memset(arg1: *mut libc::c_void, arg2: libc::c_int, arg3: usize) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn strchr(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strcmp(arg1: *const libc::c_char, arg2: *const libc::c_char) -> libc::c_int;
+}
+extern "C" {
+    pub fn strcoll(arg1: *const libc::c_char, arg2: *const libc::c_char) -> libc::c_int;
+}
+extern "C" {
+    pub fn strcspn(arg1: *const libc::c_char, arg2: *const libc::c_char) -> usize;
+}
+extern "C" {
+    pub fn strerror(arg1: libc::c_int) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strlen(arg1: *const libc::c_char) -> usize;
+}
+extern "C" {
+    pub fn strncat(
+        arg1: *mut libc::c_char,
+        arg2: *const libc::c_char,
+        arg3: usize,
+    ) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strncmp(
+        arg1: *const libc::c_char,
+        arg2: *const libc::c_char,
+        arg3: usize,
+    ) -> libc::c_int;
+}
+extern "C" {
+    pub fn strncpy(
+        arg1: *mut libc::c_char,
+        arg2: *const libc::c_char,
+        arg3: usize,
+    ) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strpbrk(arg1: *const libc::c_char, arg2: *const libc::c_char) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strrchr(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strspn(arg1: *const libc::c_char, arg2: *const libc::c_char) -> usize;
+}
+extern "C" {
+    pub fn strstr(arg1: *const libc::c_char, arg2: *const libc::c_char) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strtok(arg1: *mut libc::c_char, arg2: *const libc::c_char) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strxfrm(arg1: *mut libc::c_char, arg2: *const libc::c_char, arg3: usize) -> usize;
+}
+extern "C" {
+    pub fn strlcpy(arg1: *mut libc::c_char, arg2: *const libc::c_char, arg3: usize) -> usize;
+}
+extern "C" {
+    pub fn memset_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
+}
+extern "C" {
+    pub fn strndup(arg1: *const libc::c_char, arg2: usize) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strnlen(arg1: *const libc::c_char, arg2: usize) -> usize;
+}
+extern "C" {
+    pub fn consttime_memequal(
+        b1: *const libc::c_void,
+        b2: *const libc::c_void,
+        len: usize,
+    ) -> libc::c_int;
+}
+extern "C" {
+    pub fn bcmp(arg1: *const libc::c_void, arg2: *const libc::c_void, arg3: usize) -> libc::c_int;
+}
+extern "C" {
+    pub fn bcopy(arg1: *const libc::c_void, arg2: *mut libc::c_void, arg3: usize);
+}
+extern "C" {
+    pub fn bzero(arg1: *mut libc::c_void, arg2: usize);
+}
+extern "C" {
+    pub fn index(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn mempcpy(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn rindex(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn stpncpy(
+        dest: *mut libc::c_char,
+        src: *const libc::c_char,
+        n: usize,
+    ) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strcasecmp(arg1: *const libc::c_char, arg2: *const libc::c_char) -> libc::c_int;
+}
+extern "C" {
+    pub fn strncasecmp(
+        arg1: *const libc::c_char,
+        arg2: *const libc::c_char,
+        arg3: usize,
+    ) -> libc::c_int;
+}
+extern "C" {
+    pub fn ffs(arg1: libc::c_int) -> libc::c_int;
+}
+extern "C" {
+    pub fn ffsl(arg1: libc::c_long) -> libc::c_int;
+}
+extern "C" {
+    pub fn ffsll(arg1: libc::c_longlong) -> libc::c_int;
+}
+extern "C" {
+    pub fn strtok_r(
+        arg1: *mut libc::c_char,
+        arg2: *const libc::c_char,
+        arg3: *mut *mut libc::c_char,
+    ) -> *mut libc::c_char;
+}
+extern "C" {
+    pub fn strerror_r(arg1: libc::c_int, arg2: *mut libc::c_char, arg3: usize) -> libc::c_int;
+}
+#[doc = " \\brief Type for a boolean."]
+#[doc = ""]
+#[doc = " This is conceptually a boolean; however, the C compiler sees it as"]
+#[doc = " a type which may have many distinct values. It is meant to enable"]
+#[doc = " or disable constant-time operations. This type is defined as a"]
+#[doc = " `struct` so that it cannot be used directly to control a conditional"]
+#[doc = " jump, since such an operation would contradict constant-time behaviour."]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct cttk_bool {
+    pub v: u32,
+}
+#[test]
+fn bindgen_test_layout_cttk_bool() {
+    assert_eq!(
+        ::core::mem::size_of::<cttk_bool>(),
+        4usize,
+        concat!("Size of: ", stringify!(cttk_bool))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<cttk_bool>(),
+        4usize,
+        concat!("Alignment of ", stringify!(cttk_bool))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<cttk_bool>())).v as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(cttk_bool),
+            "::",
+            stringify!(v)
+        )
+    );
+}
+extern "C" {
+    pub static cttk_true: cttk_bool;
+}
+extern "C" {
+    pub static cttk_false: cttk_bool;
+}
+extern "C" {
+    #[doc = " \\brief Conditionally copy data from `src` into `dst`."]
+    #[doc = ""]
+    #[doc = " If `ctl` is \"true\", then the `len` bytes starting at address `dst`"]
+    #[doc = " are copied into `src`; otherwise, the contents of `dst` are unmodified."]
+    #[doc = " `src` and `dst` may overlap partially or totally; in case of overlap,"]
+    #[doc = " the new contents of the object pointed to by `dst` are set (if `ctl`"]
+    #[doc = " is \"true\") to a copy of the contents of the source object before the"]
+    #[doc = " operation. This matches the semantics of the standard function"]
+    #[doc = " `memmove()`."]
+    #[doc = ""]
+    #[doc = " The object pointed to by `src` is unmodified, except in case of overlap"]
+    #[doc = " with the destination object, as per the semantics explained above."]
+    #[doc = ""]
+    #[doc = " It is acceptable that `len` is zero, in which case nothing is copied."]
+    #[doc = ""]
+    #[doc = " \\param ctl   control value."]
+    #[doc = " \\param dst   destination buffer."]
+    #[doc = " \\param src   source buffer."]
+    #[doc = " \\param len   number of bytes to conditionally copy."]
+    pub fn cttk_cond_copy(
+        ctl: cttk_bool,
+        dst: *mut libc::c_void,
+        src: *const libc::c_void,
+        len: usize,
+    );
+}
+extern "C" {
+    #[doc = " \\brief Conditionally swap the contents of two memory areas."]
+    #[doc = ""]
+    #[doc = " If `ctl` is \"true\", then the `len` bytes located at the address `a`"]
+    #[doc = " are copied into the `len` bytes located at the address `b`, and vice"]
+    #[doc = " versa. If `ctl` is \"false\", then no value is modified. It is acceptable"]
+    #[doc = " that `len` is zero, in which case no byte is modified."]
+    #[doc = ""]
+    #[doc = " The two areas MUST NOT overlap in any way."]
+    #[doc = ""]
+    #[doc = " \\param ctl   control value."]
+    #[doc = " \\param a     first area."]
+    #[doc = " \\param b     second area."]
+    #[doc = " \\param len   number of bytes to conditionally swap."]
+    pub fn cttk_cond_swap(ctl: cttk_bool, a: *mut libc::c_void, b: *mut libc::c_void, len: usize);
+}
+extern "C" {
+    #[doc = " \\brief Constant-time array look-up (read)."]
+    #[doc = ""]
+    #[doc = " Given an array of `num_len` elements, of size `elt_len` bytes each,"]
+    #[doc = " this function reads element `index` and writes it into the buffer `d`."]
+    #[doc = " The value `a` points at the first array element, whose index is 0."]
+    #[doc = " The array values _and_ the index are protected. The cost of this"]
+    #[doc = " function is proportional to the total array size."]
+    #[doc = ""]
+    #[doc = " The caller is responsible for making sure that the requested index"]
+    #[doc = " is within the proper array range."]
+    #[doc = ""]
+    #[doc = " \\param d         destination buffer (must have length at least `elt_len`)."]
+    #[doc = " \\param a         pointer to first array element."]
+    #[doc = " \\param elt_len   individual element length (in bytes)."]
+    #[doc = " \\param num_len   number of elements in the array."]
+    #[doc = " \\param index     index of the element to read."]
+    pub fn cttk_array_read(
+        d: *mut libc::c_void,
+        a: *const libc::c_void,
+        elt_len: usize,
+        num_len: usize,
+        index: usize,
+    );
+}
+extern "C" {
+    #[doc = " \\brief Constant-time array look-up (write)."]
+    #[doc = ""]
+    #[doc = " Given an array of `num_len` elements, of size `elt_len` bytes each,"]
+    #[doc = " this function writes a given value into the array element at `index`."]
+    #[doc = " The value `a` points at the first array element, whose index is 0."]
+    #[doc = " The array values _and_ the index are protected. The cost of this"]
+    #[doc = " function is proportional to the total array size."]
+    #[doc = ""]
+    #[doc = " The caller is responsible for making sure that the requested index"]
+    #[doc = " is within the proper array range."]
+    #[doc = ""]
+    #[doc = " \\param a         pointer to first array element."]
+    #[doc = " \\param elt_len   individual element length (in bytes)."]
+    #[doc = " \\param num_len   number of elements in the array."]
+    #[doc = " \\param index     index of the element to write."]
+    #[doc = " \\param s         source value (`elt_len` bytes)."]
+    pub fn cttk_array_write(
+        a: *mut libc::c_void,
+        elt_len: usize,
+        num_len: usize,
+        index: usize,
+        s: *const libc::c_void,
+    );
+}
+extern "C" {
+    #[doc = " \\brief Constant-time comparison (equality)."]
+    #[doc = ""]
+    #[doc = " This function compares the two buffers at addresses `src1` and `src2`,"]
+    #[doc = " both of length `len` bytes. Returned value is true if the buffers"]
+    #[doc = " have equal contents, false otherwise."]
+    #[doc = ""]
+    #[doc = " All source bytes are touched; the comparison result, and the offset"]
+    #[doc = " of the first differing byte, do not leak."]
+    #[doc = ""]
+    #[doc = " \\param src1   first buffer for comparison."]
+    #[doc = " \\param src2   second buffer for comparison."]
+    #[doc = " \\param len    buffer length (in bytes)."]
+    #[doc = " \\return  true on equal contents."]
+    pub fn cttk_array_eq(
+        src1: *const libc::c_void,
+        src2: *const libc::c_void,
+        len: usize,
+    ) -> cttk_bool;
+}
+extern "C" {
+    #[doc = " \\brief Constant-time comparison (lexicographic order)."]
+    #[doc = ""]
+    #[doc = " This function compares the two buffers at addresses `src1` and `src2`,"]
+    #[doc = " both of length `len` bytes. Returned value is -1, 0 or 1, depending"]
+    #[doc = " on whether the first buffer is lower than, equal to, or greater than"]
+    #[doc = " the second buffer. Lexicographic order is applied on the individual"]
+    #[doc = " byte values, considered as unsigned integer in the 0 to 255 range."]
+    #[doc = ""]
+    #[doc = " All source bytes are touched; the comparison result, and the offset"]
+    #[doc = " of the first differing byte, do not leak."]
+    #[doc = ""]
+    #[doc = " \\param src1   first buffer for comparison."]
+    #[doc = " \\param src2   second buffer for comparison."]
+    #[doc = " \\param len    buffer length (in bytes)."]
+    #[doc = " \\return  -1, 0 or 1."]
+    pub fn cttk_array_cmp(src1: *const libc::c_void, src2: *const libc::c_void, len: usize) -> i32;
+}
+extern "C" {
+    #[doc = " \\brief Get the numerical value of an hexadecimal digit."]
+    #[doc = ""]
+    #[doc = " Hexadecimal digits are ASCII digits from `'0'` to `'9'`, and ASCII"]
+    #[doc = " letters `'A'` to `'F'` (or `'a'` to `'f'`). This function returns"]
+    #[doc = " the numerical value of the character, or -1 if the character is not"]
+    #[doc = " an hexadecimal digit."]
+    #[doc = ""]
+    #[doc = " \\param c   hexadecimal digit."]
+    #[doc = " \\return  the digit numerical value, or -1."]
+    pub fn cttk_hexval(c: libc::c_char) -> libc::c_int;
+}
+extern "C" {
+    #[doc = " \\brief Get the hexadecimal digit for a small value."]
+    #[doc = ""]
+    #[doc = " The source value `x` MUST be between 0 and 15, inclusive. Returned"]
+    #[doc = " value is either an ASCII digit (`'0'` to `'9'`) or an ASCII"]
+    #[doc = " letter (`'A'` to `'F'`, if `uppercase` is non-zero, or `'a'` to"]
+    #[doc = " `'f'`, if `uppercase` is zero)."]
+    #[doc = ""]
+    #[doc = " \\param x           value to convert (0 to 15)."]
+    #[doc = " \\param uppercase   non-zero to get an uppercase output."]
+    #[doc = " \\return  the hexadecimal digit."]
+    pub fn cttk_hexdigit(x: libc::c_int, uppercase: libc::c_int) -> libc::c_char;
+}
+extern "C" {
+    #[doc = " \\brief Scan a source string for hexadecimal characters."]
+    #[doc = ""]
+    #[doc = " This function returns the offset of the first character in the"]
+    #[doc = " provided string which is not \"acceptable\" by the hexadecimal parser."]
+    #[doc = " Acceptable characters are ASCII digits, ASCII uppercase letters"]
+    #[doc = " from `'A'` to `'F'`, and ASCII lowercase letters from `'a'` to `'f'`."]
+    #[doc = " If `skipws` is non-zero, then whitespace is also considered acceptable"]
+    #[doc = " (whitespace is ASCII space and ASCII all control characters, i.e."]
+    #[doc = " codes from 0x00 to 0x20, inclusive)."]
+    #[doc = ""]
+    #[doc = " If all `src_len` characters are acceptable, then `src_len` is returned."]
+    #[doc = ""]
+    #[doc = " Constant-time: individual non-whitespace character values are protected."]
+    #[doc = " Location of whitespace character, source length, and returned value,"]
+    #[doc = " may leak."]
+    #[doc = ""]
+    #[doc = " \\param src       source string."]
+    #[doc = " \\param src_len   source string length (in characters)."]
+    #[doc = " \\param skipws    non-zero to accept whitespace as well."]
+    #[doc = " \\return  the number of acceptable hex characters."]
+    pub fn cttk_hexscan(src: *const libc::c_char, src_len: usize, skipws: libc::c_int) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Convert an hexadecimal string into bytes."]
+    #[doc = ""]
+    #[doc = " The `src_len` characters, starting at address `src`, are parsed as"]
+    #[doc = " hexadecimal digits; the resulting byte values are accumulated in"]
+    #[doc = " `dst`. If `src_len` is 0, then it is acceptable that `src` is `NULL`."]
+    #[doc = ""]
+    #[doc = " If `dst` is `NULL`, then `dst_len` is ignored, and the returned value"]
+    #[doc = " is the number of bytes that should have been produced. If `dst` is"]
+    #[doc = " not `NULL`, then at most `dst_len` bytes are produced; if the source"]
+    #[doc = " string contains more encoded bytes than can fit in `dst`, then an"]
+    #[doc = " error is reported."]
+    #[doc = ""]
+    #[doc = " Upon any parsing error, decoding stops; the returned value is the"]
+    #[doc = " number of bytes produced so far (or number of bytes that should have"]
+    #[doc = " been produced, if `dst` is `NULL`). If `err` is not `NULL`, then"]
+    #[doc = " `*err` is set to point at the first source character where the error"]
+    #[doc = " was noticed. If the entire source string could be processed with no"]
+    #[doc = " error, and `err` is not `NULL`, then `*err` is set to `NULL`."]
+    #[doc = ""]
+    #[doc = " When the error is an insufficient output buffer length, `*err` is"]
+    #[doc = " set to point to the first hex digit that exceeds the capacity of the"]
+    #[doc = " output buffer (regardless of whether that digit is alone or not). If"]
+    #[doc = " `err` is `NULL`, then it is not possible to distinguish between a"]
+    #[doc = " fully successful decoding, and an insufficient output buffer capacity."]
+    #[doc = ""]
+    #[doc = " The `flags` modify the decoding behaviour:"]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_HEX_PAD_ODD` is set, then a final half-byte (the number of"]
+    #[doc = "     hexadecimal digits was odd) is not considered an error, and an"]
+    #[doc = "     implicit 0 is added. The padding is also applied if an invalid"]
+    #[doc = "     character is encountered after an odd number of valid hex digits."]
+    #[doc = "     If the number of hex digits is odd and that flag is _not_ set,"]
+    #[doc = "     then the error will be reported as `*err` pointing to the character"]
+    #[doc = "     immediately beyond the last one of the string."]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_HEX_SKIP_WS` is set, then \"whitespace\" characters are"]
+    #[doc = "     simply skipped and do not trigger an error. For the purposes of"]
+    #[doc = "     this function, \"whitespace\" consists in bytes of value 32 or less"]
+    #[doc = "     (i.e. ASCII space, and all ASCII control characters)."]
+    #[doc = ""]
+    #[doc = " Constant-time behaviour: the values of hex digits are protected, but"]
+    #[doc = " not their number or location. Side channels may leak the total number"]
+    #[doc = " of hex digits, and the position of whitespace characters (if skipped)."]
+    #[doc = ""]
+    #[doc = " \\param dst       destination buffer (or `NULL`)."]
+    #[doc = " \\param dst_len   maximum size of the destination buffer (in bytes)."]
+    #[doc = " \\param src       source string (can be `NULL` if `src_len` is zero)."]
+    #[doc = " \\param src_len   source string length (in characters)."]
+    #[doc = " \\param err       receiver for error character pointer, or `NULL`."]
+    #[doc = " \\param flags     behavioural flags."]
+    #[doc = " \\return  number of decoded bytes."]
+    pub fn cttk_hextobin_gen(
+        dst: *mut libc::c_void,
+        dst_len: usize,
+        src: *const libc::c_char,
+        src_len: usize,
+        err: *mut *const libc::c_char,
+        flags: libc::c_uint,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Encode bytes into hexadecimal."]
+    #[doc = ""]
+    #[doc = " The provided source bytes are encoded into hexadecimal. The destination"]
+    #[doc = " buffer length (`dst_len`) must be large enough to accommodate the"]
+    #[doc = " characters _and_ a terminating null byte."]
+    #[doc = ""]
+    #[doc = " If `dst` is `NULL`, then `dst_len` is ignored; the returned value will"]
+    #[doc = " then be the number of digits that would be produced, i.e. exactly twice"]
+    #[doc = " the value of `src_len`."]
+    #[doc = ""]
+    #[doc = " Returned value is the number of characters written, excluding the"]
+    #[doc = " terminating null byte. The terminating null byte will still be written,"]
+    #[doc = " except if `dst` is `NULL`, or `dst_len` is 0. If the output buffer is"]
+    #[doc = " too small, then output is truncated, but still with a terminating 0."]
+    #[doc = ""]
+    #[doc = " The `flags` modify the behaviour:"]
+    #[doc = ""]
+    #[doc = "  - If `CTTK_HEX_UPPERCASE` is set, then produced hexadecimal digits"]
+    #[doc = "    will use uppercase letters (`A` to `F`, for values 10 to 15)."]
+    #[doc = "    Default behaviour is to use lowercase letters (`a` to `f`)."]
+    #[doc = ""]
+    #[doc = " Constant-time behaviour: the byte values are protected, but not the"]
+    #[doc = " source or destination lengths."]
+    #[doc = ""]
+    #[doc = " \\param dst       destination buffer, or `NULL`."]
+    #[doc = " \\param dst_len   destination buffer length (in characters)."]
+    #[doc = " \\param src       source bytes (may be `NULL` if `src_len` is zero)."]
+    #[doc = " \\param src_len   source length (in bytes)."]
+    #[doc = " \\param flags     behavioural flags."]
+    #[doc = " \\return  the number of hexadecimal digits produced."]
+    pub fn cttk_bintohex_gen(
+        dst: *mut libc::c_char,
+        dst_len: usize,
+        src: *const libc::c_void,
+        src_len: usize,
+        flags: libc::c_uint,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Decode a Base64 string into bytes."]
+    #[doc = ""]
+    #[doc = " The `src_len` characters, starting at address `src`, are parsed as"]
+    #[doc = " Base64 data; the resulting byte values are accumulated in"]
+    #[doc = " `dst`. If `src_len` is 0, then it is acceptable that `src` is `NULL`."]
+    #[doc = ""]
+    #[doc = " If `dst` is `NULL`, then `dst_len` is ignored, and the returned value"]
+    #[doc = " is the number of bytes that should have been produced. If `dst` is"]
+    #[doc = " not `NULL`, then at most `dst_len` bytes are produced; if the source"]
+    #[doc = " string contains more encoded bytes than can fit in `dst`, then an"]
+    #[doc = " error is reported."]
+    #[doc = ""]
+    #[doc = " Upon any parsing error, decoding stops; the returned value is the"]
+    #[doc = " number of bytes produced so far (or number of bytes that should have"]
+    #[doc = " been produced, if `dst` is `NULL`). If `err` is not `NULL`, then"]
+    #[doc = " `*err` is set to point at the first source character where the error"]
+    #[doc = " was noticed. If the entire source string could be processed with no"]
+    #[doc = " error, and `err` is not `NULL`, then `*err` is set to `NULL`."]
+    #[doc = ""]
+    #[doc = " When the error is an insufficient output buffer length, `*err` is set"]
+    #[doc = " to point to the first character that makes the problem definite (in"]
+    #[doc = " order to maintain strict constant-time processing, reporting of such"]
+    #[doc = " a problem that could be detected only conditionally to the decoded"]
+    #[doc = " bit values is delayed to the next character). If `err` is `NULL`,"]
+    #[doc = " then it is not possible to distinguish between a fully successful"]
+    #[doc = " decoding, and an insufficient output buffer capacity."]
+    #[doc = ""]
+    #[doc = " The `flags` modify the decoding behaviour:"]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64DEC_NO_PAD` is set, then final padding characters"]
+    #[doc = "     (`'='` signs) are not expected. If such a character is present,"]
+    #[doc = "     then it will stop decoding at that point, and `*err` will be"]
+    #[doc = "     set to point to that character."]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64DEC_NO_WS` is set, then all source characters MUST"]
+    #[doc = "     be Base64 characters; whitespace (including line breaks) will not"]
+    #[doc = "     be tolerated, and be reported as an error if encountered. For the"]
+    #[doc = "     purposes of this function, \"whitespace\" consists in bytes of"]
+    #[doc = "     value 32 or less (i.e. ASCII space, and all ASCII control"]
+    #[doc = "     characters)."]
+    #[doc = ""]
+    #[doc = " An error is reported, pointing at the first character past the source"]
+    #[doc = " array, if the source buffer end is reached, or an `'='` padding sign"]
+    #[doc = " is read, and there are non-zero buffered bits at that point."]
+    #[doc = ""]
+    #[doc = " Constant-time behaviour: the values of hex digits are protected, but"]
+    #[doc = " not their number or location. Side channels may leak the total number"]
+    #[doc = " of hex digits, and the position of whitespace characters (if skipped)."]
+    #[doc = " If the source string is erroneous by having extra non-zero bits in the"]
+    #[doc = " last chunk, then the value of these extra bits may leak as well (but"]
+    #[doc = " not of the non-extra bits)."]
+    #[doc = ""]
+    #[doc = " \\param dst       destination buffer (or `NULL`)."]
+    #[doc = " \\param dst_len   maximum size of the destination buffer (in bytes)."]
+    #[doc = " \\param src       source string (can be `NULL` if `src_len` is zero)."]
+    #[doc = " \\param src_len   source string length (in characters)."]
+    #[doc = " \\param err       receiver for error character pointer, or `NULL`."]
+    #[doc = " \\param flags     behavioural flags."]
+    #[doc = " \\return  number of decoded bytes."]
+    pub fn cttk_b64tobin_gen(
+        dst: *mut libc::c_void,
+        dst_len: usize,
+        src: *const libc::c_char,
+        src_len: usize,
+        err: *mut *const libc::c_char,
+        flags: libc::c_uint,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Encode bytes into Base64."]
+    #[doc = ""]
+    #[doc = " The provided source bytes are encoded into Base64. The destination"]
+    #[doc = " buffer length (`dst_len`) must be large enough to accommodate the"]
+    #[doc = " characters _and_ a terminating null byte."]
+    #[doc = ""]
+    #[doc = " If `dst` is `NULL`, then `dst_len` is ignored; the returned value will"]
+    #[doc = " then be the number of characters that would be produced (not counting"]
+    #[doc = " the terminating null byte)."]
+    #[doc = ""]
+    #[doc = " Returned value is the number of characters written, excluding the"]
+    #[doc = " terminating null byte. The terminating null byte will still be written,"]
+    #[doc = " except if `dst` is `NULL`, or `dst_len` is 0."]
+    #[doc = ""]
+    #[doc = " The `flags` modify the behaviour:"]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64ENC_NO_PAD` is set, then the final `'='` signs (for"]
+    #[doc = "     padding the last character group, if needed) are not produced."]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64ENC_NEWLINE` is set, then line breaks will be added"]
+    #[doc = "     every 76 characters (by default). A line break will also be"]
+    #[doc = "     produced at the end of the last line, unless the input is empty."]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64ENC_CRLF` is set, then line breaks (if produced) will"]
+    #[doc = "     use a CR+LF sequence (0x0D and 0x0A bytes, in that order). By"]
+    #[doc = "     default, line breaks use a single LF (0x0A)."]
+    #[doc = ""]
+    #[doc = "   - If `CTTK_B64ENC_LINE64` is set, then line breaks (if produced)"]
+    #[doc = "     will occur every 64 characters instead of the default of 76. Some"]
+    #[doc = "     implementations of Base64 don't tolerate lines longer than 64"]
+    #[doc = "     characters."]
+    #[doc = ""]
+    #[doc = " Constant-time behaviour: the source byte values are protected, but not"]
+    #[doc = " the source or destination lengths."]
+    #[doc = ""]
+    #[doc = " \\param dst       destination buffer, or `NULL`."]
+    #[doc = " \\param dst_len   destination buffer length (in characters)."]
+    #[doc = " \\param src       source bytes (may be `NULL` if `src_len` is zero)."]
+    #[doc = " \\param src_len   source length (in bytes)."]
+    #[doc = " \\param flags     behavioural flags."]
+    #[doc = " \\return  the number of characters produced."]
+    pub fn cttk_bintob64_gen(
+        dst: *mut libc::c_char,
+        dst_len: usize,
+        src: *const libc::c_void,
+        src_len: usize,
+        flags: libc::c_uint,
+    ) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication unsigned 32x32 -> 32."]
+    #[doc = ""]
+    #[doc = " Result is computed modulo 2^32 (no undefined behaviour on overflow)."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_mulu32(x: u32, y: u32) -> u32;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication signed 32x32 -> 32."]
+    #[doc = ""]
+    #[doc = " This function guarantees two's complement behaviour with truncation"]
+    #[doc = " to the low 32 bits (no undefined behaviour on overflow/underflow)."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_muls32(x: i32, y: i32) -> i32;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication unsigned 32x32 -> 64."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_mulu32w(x: u32, y: u32) -> u64;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication signed 32x32 -> 64."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_muls32w(x: i32, y: i32) -> i64;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication unsigned 64x64 -> 64."]
+    #[doc = ""]
+    #[doc = " Result is computed modulo 2^64 (no undefined behaviour on overflow)."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_mulu64(x: u64, y: u64) -> u64;
+}
+extern "C" {
+    #[doc = " \\brief Multiplication signed 64x64 -> 64."]
+    #[doc = ""]
+    #[doc = " This function guarantees two's complement behaviour with truncation"]
+    #[doc = " to the low 64 bits (no undefined behaviour on overflow/underflow)."]
+    #[doc = ""]
+    #[doc = " \\param x   first operand."]
+    #[doc = " \\param y   second operand."]
+    #[doc = " \\return  the result."]
+    pub fn cttk_muls64(x: i64, y: i64) -> i64;
+}
+extern "C" {
+    pub fn cttk_i31_init(x: *mut u32, size: libc::c_uint);
+}
+extern "C" {
+    pub fn cttk_i31_set_u32(x: *mut u32, v: u32);
+}
+extern "C" {
+    pub fn cttk_i31_set_u32_trunc(x: *mut u32, v: u32);
+}
+extern "C" {
+    pub fn cttk_i31_set_u64(x: *mut u32, v: u64);
+}
+extern "C" {
+    pub fn cttk_i31_set_u64_trunc(x: *mut u32, v: u64);
+}
+extern "C" {
+    pub fn cttk_i31_set_s32(x: *mut u32, v: i32);
+}
+extern "C" {
+    pub fn cttk_i31_set_s64(x: *mut u32, v: i64);
+}
+extern "C" {
+    pub fn cttk_i31_set(d: *mut u32, a: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_set_trunc(d: *mut u32, a: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_to_u32_trunc(x: *const u32) -> u32;
+}
+extern "C" {
+    pub fn cttk_i31_to_s32_trunc(x: *const u32) -> i32;
+}
+extern "C" {
+    pub fn cttk_i31_to_u64_trunc(x: *const u32) -> u64;
+}
+extern "C" {
+    pub fn cttk_i31_to_s64_trunc(x: *const u32) -> i64;
+}
+extern "C" {
+    pub fn cttk_i31_to_u32(x: *const u32) -> u32;
+}
+extern "C" {
+    pub fn cttk_i31_to_s32(x: *const u32) -> i32;
+}
+extern "C" {
+    pub fn cttk_i31_to_u64(x: *const u32) -> u64;
+}
+extern "C" {
+    pub fn cttk_i31_to_s64(x: *const u32) -> i64;
+}
+extern "C" {
+    pub fn cttk_i31_decbe_signed(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decbe_unsigned(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decbe_signed_trunc(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decbe_unsigned_trunc(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decle_signed(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decle_unsigned(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decle_signed_trunc(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_decle_unsigned_trunc(x: *mut u32, src: *const libc::c_void, len: usize);
+}
+extern "C" {
+    pub fn cttk_i31_encbe(dst: *mut libc::c_void, len: usize, x: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_encle(dst: *mut libc::c_void, len: usize, x: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_eq0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_neq0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_gt0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_lt0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_geq0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_leq0(x: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_eq(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_neq(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_lt(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_leq(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_gt(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_geq(x: *const u32, y: *const u32) -> cttk_bool;
+}
+extern "C" {
+    pub fn cttk_i31_sign(x: *const u32) -> libc::c_int;
+}
+extern "C" {
+    pub fn cttk_i31_cmp(x: *const u32, y: *const u32) -> i32;
+}
+extern "C" {
+    pub fn cttk_i31_copy(d: *mut u32, s: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_cond_copy(ctl: cttk_bool, d: *mut u32, s: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_swap(a: *mut u32, b: *mut u32);
+}
+extern "C" {
+    pub fn cttk_i31_cond_swap(ctl: cttk_bool, a: *mut u32, b: *mut u32);
+}
+extern "C" {
+    pub fn cttk_i31_mux(ctl: cttk_bool, d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_add(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_add_trunc(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_sub(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_sub_trunc(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_neg(d: *mut u32, x: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_neg_trunc(d: *mut u32, x: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_mul(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_mul_trunc(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_lsh(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_lsh_prot(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_lsh_trunc(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_lsh_trunc_prot(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_rsh(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_rsh_prot(d: *mut u32, a: *const u32, n: u32);
+}
+extern "C" {
+    pub fn cttk_i31_divrem(q: *mut u32, r: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_mod(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_and(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_or(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_xor(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_eqv(d: *mut u32, a: *const u32, b: *const u32);
+}
+extern "C" {
+    pub fn cttk_i31_not(d: *mut u32, a: *const u32);
+}
+pub type cti65_t = [u32; 4usize];
 pub type __builtin_va_list = [__va_list_tag; 1usize];
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

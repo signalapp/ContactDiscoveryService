@@ -27,8 +27,8 @@ use test_ffi::*;
 pub use super::bindgen_wrapper::{sgxsd_aes_gcm_key_t, sgxsd_msg_buf_t, sgxsd_msg_from_t};
 
 use super::bindgen_wrapper::{
-    br_sha224_context, br_sha256_context, sgx_status_t, sgxsd_aes_gcm_iv_t, sgxsd_aes_gcm_mac_t, sgxsd_msg_tag__bindgen_ty_1,
-    sgxsd_msg_tag_t, sgxsd_rand_buf_t, SGXSD_SHA256_HASH_SIZE,
+    br_sha1_context, br_sha1_SIZE, br_sha224_context, br_sha256_context, br_sha256_SIZE, sgx_status_t, sgxsd_aes_gcm_iv_t, sgxsd_aes_gcm_mac_t,
+    sgxsd_msg_tag__bindgen_ty_1, sgxsd_msg_tag_t, sgxsd_rand_buf_t,
 };
 
 //
@@ -41,6 +41,8 @@ thread_local! {
     pub static SGXSD_AES_GCM_ENCRYPT:        RefCell<Option<SgxsdAesGcmEncryptMock>>        = RefCell::new(None);
     pub static SGXSD_AES_GCM_DECRYPT:        RefCell<Option<SgxsdAesGcmDecryptMock>>        = RefCell::new(None);
     pub static SGXSD_ENCLAVE_READ_RAND:      RefCell<Option<SgxsdEnclaveReadRandMock>>      = RefCell::new(None);
+    pub static BEARSSL_SHA256:               RefCell<Option<BearsslSHA256Mock>>             = RefCell::new(None);
+    pub static BEARSSL_SHA1:                 RefCell<Option<BearsslSHA1Mock>>               = RefCell::new(None);
 }
 
 impl std::fmt::Debug for sgxsd_msg_from_t {
@@ -72,6 +74,18 @@ pub trait SgxsdAesGcmDecrypt {
 #[mocked]
 pub trait SgxsdEnclaveReadRand {
     fn sgxsd_enclave_read_rand(&self) -> sgx_status_t;
+}
+
+#[mocked]
+pub trait BearsslSHA256 {
+    fn update(&self, data: &[u8]);
+    fn out(&self) -> [u8; 32];
+}
+
+#[mocked]
+pub trait BearsslSHA1 {
+    fn update(&self, data: &[u8]);
+    fn out(&self) -> [u8; 20];
 }
 
 //
@@ -291,21 +305,70 @@ pub mod impls {
 
     #[no_mangle]
     pub extern "C" fn br_sha224_update(ctx: *mut br_sha224_context, data: *const ::std::os::raw::c_void, len: usize) {
-        unsafe { std::ptr::write_volatile(ctx, std::ptr::read_volatile(ctx)) };
-        if len != 0 {
-            assert!(!data.is_null());
-            let data = unsafe { std::slice::from_raw_parts(data as *const u8, len) };
-            data.iter().for_each(|p| unsafe {
-                std::ptr::read_volatile(p);
-            });
-        }
+        BEARSSL_SHA256.with(|mock| {
+            unsafe { std::ptr::write_volatile(ctx, std::ptr::read_volatile(ctx)) };
+            if len != 0 {
+                assert!(!data.is_null());
+                let data = unsafe { std::slice::from_raw_parts(data as *const u8, len) };
+                if let Some(mock) = mock.borrow().as_ref() {
+                    mock.update(data);
+                } else {
+                    data.iter().for_each(|p| unsafe {
+                        std::ptr::read_volatile(p);
+                    });
+                }
+            }
+        })
     }
 
     #[no_mangle]
     pub extern "C" fn br_sha256_out(ctx: *const br_sha256_context, out: *mut ::std::os::raw::c_void) {
-        unsafe { std::ptr::read_volatile(ctx) };
-        assert!(!out.is_null());
-        let out = unsafe { std::slice::from_raw_parts_mut(out as *mut u8, SGXSD_SHA256_HASH_SIZE as usize) };
-        read_rand(out);
+        BEARSSL_SHA1.with(|mock| {
+            unsafe { std::ptr::read_volatile(ctx) };
+            assert!(!out.is_null());
+            let out = unsafe { std::slice::from_raw_parts_mut(out as *mut u8, br_sha256_SIZE as usize) };
+            if let Some(mock) = mock.borrow().as_ref() {
+                out.copy_from_slice(&mock.out());
+            } else {
+                read_rand(out);
+            }
+        })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn br_sha1_init(ctx: *mut br_sha1_context) {
+        unsafe { std::ptr::write_volatile(ctx, std::mem::zeroed()) };
+    }
+
+    #[no_mangle]
+    pub extern "C" fn br_sha1_update(ctx: *mut br_sha1_context, data: *const ::std::os::raw::c_void, len: usize) {
+        BEARSSL_SHA1.with(|mock| {
+            unsafe { std::ptr::write_volatile(ctx, std::ptr::read_volatile(ctx)) };
+            if len != 0 {
+                assert!(!data.is_null());
+                let data = unsafe { std::slice::from_raw_parts(data as *const u8, len) };
+                if let Some(mock) = mock.borrow().as_ref() {
+                    mock.update(data);
+                } else {
+                    data.iter().for_each(|p| unsafe {
+                        std::ptr::read_volatile(p);
+                    });
+                }
+            }
+        })
+    }
+
+    #[no_mangle]
+    pub extern "C" fn br_sha1_out(ctx: *const br_sha1_context, out: *mut ::std::os::raw::c_void) {
+        BEARSSL_SHA1.with(|mock| {
+            unsafe { std::ptr::read_volatile(ctx) };
+            assert!(!out.is_null());
+            let out = unsafe { std::slice::from_raw_parts_mut(out as *mut u8, br_sha1_SIZE as usize) };
+            if let Some(mock) = mock.borrow().as_ref() {
+                out.copy_from_slice(&mock.out());
+            } else {
+                read_rand(out);
+            }
+        })
     }
 }

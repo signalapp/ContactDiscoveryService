@@ -56,6 +56,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .compiler("clang")
         .file("c_src/cds-enclave-hash.rs.s")
         .file("c_src/cds-enclave-ratelimit-set.rs.s")
+        .file("c_src/cttk/int31.c")
+        .include("c_src")
+        .include("../include")
         .compile("cds_enclave_c");
 
     Ok(())
