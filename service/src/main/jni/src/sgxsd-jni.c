@@ -328,6 +328,25 @@ JNIEXPORT void JNICALL SGXSD_JNI_CLASS_METHOD(nativeEnclaveStart)
         return;
     }
 }
+sgxsd_status_t sgxsd_jni_start_callback(sgxsd_enclave_t enclave, JNIEnv *env, jobject j_callback_obj) {
+
+    jclass class = (*env)->GetObjectClass(env, j_callback_obj);
+    if (class != NULL) {
+        jmethodID callback_method_id = (*env)->GetMethodID(env, class, "runEnclave", "(JJ[B)V");
+        if (callback_method_id != NULL) {
+            jlong j_enclave_id = enclave.id;
+            jlong j_gid = enclave.gid32;
+            // an exception might be thrown, which will be handled by the JVM in CallVoidMethod
+            jbyteArray j_launch_token = sgxsd_jni_to_byte_array(env, enclave.launch_token, sizeof(enclave.launch_token));
+            (*env)->CallVoidMethod(env, j_callback_obj, callback_method_id, j_enclave_id, j_gid, j_launch_token);
+            return sgxsd_status_ok();
+        } else {
+            return sgxsd_status_error("get_start_callback_method_id_fail");
+        }
+    } else {
+        return sgxsd_status_error("find_start_callback_class_fail");
+    }
+}
 
 static inline
 jobject sgxsd_jni_get_next_quote(JNIEnv *env, sgx_enclave_id_t enclave_id, sgx_spid_t spid,
