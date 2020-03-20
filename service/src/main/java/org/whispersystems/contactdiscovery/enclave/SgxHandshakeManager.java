@@ -136,6 +136,21 @@ public class SgxHandshakeManager implements Managed, Runnable {
     this.running = running;
   }
 
+  private void handleGroupOutOfDataException(GroupOutOfDateException e) {
+    getQuoteSignatureErrorMeter.mark();
+
+    try {
+      byte[] platformInfoBlob = e.getPlatformInfoBlob();
+      if (platformInfoBlob != null) {
+        reportPlatformAttestationStatus(platformInfoBlob, false);
+      } else {
+        logger.warn("Platform needs update: " + e.getMessage() + ", but didn't get platform info blob from IAS");
+      }
+    } catch (QuoteVerificationException | SgxException | IllegalArgumentException e2) {
+      logger.warn("Platform needs update: " + e.getMessage() + ", but problems finding which component", e2);
+    }
+  }
+
   @VisibleForTesting
   public void refreshAllQuotes() {
     for (Map.Entry<String, SgxEnclave> enclaveMapEntry : sgxEnclaveManager.getEnclaves().entrySet()) {
@@ -146,18 +161,7 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
         logger.warn("Problem calling enclave", e);
       } catch (GroupOutOfDateException e) {
-        getQuoteSignatureErrorMeter.mark();
-
-        try {
-          byte[] platformInfoBlob = e.getPlatformInfoBlob();
-          if (platformInfoBlob != null) {
-            reportPlatformAttestationStatus(platformInfoBlob, false);
-          } else {
-            logger.warn("Platform needs update: " + e.getMessage() + ", but didn't get platform info blob from IAS");
-          }
-        } catch (QuoteVerificationException | SgxException | IllegalArgumentException e2) {
-          logger.warn("Platform needs update: " + e.getMessage() + ", but problems finding which component", e2);
-        }
+        handleGroupOutOfDataException(e);
       } catch (Throwable t) {
         getQuoteSignatureErrorMeter.mark();
 
@@ -174,7 +178,14 @@ public class SgxHandshakeManager implements Managed, Runnable {
       try {
         byte[]                 revocationList = sgxRevocationListManager.getRevocationList(enclave.getGid());
         byte[]                 quote          = enclave.getNextQuote(revocationList);
-        QuoteSignatureResponse signature      = client.getQuoteSignature(quote);
+        QuoteSignatureResponse signature;
+
+        try {
+          signature = client.getQuoteSignature(quote);
+        } catch (GroupOutOfDateException e) {
+          handleGroupOutOfDataException(e);
+          throw e;
+        }
 
         synchronized (quotes) {
           quotes.put(enclaveId, new SgxSignedQuote(quote, signature));
