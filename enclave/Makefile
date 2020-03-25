@@ -26,7 +26,7 @@ CFLAGS = \
 	-D_FORTIFY_SOURCE=2 -std=c11 -D_DEFAULT_SOURCE \
 	-fstack-protector-strong -fcf-protection \
 	-Wall -Werror=all -Wextra -Wno-unused-parameter -Wno-missing-field-initializers \
-	-I$(includedir) -I$(includedir)/bearssl -I$(SGX_INCLUDEDIR)
+	-I$(includedir) -I$(includedir)/bearssl -I$(c_srcdir)/bearssl -I$(SGX_INCLUDEDIR)
 
 LDFLAGS =
 
@@ -60,7 +60,7 @@ C_SOURCES := \
 	$(c_srcdir)/curve25519-donna-c64.c \
 	$(BEARSSL_SOURCES) \
 	$(c_srcdir)/sgx-tcrypto-stub.c
-C_OBJECTS := $(addprefix $(builddir)/,$(SOURCES:.c=.o))
+C_OBJECTS := $(addprefix $(builddir)/,$(C_SOURCES:.c=.o))
 
 TEST_SGXSD_SOURCES := \
 	$(c_srcdir)/sgxsd-enclave.c \
