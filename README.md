@@ -91,6 +91,7 @@ libsabd-enclave.pub, and signed using `make signed install`.
 
 `````
 $ cd <repository_root>
+$ make -C ./service/src/main/jni
 $ mvn package
 `````
 
