@@ -1,0 +1,29 @@
+#
+# Azure Pipelines job to run all service tests from within in the cds-jni-builder docker image.
+#
+
+jobs:
+- job: run_service_tests
+  displayName: running service tests
+  pool:
+    name: jeff
+    vmImage: ubuntu-18.04
+  container: cds-jni-builder
+  variables:
+    MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+    MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+  steps:
+    - task: Cache@2
+      inputs:
+        key: 'maven | "$(Agent.OS)" | **/pom.xml'
+        restoreKeys: |
+          maven | "$(Agent.OS)"
+        path: $(MAVEN_CACHE_FOLDER)
+      displayName: cache Maven local repo
+
+    - script: make -C ./service/src/main/jni all install
+      displayName: build the JNI library
+
+      # verify runs the integration and normal tests
+    - script: mvn verify -pl service -B -e $(MAVEN_OPTS)
+      displayName: integration tests

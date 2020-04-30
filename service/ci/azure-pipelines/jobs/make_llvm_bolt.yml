@@ -1,0 +1,25 @@
+jobs:
+  - job: make_llvm_bolt
+    displayName: make llvm-bolt
+    pool:
+      vmImage: ubuntu-18.04
+    container: cds-enclave-builder
+    timeoutInMinutes: 120
+    workspace:
+      clean: all
+    steps:
+      - task: CacheBeta@1
+        displayName: cached enclave/build/bin/
+        inputs:
+          path: enclave/build/bin/
+          key:  enclave/docker/Dockerfile | enclave/docker/apt.conf | enclave/docker/sources.list | enclave/sgx_enclave.mk | "$(Build.SourceBranch)"
+          restoreKeys:
+            enclave/docker/Dockerfile | enclave/docker/apt.conf | enclave/docker/sources.list | enclave/sgx_enclave.mk | "refs/heads/$(System.PullRequest.TargetBranch)"
+
+            enclave/docker/Dockerfile | enclave/docker/apt.conf | enclave/docker/sources.list | enclave/sgx_enclave.mk
+
+      - script: make -C ./enclave llvm-bolt
+        displayName: make llvm-bolt
+
+      - publish:  enclave/build/bin/llvm-bolt
+        artifact: llvm-bolt

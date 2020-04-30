@@ -168,6 +168,8 @@ install:
 		cp $(builddir)/$(CDS_ENCLAVE_NAME).signed.so \
 		   $(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave).so; \
 	fi
+	cp $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave \
+			$(resourcedir)/enclave/current.mrenclave
 
 edger8r: $(includedir)/cds_enclave.edl | $(SGX_EDGER8R)
 	 $(SGX_EDGER8R) --untrusted --untrusted-dir $(includedir) \

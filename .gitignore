@@ -19,4 +19,5 @@ target
 /service/config/staging.yml
 /service/config/testing.yml
 /service/config/local.yml
+/service/src/main/resources/enclave/current.mrenclave
 dependency-reduced-pom.xml

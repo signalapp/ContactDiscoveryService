@@ -8,9 +8,13 @@ RUN    apt-get update \
                build-essential \
                curl \
                gpg-agent \
+               libcurl4-openssl-dev \
+               libprotobuf-dev \
+               libssl-dev \
                openjdk-11-jdk-headless \
                pkg-config \
                software-properties-common \
+               maven \
     && apt-key add /tmp/docker/linux-sgx.gpg \
     && apt-add-repository "deb https://download.01.org/intel-sgx/sgx_repo/ubuntu bionic main" \
     && apt-get install -y --download-only libsgx-enclave-common=2.7.101.3-bionic1 libsgx-enclave-common-dev=2.7.101.3-bionic1 \

@@ -1,0 +1,37 @@
+# Azure Pipelines set up to allow us to reuse a built enclave stored in git to test the CDS.
+name: test build without enclave rebuild
+pr:
+  branches:
+    include:
+      - master
+
+trigger:
+  branches:
+    include:
+      - master
+      - "test-svc-*"
+      - "test_svc_*"
+  paths:
+    exclude:
+      - "enclave/*"
+
+resources:
+  containers:
+    - container: cds-jni-builder
+      image:     signalbackupci:cds-jni-builder
+      endpoint:  signalbackupci-container-registry
+      options:   --user 0:0 --device /dev/isgx
+      volumes:
+        - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
+
+stages:
+  - stage: docker_build_cds_jni_builder
+    displayName: docker build cds-jni-builder
+    jobs:
+      - template: jobs/docker_build_cds_jni_builder.yml
+
+  - stage: integration_test
+    displayName: integration tests
+    dependsOn: docker_build_cds_jni_builder
+    jobs:
+      - template: jobs/service_tests.yml

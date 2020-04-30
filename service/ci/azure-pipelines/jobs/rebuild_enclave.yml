@@ -1,0 +1,27 @@
+#
+# Azure Pipelines job to rebuild the enclave binary from within in the cds-enclave-builder docker image.
+#
+
+jobs:
+  - job: rebuild_enclave
+    displayName: rebuild the cds enclave
+    pool:
+      name: jeff
+      vmImage: ubuntu-18.04
+    container: cds-enclave-builder
+    steps:
+      - download: current
+        artifact: llvm-bolt
+      - script: install -D -m 755 $(Pipeline.Workspace)/llvm-bolt/llvm-bolt enclave/build/bin/llvm-bolt
+
+      - script: make -C ./enclave bindgen
+        displayName: make bindgen
+
+      - script: make -C ./enclave debuild
+        displayName: make debuild
+
+      - script: make -C ./enclave debug install
+        displayName: making enclave
+
+      - script: make -C ./enclave test
+        displayName: testing enclave

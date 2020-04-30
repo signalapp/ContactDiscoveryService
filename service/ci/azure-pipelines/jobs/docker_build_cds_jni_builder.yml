@@ -1,0 +1,34 @@
+#
+# Azure Pipelines job to build the cds-enclave-builder docker image used to build the cds service.
+#
+
+jobs:
+  - job: docker_build_cds_jni_builder
+    displayName: docker build cds-jni-builder
+    pool:
+      vmImage: ubuntu-18.04
+    steps:
+      - task: Docker@2
+        displayName: docker login
+        inputs:
+          command:           login
+          containerRegistry: signalbackupci-container-registry
+
+      - script: docker pull signalbackupci.azurecr.io/signalbackupci:cds-jni-builder || true
+        displayName: docker pull
+
+      - task: Docker@2
+        displayName: docker build
+        inputs:
+          command:    build
+          dockerfile: service/src/main/jni/docker/Dockerfile
+          arguments:  --build-arg UID=1000 --build-arg GID=1000 --cache-from signalbackupci.azurecr.io/signalbackupci:cds-jni-builder
+          repository: signalbackupci
+          tags:       cds-jni-builder
+
+      - task: Docker@2
+        displayName: docker push
+        inputs:
+          command:    push
+          repository: signalbackupci
+          tags:       cds-jni-builder

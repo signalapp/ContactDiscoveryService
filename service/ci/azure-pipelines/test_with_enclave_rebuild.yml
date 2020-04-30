@@ -1,0 +1,63 @@
+#
+# Azure Pipeline to build & test the CDS while also rebuilding the enclave instead of using the one in git.
+#
+name: test build with enclave rebuilt
+pr:
+  branches:
+    include:
+    - master
+
+trigger:
+  branches:
+    include:
+    - master
+    - "test-*"
+    - "test_*"
+    exclude:
+    - "test-svc-*"
+    - "test_svc_*"
+
+resources:
+  containers:
+  - container: cds-enclave-builder
+    image:     signalbackupci:cds-enclave-builder
+    endpoint:  signalbackupci-container-registry
+    options:   --user 0:0
+  - container: cds-jni-builder
+    image:     signalbackupci:cds-jni-builder
+    endpoint:  signalbackupci-container-registry
+    options:   --user 0:0 --device /dev/isgx -v /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
+
+stages:
+  - stage: docker_build_cds_enclave_builder
+    displayName: docker build cds-enclave-builder
+    jobs:
+      - template: jobs/docker_build_cds_enclave_builder.yml
+  - stage: make_llvm_bolt
+    displayName: make llvm-bolt
+    dependsOn: docker_build_cds_enclave_builder
+    jobs:
+      - template: jobs/make_llvm_bolt.yml
+
+  - stage: rebuild_enclave
+    displayName: rebuilding enclave
+    dependsOn:
+      - docker_build_cds_enclave_builder
+      - make_llvm_bolt
+    jobs:
+      - template: jobs/rebuild_enclave.yml
+
+  - stage: docker_build_cds_jni_builder
+    displayName: docker build cds-jni-builder
+    jobs:
+      - template: jobs/docker_build_cds_jni_builder.yml
+
+  - stage: integration_test
+    displayName: integration tests
+    dependsOn:
+      - docker_build_cds_jni_builder
+      - rebuild_enclave
+    jobs:
+      - template: jobs/service_tests.yml
+
+
