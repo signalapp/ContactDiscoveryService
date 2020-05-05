@@ -2926,7 +2926,7 @@ pub struct br_hash_class_ {
     #[doc = ""]
     #[doc = " This method saves the current running state into the `dst`"]
     #[doc = " buffer. What constitutes the \"running state\" depends on the"]
-    #[doc = " hash function; for Merkle-Damg\u{e5}rd hash functions (like"]
+    #[doc = " hash function; for Merkle-Damgård hash functions (like"]
     #[doc = " MD5 or SHA-1), this is the output obtained after processing"]
     #[doc = " each block. The number of bytes injected so far is returned."]
     #[doc = " The context is not modified by this call."]
