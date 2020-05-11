@@ -43,7 +43,6 @@ public class SgxEnclave implements Runnable {
 
   private Thread       thread          = null;
   private EnclaveState enclaveState    = null;
-  private byte[]       lastLaunchToken = null;
   private Long         lastGid         = null;
   private boolean      stopped         = false;
   private SgxException lastError       = null;
@@ -55,14 +54,13 @@ public class SgxEnclave implements Runnable {
         }
   }
 
-  public SgxEnclave(String enclavePath, boolean debug, byte[] launchToken, byte[] spid) {
-    if (enclavePath == null || (launchToken != null && launchToken.length != 1024) || spid == null || spid.length != 16) {
+  public SgxEnclave(String enclavePath, boolean debug, byte[] spid) {
+    if (enclavePath == null || spid == null || spid.length != 16) {
       throw new IllegalArgumentException("Bad SgxEnclave arguments");
     }
 
     this.enclavePath = enclavePath;
     this.debug       = debug;
-    lastLaunchToken  = launchToken;
     this.spid        = spid;
   }
 
@@ -113,13 +111,12 @@ public class SgxEnclave implements Runnable {
     while (!isStopped()) {
       try {
         // native will call back into runEnclave
-        nativeEnclaveStart(enclavePath, debug, lastLaunchToken, PENDING_REQUESTS_TABLE_ORDER,
-                           (enclaveId, gid, launchToken) -> {
+        nativeEnclaveStart(enclavePath, debug, PENDING_REQUESTS_TABLE_ORDER,
+                           (enclaveId, gid) -> {
                              synchronized(SgxEnclave.this) {
                                EnclaveState enclaveState = new EnclaveState(enclaveId);
 
                                SgxEnclave.this.enclaveState    = enclaveState;
-                               SgxEnclave.this.lastLaunchToken = launchToken;
                                SgxEnclave.this.lastGid         = gid;
                                SgxEnclave.this.notifyAll();
 
@@ -325,7 +322,8 @@ public class SgxEnclave implements Runnable {
   //
 
   private interface EnclaveStartCallback {
-    void runEnclave(long enclaveId, long gid, byte[] launchToken) throws SgxException;
+
+    void runEnclave(long enclaveId, long gid) throws SgxException;
   }
 
   private interface NativeServerReplyCallback {
@@ -344,7 +342,7 @@ public class SgxEnclave implements Runnable {
     byte[] pending_request_id;
   }
 
-  private static native void nativeEnclaveStart(String enclavePath, boolean debug, byte[] launchToken, byte pendingRequestsTableOrder, EnclaveStartCallback callback) throws SgxException;
+  private static native void nativeEnclaveStart(String enclavePath, boolean debug, byte pendingRequestsTableOrder, EnclaveStartCallback callback) throws SgxException;
 
   private static native byte[] nativeGetNextQuote(long enclaveId, byte[] spid, byte[] sig_rl) throws SgxException;
   private static native void nativeSetCurrentQuote(long enclaveId) throws SgxException;

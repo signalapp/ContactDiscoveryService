@@ -289,7 +289,7 @@ sgx_status_t sgxsd_ocall_reply(const sgxsd_msg_header_t *p_reply_header,
 //
 
 JNIEXPORT void JNICALL SGXSD_JNI_CLASS_METHOD(nativeEnclaveStart)
-    (JNIEnv *env, jclass class, jstring j_enclave_path, jboolean j_debug, jbyteArray j_launch_token,
+    (JNIEnv *env, jclass class, jstring j_enclave_path, jboolean j_debug,
      jbyte j_pending_requests_table_order, jobject j_callback_obj) {
     if (j_callback_obj == NULL) {
         sgxsd_jni_throw_exception(env, "java/lang/NullPointerException", "()V");
@@ -298,20 +298,11 @@ JNIEXPORT void JNICALL SGXSD_JNI_CLASS_METHOD(nativeEnclaveStart)
 
     char *enclave_path = sgxsd_jni_copy_jstring(env, j_enclave_path);
     if (enclave_path != NULL) {
-        sgx_launch_token_t valid_launch_token;
-        sgx_launch_token_t *p_launch_token;
-        if (j_launch_token != NULL) {
-            p_launch_token = &valid_launch_token;
-            (*env)->GetByteArrayRegion(env, j_launch_token, 0, sizeof(valid_launch_token),
-                                       (jbyte *) &valid_launch_token);
-        } else {
-            p_launch_token = NULL;
-        }
         sgxsd_node_init_args_t node_init_args = {
             .pending_requests_table_order = j_pending_requests_table_order,
         };
         if ((*env)->ExceptionCheck(env) != JNI_TRUE) {
-            sgxsd_status_t start_res = sgxsd_start(enclave_path, j_debug == JNI_TRUE, p_launch_token, &node_init_args,
+            sgxsd_status_t start_res = sgxsd_start(enclave_path, j_debug == JNI_TRUE, &node_init_args,
                                                    sgxsd_jni_start_callback_args(env, j_callback_obj));
 
             free(enclave_path);
@@ -332,13 +323,11 @@ sgxsd_status_t sgxsd_jni_start_callback(sgxsd_enclave_t enclave, JNIEnv *env, jo
 
     jclass class = (*env)->GetObjectClass(env, j_callback_obj);
     if (class != NULL) {
-        jmethodID callback_method_id = (*env)->GetMethodID(env, class, "runEnclave", "(JJ[B)V");
+        jmethodID callback_method_id = (*env)->GetMethodID(env, class, "runEnclave", "(JJ)V");
         if (callback_method_id != NULL) {
             jlong j_enclave_id = enclave.id;
             jlong j_gid = enclave.gid32;
-            // an exception might be thrown, which will be handled by the JVM in CallVoidMethod
-            jbyteArray j_launch_token = sgxsd_jni_to_byte_array(env, enclave.launch_token, sizeof(enclave.launch_token));
-            (*env)->CallVoidMethod(env, j_callback_obj, callback_method_id, j_enclave_id, j_gid, j_launch_token);
+            (*env)->CallVoidMethod(env, j_callback_obj, callback_method_id, j_enclave_id, j_gid);
             return sgxsd_status_ok();
         } else {
             return sgxsd_status_error("get_start_callback_method_id_fail");

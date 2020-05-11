@@ -44,7 +44,7 @@ public class SgxEnclaveManager implements Managed {
     for (EnclaveInstanceConfiguration instance : configuration.getInstances()) {
       File enclaveLibrary = NativeUtils.extractNativeResource("/enclave/" + instance.getMrenclave() + ".so");
       enclaves.put(instance.getMrenclave(), new SgxEnclave(enclaveLibrary.getAbsolutePath(),
-                                                           instance.isDebug(), null,
+                                                           instance.isDebug(),
                                                            configuration.getSpid()));
     }
   }

@@ -125,7 +125,7 @@ typedef struct sgxsd_enclave {
 } sgxsd_enclave_t;
 
 typedef sgxsd_status_t (*sgxsd_start_callback_t)(sgxsd_enclave_t, va_list);
-sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgx_launch_token_t *p_launch_token, const sgxsd_node_init_args_t *p_node_init_args, sgxsd_start_callback_t p_callback, ...);
+sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgxsd_node_init_args_t *p_node_init_args, sgxsd_start_callback_t p_callback, ...);
 sgxsd_status_t sgxsd_get_next_quote(sgx_enclave_id_t enclave_id, sgx_spid_t spid, const uint8_t *p_sig_rl, uint32_t sig_rl_size, sgx_quote_t *p_quote, uint32_t quote_size);
 
 //

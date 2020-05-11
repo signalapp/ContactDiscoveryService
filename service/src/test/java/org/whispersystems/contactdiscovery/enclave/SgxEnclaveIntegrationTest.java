@@ -26,7 +26,7 @@ public class SgxEnclaveIntegrationTest {
     NativeUtils.loadNativeResource("/enclave-jni.so");
     File enclaveLibrary = NativeUtils.extractNativeResource("/enclave/" + mrenclave + ".so");
     byte[] spid = Hex.decodeHex("00000000000000000000000000000000");
-    SgxEnclave enclave = new SgxEnclave(enclaveLibrary.getAbsolutePath(), debugBuild, null, spid);
+    SgxEnclave enclave = new SgxEnclave(enclaveLibrary.getAbsolutePath(), debugBuild, spid);
     enclave.start();
     enclave.setCurrentQuote();
     byte[] nextQuote = enclave.getNextQuote(new byte[0]);

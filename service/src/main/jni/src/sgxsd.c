@@ -31,7 +31,6 @@
 typedef struct sgxsd_enclave_args {
     const char *path;
     bool debug;
-    const sgx_launch_token_t *p_launch_token;
     const sgxsd_node_init_args_t *p_node_init_args;
 } sgxsd_enclave_args_t;
 static inline sgxsd_status_t sgxsd_init_get_epid(sgxsd_enclave_args_t enclave_args, sgxsd_start_callback_t p_callback, va_list callback_args);
@@ -42,7 +41,7 @@ static inline sgxsd_status_t sgxsd_init_node_init(sgxsd_enclave_t enclave, sgxsd
 // public api
 //
 
-sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgx_launch_token_t *p_launch_token, const sgxsd_node_init_args_t *p_node_init_args, sgxsd_start_callback_t p_callback, ...) {
+sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgxsd_node_init_args_t *p_node_init_args, sgxsd_start_callback_t p_callback, ...) {
     if (enclave_path == NULL || p_callback == NULL) {
         return sgxsd_status_error_code("badarg", SGX_ERROR_INVALID_PARAMETER);
     }
@@ -53,7 +52,6 @@ sgxsd_status_t sgxsd_start(const char *enclave_path, bool debug, const sgx_launc
     sgxsd_enclave_args_t enclave_args = {
         .path = enclave_path,
         .debug = debug,
-        .p_launch_token = p_launch_token,
         .p_node_init_args = p_node_init_args,
     };
     sgxsd_status_t rest_of_start_res = sgxsd_init_get_epid(enclave_args, p_callback, callback_args);
@@ -85,11 +83,8 @@ sgxsd_status_t sgxsd_init_create_enclave(sgxsd_enclave_args_t enclave_args, sgxs
     };
     sgx_status_t init_quote_res = sgx_init_quote(&(sgx_target_info_t) {{{0}}}, &enclave.gid);
     if (init_quote_res == SGX_SUCCESS) {
-        if (enclave_args.p_launch_token != NULL) {
-            memcpy(enclave.launch_token, enclave_args.p_launch_token, sizeof(enclave.launch_token));
-        }
         sgx_status_t create_enclave_res =
-            sgx_create_enclave(enclave_args.path, enclave_args.debug, &enclave.launch_token, &(int){0}, &enclave.id, NULL);
+            sgx_create_enclave(enclave_args.path, enclave_args.debug, NULL, &(int){0}, &enclave.id, NULL);
         if (create_enclave_res == SGX_SUCCESS) {
             sgxsd_status_t rest_res = sgxsd_init_node_init(enclave, enclave_args, p_callback, callback_args);
             sgx_destroy_enclave(enclave.id);
