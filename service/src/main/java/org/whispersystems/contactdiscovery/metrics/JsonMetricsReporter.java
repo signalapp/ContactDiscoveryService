@@ -19,10 +19,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -35,17 +35,18 @@ public class JsonMetricsReporter extends ScheduledReporter {
   private final JsonFactory factory = new JsonFactory();
 
   private final String token;
+  // hostname is the host we send Wavefront-formatted metrics to.
   private final String hostname;
+  // host is the FQDN of the machine this code is running on (or "localhost") and used as the "source" in Wavefront metrics.
   private final String host;
 
   public JsonMetricsReporter(MetricRegistry registry, String token, String hostname,
                              MetricFilter filter, TimeUnit rateUnit, TimeUnit durationUnit)
-      throws UnknownHostException
   {
     super(registry, "json-reporter", filter, rateUnit, durationUnit);
     this.token    = token;
     this.hostname = hostname;
-    this.host     = InetAddress.getLocalHost().getCanonicalHostName();
+    this.host     = Optional.of(System.getenv("CDS_FQDN")).orElse("localhost");
   }
 
   @Override
