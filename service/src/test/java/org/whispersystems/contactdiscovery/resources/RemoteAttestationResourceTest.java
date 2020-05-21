@@ -28,10 +28,12 @@ import java.security.SecureRandom;
 import io.dropwizard.testing.junit.ResourceTestRule;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
+import static org.whispersystems.contactdiscovery.requests.RequestManager.FAKE_ENCLAVE_OUTPUT_MAP_KEY;
 
 public class RemoteAttestationResourceTest {
 
@@ -103,8 +105,9 @@ public class RemoteAttestationResourceTest {
 
     assertEquals(response.getAttestations().size(), 1);
 
-    RemoteAttestationResponse attestation = response.getAttestations().get(0);
+    RemoteAttestationResponse attestation = response.getAttestations().get(FAKE_ENCLAVE_OUTPUT_MAP_KEY);
 
+    assertNotNull("attestation didn't have the expected key", attestation);
     assertArrayEquals(attestation.getQuote(), this.quote);
     assertArrayEquals(attestation.getTag(), this.tag);
     assertArrayEquals(attestation.getIv(), this.iv);

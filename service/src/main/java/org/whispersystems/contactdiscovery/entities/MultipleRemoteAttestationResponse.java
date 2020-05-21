@@ -21,22 +21,23 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 
 public class MultipleRemoteAttestationResponse {
 
   @JsonProperty
   @NotNull
   @Size(min = 1, max = 3)
-  List<RemoteAttestationResponse> attestations;
+  Map<String, RemoteAttestationResponse> attestations;
 
   public MultipleRemoteAttestationResponse() {
   }
 
-  public MultipleRemoteAttestationResponse(List<RemoteAttestationResponse> attestations) {
+  public MultipleRemoteAttestationResponse(Map<String, RemoteAttestationResponse> attestations) {
     this.attestations = attestations;
   }
 
-  public List<RemoteAttestationResponse> getAttestations() {
+  public Map<String, RemoteAttestationResponse> getAttestations() {
     return attestations;
   }
 }

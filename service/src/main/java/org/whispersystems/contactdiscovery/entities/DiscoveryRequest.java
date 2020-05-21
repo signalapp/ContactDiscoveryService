@@ -27,6 +27,7 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Entity representing an encrypted contact discovery request
@@ -70,13 +71,13 @@ public class DiscoveryRequest {
   @JsonProperty
   @NotNull
   @Size(min = 1, max = 3)
-  private List<DiscoveryRequestEnvelope> envelopes;
+  private Map<String, DiscoveryRequestEnvelope> envelopes;
 
   public DiscoveryRequest() {
 
   }
 
-  public DiscoveryRequest(int addressCount, byte[] iv, byte[] data, byte[] mac, byte[] commitment, List<DiscoveryRequestEnvelope> envelopes) {
+  public DiscoveryRequest(int addressCount, byte[] iv, byte[] data, byte[] mac, byte[] commitment, Map<String, DiscoveryRequestEnvelope> envelopes) {
     this.addressCount = addressCount;
     this.iv           = iv;
     this.data         = data;
@@ -105,7 +106,7 @@ public class DiscoveryRequest {
     return commitment;
   }
 
-  public List<DiscoveryRequestEnvelope> getEnvelopes() {
+  public Map<String, DiscoveryRequestEnvelope> getEnvelopes() {
     return envelopes;
   }
 

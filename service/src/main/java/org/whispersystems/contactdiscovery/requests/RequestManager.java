@@ -26,6 +26,7 @@ import io.dropwizard.lifecycle.Managed;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
 import org.apache.commons.lang3.tuple.Pair;
+import org.bouncycastle.util.encoders.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
@@ -39,6 +40,9 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +57,12 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @author Moxie Marlinspike
  */
 public class RequestManager implements Managed {
+
+  /**
+   * FAKE_ENCLAVE_OUTPUT_MAP_KEY is just faked out key for the attestations map that will only hold one enclave. This
+   * will go away when we work out the routing code to the new rate limiter service.
+   */
+  public static final String FAKE_ENCLAVE_OUTPUT_MAP_KEY = generateFakeEnclaveKey();
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
@@ -75,6 +85,17 @@ public class RequestManager implements Managed {
     this.directoryManager = directoryManager;
     this.pending          = new PendingRequestQueueSet(queueMap);
     this.targetBatchSize  = targetBatchSize;
+  }
+
+  private static String generateFakeEnclaveKey() {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] encodedhash = digest.digest(
+          "enclave".getBytes(StandardCharsets.UTF_8));
+      return Hex.toHexString(encodedhash);
+    } catch (NoSuchAlgorithmException e) {
+      return "welpenclave";
+    }
   }
 
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
@@ -135,7 +156,7 @@ public class RequestManager implements Managed {
           for (PendingRequest request : requests) {
             int                      addressCount = request.getRequest().getAddressCount();
             byte[]                   commitment   = request.getRequest().getCommitment();
-            DiscoveryRequestEnvelope envelope     = request.getRequest().getEnvelopes().get(0);
+            DiscoveryRequestEnvelope envelope     = request.getRequest().getEnvelopes().get(FAKE_ENCLAVE_OUTPUT_MAP_KEY);
             byte[]                   requestId    = envelope.getRequestId();
 
             SgxsdMessage queryMessage    = new SgxsdMessage(request.getRequest().getData(),

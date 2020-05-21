@@ -24,6 +24,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.security.SecureRandom;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import io.dropwizard.testing.junit.ResourceTestRule;
@@ -69,8 +70,8 @@ public class ContactDiscoveryResourceTest {
     new SecureRandom().nextBytes(mac);
 
     DiscoveryRequestEnvelope validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
-    validDiscoveryRequest                  = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], List.of(validEnvelope));
-    invalidDiscoveryRequest                = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], List.of(validEnvelope));
+    validDiscoveryRequest                  = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of("fake", validEnvelope));
+    invalidDiscoveryRequest                = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of("fake", validEnvelope));
 
     DiscoveryResponse                    discoveryResponse = new DiscoveryResponse(requestId, iv, data, mac);
     CompletableFuture<DiscoveryResponse> responseFuture    = CompletableFuture.completedFuture(discoveryResponse);

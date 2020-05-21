@@ -52,6 +52,7 @@ import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 
 import io.dropwizard.auth.Auth;
+import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -59,7 +60,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -95,7 +96,7 @@ public class RemoteAttestationResource {
     rateLimiter.validate(user.getNumber());
     // XXX 2019-05-17 remove cookie before going live
     RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
-    return Response.ok(new MultipleRemoteAttestationResponse(List.of(attestation)))
+    return Response.ok(new MultipleRemoteAttestationResponse(Map.of(RequestManager.FAKE_ENCLAVE_OUTPUT_MAP_KEY, attestation)))
                    .cookie(new NewCookie("dummy", "dummy"))
                    .build();
   }
@@ -198,7 +199,7 @@ public class RemoteAttestationResource {
     }
 
     RemoteAttestationResponse attestation = testFun.apply(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()));
-    return new MultipleRemoteAttestationResponse(List.of(attestation));
+    return new MultipleRemoteAttestationResponse(Map.of("enclave", attestation));
   }
 
   private static String readMockCertificate() {
