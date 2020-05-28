@@ -1,7 +1,7 @@
 #
 # Azure Pipeline to build & test the CDS while also rebuilding the enclave instead of using the one in git.
 #
-name: test build with enclave rebuilt
+name: test with enclave rebuild
 pr:
   branches:
     include:
@@ -16,6 +16,8 @@ trigger:
     exclude:
     - "test-svc-*"
     - "test_svc_*"
+
+
 
 resources:
   containers:

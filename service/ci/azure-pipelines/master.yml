@@ -11,9 +11,6 @@ trigger:
       - master
       - "test-svc-*"
       - "test_svc_*"
-  paths:
-    exclude:
-      - "enclave/*"
 
 resources:
   containers:

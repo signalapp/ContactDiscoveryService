@@ -105,3 +105,36 @@ $ cd <repository_root>
 $ java -jar service/target/contactdiscovery-<version>.jar server service/config/yourconfig.yml
 `````
 
+## Testing
+
+# Local testing
+You can locally run tests in `enclave/` with `cargo test` in that directroy. For
+`service/`, run `mvn test -pl ./service` from the top level. (Note that those
+won't run tests that require working SGX hardware.) If you have a machine with
+the SGX dependencies installed and working SGX hardware, you can run `mvn verify
+-pl ./service` to run tests that depend on them.
+
+You can also use our Azure Pipelines set up to run the SGX-required tests with
+manual triggers.
+
+To run the pipelines, if you have a change in `enclave/`, you can push to a
+branch that starts with either "test-" or "test_" and the enclave will rebuild
+and `mvn verify` will be run on hardware with SGX enabled. If you push to a
+"test-svc-" or "test_svc_" prefixed branch, the checked-in enclave will be used
+and `mvn verify` will be run on the SGX-enabled hardware.
+
+# CI
+
+Azure Pipelines is what we currently use for CI. It has two separate Pipelines
+that run on PR and merges to master..
+
+There are two pipelines configured. They currently (2020-05) are configured in
+`service/ci/master.yml` and `service/ci/test_with_enclave_rebuild.yml`. The
+former runs the `service` tests with the enclave library already checked-in to
+the repo. The latter runs the full enclave rebuild and test process, plus the
+`service` tests.
+
+Both pipelines are run simultaneously to allow the quicker `service` tests to
+give developer's feedback sooner. (`test_with_enclave_rebuild` caches the LLVM
+BOLT binary smartly so it's comfortable to run on every PR. A build with a
+cached BOLT binary takes roughly 11 minutes.)
