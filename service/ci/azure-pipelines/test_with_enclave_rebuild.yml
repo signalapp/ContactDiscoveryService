@@ -17,7 +17,13 @@ trigger:
     - "test-svc-*"
     - "test_svc_*"
 
-
+schedules:
+  - cron: "00 14 * * *"
+    displayName: "Daily test run"
+    branches:
+      include:
+      - master
+    always: true
 
 resources:
   containers:
