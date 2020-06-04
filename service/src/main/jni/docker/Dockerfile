@@ -6,11 +6,13 @@ RUN    apt-get update \
     && apt-get install -y --no-install-recommends \
                apt-transport-https \
                build-essential \
+               clang \
                curl \
                gpg-agent \
                libcurl4-openssl-dev \
                libprotobuf-dev \
                libssl-dev \
+               libprotobuf10 \
                openjdk-11-jdk-headless \
                pkg-config \
                software-properties-common \
@@ -37,6 +39,16 @@ ENV SHELL /bin/bash
 
 WORKDIR /home/cds
 
+ARG TOOLCHAIN=1.40.0
+
+COPY rustup-init.sha256 /tmp/docker/
+
+RUN    curl -f https://static.rust-lang.org/rustup/archive/1.20.2/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
+    && [ `sha256sum /tmp/rustup-init|cut -d' ' -f1` = `cut -d' ' -f1</tmp/docker/rustup-init.sha256` ] \
+    && chmod a+x /tmp/rustup-init \
+    && /tmp/rustup-init -y --profile minimal --component rustfmt --default-toolchain "${TOOLCHAIN}" \
+    && rm -rf /tmp/rustup-init /tmp/docker
+
 ARG SGX_SDK_VERSION=2.7.1
 
 COPY linux-sgx.tar.gz.sha256 /tmp/docker/
@@ -50,5 +62,7 @@ RUN cp "/tmp/linux-sgx-sgx_${SGX_SDK_VERSION}"/common/inc/sgx*.h /usr/include/
 
 USER cds
 RUN rm -rf "/tmp/linux-sgx-sgx_${SGX_SDK_VERSION}" /tmp/linux-sgx.tar.gz
+
+ENV PATH="/home/cds/.cargo/bin:${PATH}"
 
 CMD [ "/bin/bash" ]

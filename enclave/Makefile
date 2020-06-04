@@ -94,7 +94,7 @@ include sgx_enclave.mk
 
 docker-install: docker install
 
-all: $(CDS_ENCLAVE_TARGET) $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so $(builddir)/$(CDS_ENCLAVE_NAME).signdata $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave
+all: $(CDS_ENCLAVE_TARGET) $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so $(builddir)/$(CDS_ENCLAVE_NAME).signdata $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave $(includedir)/cds_enclave_u.c $(includedir)/cds_enclave_u.h
 
 unstripped: $(CDS_ENCLAVE_TARGET)
 
@@ -244,12 +244,6 @@ $(includedir)/cds_enclave_t.h $(includedir)/cds_enclave_u.h: $(includedir)/sgxsd
 
 $(builddir)/cds_enclave_t.o: $(includedir)/cds_enclave_t.c
 	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
-
-$(builddir)/cds_enclave_u.o: $(includedir)/cds_enclave_u.c
-	$(CC) -o $@ $(CFLAGS) -c $<
-
-$(builddir)/libcds_enclave_u.a: $(builddir)/cds_enclave_u.o
-	$(AR) r $@ $<
 
 $(CDS_ENCLAVE_RUST_STATICLIB): cds_enclave/c_src/cds-enclave-hash.c.s cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
 

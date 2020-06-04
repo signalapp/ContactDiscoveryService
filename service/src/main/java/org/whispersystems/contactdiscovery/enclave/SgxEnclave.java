@@ -110,6 +110,8 @@ public class SgxEnclave implements Runnable {
   public void run() {
     while (!isStopped()) {
       try {
+        // TODO(CDS-136): turn this callback into return values now that we've moved to rust and return values are
+        // easier to pass back up the stack.
         // native will call back into runEnclave
         nativeEnclaveStart(enclavePath, debug, PENDING_REQUESTS_TABLE_ORDER,
                            (enclaveId, gid) -> {

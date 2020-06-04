@@ -1,0 +1,14 @@
+[package]
+authors = ["Signal Messenger, LLC"]
+name    = "cds_enclave_ffi"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[dependencies]
+failure = "0.1"
+sgx_sdk_ffi = { git = "https://github.com/signalapp/sgx_common.git", rev = "e9726911e4432edb402c299b2e126d5229270eb6" }
+
+[build-dependencies]
+bindgen = "0.53"
+cc      = "1.0"

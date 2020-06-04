@@ -131,6 +131,10 @@
                 <configuration>
                     <source>11</source>
                     <target>11</target>
+                    <compilerArgs>
+                      <arg>-h</arg>
+                      <arg>${project.basedir}/src/main/jni/include/</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>

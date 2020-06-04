@@ -1,59 +1,45 @@
-srcdir = src
 projectdir = ../../../..
 includedir = $(projectdir)/enclave/include
 builddir = build
+targetdir = $(builddir)/target
 resourcedir = ../resources
 
+CARGO ?= cargo
 DOCKER ?= docker
 INSTALL ?= install
+
+FEATURES ?=
 
 INSTALL_PROGRAM = $(INSTALL) -m 755 $(INSTALL_PROGRAM_FLAGS)
 INSTALL_DATA    = $(INSTALL) -m 644
 
 DESTDIR ?=
 
-JDK_HOME ?= $(dir $(word 1,$(wildcard /usr/lib/jvm/*/include)))
+CARGOBUILDFLAGS =
+export CARGO_TARGET_DIR = $(CURDIR)/$(targetdir)
+export CARGO_HOME = $(CURDIR)/$(builddir)/cargo
 
-CFLAGS = \
-	-m64 -O2 -ggdb -pipe -fPIC \
-	-std=c11 -D_DEFAULT_SOURCE \
-	-Wall -Werror=all -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wno-attributes \
-	-I$(includedir) -I$(JDK_HOME)/include -I$(JDK_HOME)/include/linux
+TARGET = $(builddir)/target/release/libcds_jni.so
 
-LDFLAGS =
-LDLIBS = -lsgx_urts -lsgx_uae_service
-
-TARGET = $(builddir)/libcds-jni.so
-
-SOURCES := $(srcdir)/sgxsd-jni.c $(srcdir)/sgxsd.c
-OBJECTS := $(addprefix $(builddir)/,$(SOURCES:.c=.o))
-
-.PHONY: all install clean docker
+.PHONY: all install clean docker genjni
+.PHONY: FORCE
 
 default: docker install
 
 all: $(TARGET)
 
-$(builddir)/src/cds_enclave_u.o: $(includedir)/cds_enclave_u.c $(includedir)/cds_enclave_u.h
-	@mkdir -p $(dir $@)
-	$(CC) -o $@ $(CFLAGS) -c $<
-
-$(OBJECTS): $(builddir)/%.o: %.c $(includedir)/sgxsd.h $(includedir)/cds.h $(includedir)/cds_enclave_u.h
-	@mkdir -p $(dir $@)
-	$(CC) -o $@ $(CFLAGS) -c $<
-
-$(TARGET): $(OBJECTS) $(builddir)/src/cds_enclave_u.o
-	$(CC) -shared -Wl,-soname=$@ -Wl,--whole-archive $^ -Wl,--no-whole-archive -o $@ $(LDFLAGS) $(LDLIBS)
+$(builddir)/target/release/lib%.so: FORCE cds_jni/src/ffi/ffi.rs
+	env -u CFLAGS \
+		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
 install:
 	$(INSTALL_DATA) $(TARGET) $(resourcedir)/enclave-jni.so
 
 .PHONY: clean
 clean:
-	rm -f \
-		$(TARGET) \
-		$(OBJECTS) \
-		$(builddir)/src/cds_enclave_u.o
+	-rm -r	$(targetdir)/release/ \
+		$(targetdir)/debug/
+	-$(CARGO) clean --release
 
 ## Docker build env
 
@@ -64,7 +50,15 @@ docker:
 	$(DOCKER) build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) \
 	  -t cds-jni-builder ./docker
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE \
+		-v `pwd`/$(projectdir)/../sgx_common:/home/cds/sgx_common \
 		-v `pwd`/$(projectdir):/home/cds/src $(DOCKER_EXTRA) \
 		--env MAKEFLAGS="$(MAKEFLAGS)" \
 		cds-jni-builder \
 		sh -c "cd src/service/src/main/jni/; make $(MAKETARGET)"
+
+cds_jni/src/ffi/ffi.rs:
+	jbindgen --jniimpl_use 'crate::jniimpl' \
+		$(projectdir)/service/src/main/jni/include/org_whispersystems_contactdiscovery_enclave_SgxEnclave.h -- \
+		-I/usr/lib/jvm/default-java/include -I/usr/lib/jvm/default-java/include/linux/ > cds_jni/src/ffi/ffi.rs
+
+genjni: cds_jni/src/ffi/ffi.rs
