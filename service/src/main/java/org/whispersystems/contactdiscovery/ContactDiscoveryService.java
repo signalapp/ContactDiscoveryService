@@ -58,6 +58,7 @@ import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
 import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.PingResource;
 import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
@@ -73,6 +74,7 @@ import java.security.KeyStoreException;
 import java.security.Security;
 import java.security.cert.CertificateException;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -135,7 +137,11 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager);
     DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
-    PingResource                      pingResource                      = new PingResource();
+
+    var healthCheckOverride = new AtomicBoolean(true);
+    var onResource = new HealthCheckOverride.HealthCheckOn(healthCheckOverride);
+    var offResource = new HealthCheckOverride.HealthCheckOff(healthCheckOverride);
+    var pingResource = new PingResource(healthCheckOverride);
 
     environment.lifecycle().manage(sgxEnclaveManager);
     environment.lifecycle().manage(sgxRevocationListManager);
@@ -176,6 +182,9 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.metrics().register(name(NetworkSentGauge.class, "bytes_sent"), new NetworkSentGauge());
     environment.metrics().register(name(NetworkReceivedGauge.class, "bytes_received"), new NetworkReceivedGauge());
     environment.metrics().register(name(FileDescriptorGauge.class, "fd_count"), new FileDescriptorGauge());
+
+    environment.admin().addTask(onResource);
+    environment.admin().addTask(offResource);
   }
 
 }
