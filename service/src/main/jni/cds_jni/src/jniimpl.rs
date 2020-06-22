@@ -15,15 +15,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use std::mem::{size_of, ManuallyDrop};
+use std::panic::{catch_unwind, UnwindSafe};
+use std::slice;
+use std::sync::Arc;
+
 use cds_enclave_ffi::sgxsd;
 use jni::objects::*;
 use jni::sys::*;
 use jni::{sys, Executor, JNIEnv};
 use sgx_sdk_ffi::{SgxEnclaveId, SgxStatus};
-use std::mem::{size_of, ManuallyDrop};
-use std::panic::{catch_unwind, UnwindSafe};
-use std::slice;
-use std::sync::Arc;
 use thiserror::Error as ThisError;
 
 #[derive(ThisError, Debug)]
@@ -440,17 +441,15 @@ fn server_call(
     )?;
 
     let pending_request_id_data = &mut [0 as u8; size_of::<u64>()];
-    pending_request_id_data.clone_from_slice(&pending_request_id_bytes[0..size_of::<u64>() - 1]);
+    pending_request_id_data.clone_from_slice(&pending_request_id_bytes[0..size_of::<u64>()]);
 
     let u64_and_iv = size_of::<u64>() + size_of::<sgxsd::SgxsdAesGcmIv>();
     let pending_request_id_iv = &mut [0 as u8; size_of::<sgxsd::SgxsdAesGcmIv>()];
-    pending_request_id_iv
-        .clone_from_slice(&pending_request_id_bytes[size_of::<u64>()..u64_and_iv - 1]);
+    pending_request_id_iv.clone_from_slice(&pending_request_id_bytes[size_of::<u64>()..u64_and_iv]);
 
     let u64_iv_and_mac = u64_and_iv + size_of::<sgxsd::SgxsdAesGcmMac>();
     let pending_request_id_mac = &mut [0 as u8; size_of::<sgxsd::SgxsdAesGcmMac>()];
-    pending_request_id_mac
-        .clone_from_slice(&pending_request_id_bytes[u64_and_iv..u64_iv_and_mac - 1]);
+    pending_request_id_mac.clone_from_slice(&pending_request_id_bytes[u64_and_iv..u64_iv_and_mac]);
 
     let sgxcallargs = sgxsd::SgxsdServerCallArgs {
         query_phone_count: query_phone_count as u32,
@@ -519,6 +518,7 @@ fn server_call(
     )
     .map_err(PossibleError::from);
 }
+
 fn run_success_callback(
     env: &JNIEnv,
     reply: sgxsd::MessageReply,
@@ -538,6 +538,7 @@ fn run_success_callback(
         .map(|_| ())
         .map_err(PossibleError::from);
 }
+
 fn get_nonnull_fixed_size_array_field(
     env: &JNIEnv,
     obj: JObject,
