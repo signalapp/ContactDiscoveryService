@@ -141,7 +141,19 @@ pub fn delete_ratelimit_state(ratelimit_state_uuid: Uuid) -> Result<(), SgxStatu
 
 impl SgxsdServerState {
     fn decode_request<'a>(&mut self, args: &'a CallArgs, request_data: &[u8]) -> Result<Request<'a>, SgxStatus> {
-        if (args.query_phone_count == 0 || args.query_phone_count.to_usize() > self.query_phones.capacity() - self.query_phones.len()) {
+        let ratelimit_state = if let Some(ratelimit_state_uuid) = args.ratelimit_state_uuid.into() {
+            Some(RequestRatelimitState {
+                uuid: ratelimit_state_uuid,
+                data: UntrustedSlice::new(args.ratelimit_state_data, args.ratelimit_state_size.to_usize())
+                    .map_err(|_| SGX_ERROR_INVALID_PARAMETER)?,
+            })
+        } else {
+            None
+        };
+
+        if ratelimit_state.is_none() &&
+            (args.query_phone_count == 0 || args.query_phone_count.to_usize() > self.query_phones.capacity() - self.query_phones.len())
+        {
             return Err(SGX_ERROR_INVALID_PARAMETER);
         }
 
@@ -168,15 +180,6 @@ impl SgxsdServerState {
 
         Self::verify_commitment(&query_phones.data.get()[..], &args.query_commitment)?;
 
-        let ratelimit_state = if let Some(ratelimit_state_uuid) = args.ratelimit_state_uuid.into() {
-            Some(RequestRatelimitState {
-                uuid: ratelimit_state_uuid,
-                data: UntrustedSlice::new(args.ratelimit_state_data, args.ratelimit_state_size.to_usize())
-                    .map_err(|_| SGX_ERROR_INVALID_PARAMETER)?,
-            })
-        } else {
-            None
-        };
         Ok(Request {
             phones: query_phones,
             ratelimit_state,
