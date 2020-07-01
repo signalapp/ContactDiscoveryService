@@ -859,6 +859,224 @@ mod tests {
         assert_eq!(phone, u64::from_ne_bytes(mock_result[..8].try_into().unwrap()));
     }
 
+    fn make_rl_state(slot_count: usize) -> SecretValue<Box<[u8]>> {
+        let slot_count = ((slot_count + 3) / 4) * 4;
+        let mut rl_state = TestRatelimitState::new(slot_count);
+        let request_rl_state = RequestRatelimitState {
+            uuid: NonZeroU128::new(1).unwrap(),
+            data: UntrustedSlice::new(rl_state.data.as_mut_ptr(), rl_state.data.len()).unwrap(),
+        };
+
+        let ratelimit_state_data_len = (request_rl_state.data).len().checked_sub(AesGcmMac::default().data.len()).unwrap();
+        SecretValue::new(
+            (request_rl_state.data)
+                .read_bytes(ratelimit_state_data_len)
+                .unwrap()
+                .into_boxed_slice(),
+        )
+    }
+
+    fn make_rl_phones(phones: &[u64]) -> PhoneList {
+        let mut query_data_vec: Vec<u8> = Vec::with_capacity(COMMITMENT_NONCE_SIZE + std::mem::size_of::<u64>() * phones.len());
+        query_data_vec.extend_from_slice(&[0; COMMITMENT_NONCE_SIZE]);
+        for number in phones {
+            println!("in_phones: 0x{:0x}", number);
+            query_data_vec.extend_from_slice(&number.to_ne_bytes());
+        }
+        println!("query_data_vec.len(): {}", query_data_vec.len());
+
+        let query_phones = RequestPhoneList::new(query_data_vec.into_boxed_slice());
+
+        let request_phones_iter = query_phones.iter();
+        println!("request_phones_iter.len(): {}", request_phones_iter.len());
+        let mut request_phones = PhoneList::new(request_phones_iter.len());
+        request_phones.extend(request_phones_iter);
+
+        request_phones
+    }
+
+    fn dump_rl_state(ratelimit_state_data: &Box<[u8]>) {
+        let (size_limit_data, slots_data) = ratelimit_state_data.split_at(mem::size_of::<u32>());
+
+        let size_limit = u32::from_ne_bytes(size_limit_data.try_into().unwrap());
+        println!("after add: size_limit: {}", size_limit);
+
+        let mut i = 0;
+        for phone in slots_data
+            .chunks_exact(mem::size_of::<u64>())
+            .map(|v| u64::from_ne_bytes(v.try_into().unwrap()))
+        {
+            println!("slot data:{:02}:0x{:016x}", i, phone);
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn test_ratelimit_initial_query_ok() {
+        let phones = [
+            0x14234567890u64,
+            0x14081234567u64,
+            0x15234567891u64,
+            0x14234567891u64,
+            0x14081234562u64,
+            0x15234567893u64,
+            0x14234567894u64,
+            0x14081234565u64,
+            0x15234567896u64,
+        ];
+
+        for i in 0..phones.len() {
+            let scenario = Scenario::new();
+            let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+            scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
+
+            let request_phones = make_rl_phones(&phones[0..(i + 1)]);
+            let ratelimit_state_data = make_rl_state((phones.len() * 2) + 1);
+            let mut ratelimit_state: RatelimitState = Default::default();
+
+            let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
+
+            assert_eq!(result.is_ok(), true);
+        }
+
+        let scenario = Scenario::new();
+        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+        scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
+
+        let request_phones = make_rl_phones(&phones);
+        let ratelimit_state_data = make_rl_state(16);
+        let mut ratelimit_state: RatelimitState = Default::default();
+
+        let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
+
+        assert_eq!(result.is_ok(), true);
+
+        let (ratelimit_state_data, _ratelimit_state_mac) = result.unwrap();
+        dump_rl_state(&ratelimit_state_data);
+    }
+
+    #[test]
+    fn test_ratelimit_subsequent_query_ok() {
+        let phones = [
+            0x14234567890u64,
+            0x14081234567u64,
+            0x14234567891u64,
+            0x14081234562u64,
+            0x15234567893u64,
+            0x14234567894u64,
+            0x14081234565u64,
+            0x15234567896u64,
+        ];
+
+        let scenario = Scenario::new();
+        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+        scenario.expect(
+            sgx_is_outside_enclave
+                .sgx_is_outside_enclave(any(), any())
+                .and_return_clone(true)
+                .times(1),
+        );
+
+        // first make a query with half the phones
+        let request_phones = make_rl_phones(&phones[0..phones.len() / 2]);
+        let ratelimit_state_data = make_rl_state((phones.len() * 2) + 1);
+        let mut ratelimit_state: RatelimitState = Default::default();
+        let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
+        assert_eq!(result.is_ok(), true);
+
+        let (ratelimit_state_result, ratelimit_state_mac) = result.unwrap();
+        dump_rl_state(&ratelimit_state_result);
+
+        // now query the whole list, should still be OK.
+        let request_phones = make_rl_phones(&phones);
+        let new_ratelimit_state = SecretValue::new(ratelimit_state_result);
+
+        let result = ratelimit_state.update(new_ratelimit_state, ratelimit_state_mac, &request_phones);
+        assert_eq!(result.is_ok(), true);
+
+        let (ratelimit_state_result, _ratelimit_state_mac) = result.unwrap();
+        dump_rl_state(&ratelimit_state_result);
+    }
+
+    #[test]
+    fn test_ratelimit_initial_query_fail() {
+        let phones = [
+            0x14234567890u64,
+            0x14081234567u64,
+            0x15234567891u64,
+            0x14234567891u64,
+            0x14081234562u64,
+            0x15234567893u64,
+            0x14234567894u64,
+            0x14081234565u64,
+            0x15234567896u64,
+            0x16234567896u64,
+            0x15234567894u64,
+            0x16081234565u64,
+            0x17234567896u64,
+            0x18234567896u64,
+        ];
+
+        let scenario = Scenario::new();
+        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+        scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
+
+        let request_phones = make_rl_phones(&phones);
+        let ratelimit_state_data = make_rl_state(8);
+        let mut ratelimit_state: RatelimitState = Default::default();
+
+        let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
+        assert_eq!(result, Err(CDS_ERROR_RATE_LIMIT_EXCEEDED));
+    }
+
+    // TODO - update the test to work with the encryption mock code. CDS-118.
+    // #[test]
+    fn test_ratelimit_subsequent_query_fail() {
+        let phones = [
+            0x14234567890u64,
+            0x14081234567u64,
+            0x15234567891u64,
+            0x14234567891u64,
+            0x14081234562u64,
+            0x15234567893u64,
+            0x14234567894u64,
+            0x14081234565u64,
+            0x15234567896u64,
+            0x16234567896u64,
+            0x15234567894u64,
+            0x16081234565u64,
+            0x17234567896u64,
+            0x18234567896u64,
+        ];
+
+        let scenario = Scenario::new();
+        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+        scenario.expect(
+            sgx_is_outside_enclave
+                .sgx_is_outside_enclave(any(), any())
+                .and_return_clone(true)
+                .times(1),
+        );
+
+        // first make a query with 1/4 of the phones
+        let request_phones = make_rl_phones(&phones[0..phones.len() / 4]);
+        let ratelimit_state_data = make_rl_state((phones.len() / 2) - 1);
+        let mut ratelimit_state: RatelimitState = Default::default();
+
+        let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
+        assert_eq!(result.is_ok(), true);
+
+        let (ratelimit_state_result, ratelimit_state_mac) = result.unwrap();
+        dump_rl_state(&ratelimit_state_result);
+
+        // now query the whole list, should still be OK.
+        let request_phones = make_rl_phones(&phones);
+        let new_ratelimit_state = SecretValue::new(ratelimit_state_result);
+
+        let result = ratelimit_state.update(new_ratelimit_state, ratelimit_state_mac, &request_phones);
+        assert_eq!(result, Err(CDS_ERROR_RATE_LIMIT_EXCEEDED));
+    }
+
     //
     // TestQuery impls
     //
