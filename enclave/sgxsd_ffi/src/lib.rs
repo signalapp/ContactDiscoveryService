@@ -138,7 +138,7 @@ impl RngCore for RdRand {
         let mut rand_buf = sgxsd_rand_buf::default();
         while !dest.is_empty() {
             match num::NonZeroU32::new(unsafe { sgxsd_enclave_read_rand(&mut rand_buf) }) {
-                None        => (),
+                None => (),
                 Some(error) => {
                     clear(&mut rand_buf.x);
                     return Err(error.into());
@@ -220,7 +220,7 @@ impl AesGcmKey {
             )
         } {
             SGX_SUCCESS => Ok(()),
-            error       => Err(error),
+            error => Err(error),
         }
     }
 
@@ -241,7 +241,7 @@ impl AesGcmKey {
             )
         } {
             SGX_SUCCESS => Ok(()),
-            error       => Err(error),
+            error => Err(error),
         }
     }
 

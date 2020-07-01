@@ -69,10 +69,10 @@ pub unsafe fn hash_lookup(
             hash_slot_results.as_mut_ptr(),
             hash_slots.len().min(hash_slot_results.len()),
         ) {
-            (CDS_HASH_LOOKUP_SUCCESS)                      => return Ok(()),
-            (CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER)      => return Err(SGX_ERROR_UNEXPECTED),
-            (CDS_HASH_LOOKUP_ERROR_RDRAND)                 => return Err(SGX_ERROR_UNEXPECTED),
-            (CDS_HASH_LOOKUP_ERROR_HASH_TABLE_OVERFLOW)    => debug_assert!(false, "hash table overflow"),
+            (CDS_HASH_LOOKUP_SUCCESS) => return Ok(()),
+            (CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER) => return Err(SGX_ERROR_UNEXPECTED),
+            (CDS_HASH_LOOKUP_ERROR_RDRAND) => return Err(SGX_ERROR_UNEXPECTED),
+            (CDS_HASH_LOOKUP_ERROR_HASH_TABLE_OVERFLOW) => debug_assert!(false, "hash table overflow"),
             (CDS_HASH_LOOKUP_ERROR_FIRST_UNDEF..=u32::MAX) => return Err(SGX_ERROR_UNEXPECTED),
         }
     }
@@ -253,10 +253,7 @@ mod test {
                 expected_results.push(*expected_result);
             }
         }
-        assert_eq!(
-            TEST_DATA.hash_lookup(None, &query_phones[..]).unwrap(),
-            expected_results,
-        );
+        assert_eq!(TEST_DATA.hash_lookup(None, &query_phones[..]).unwrap(), expected_results,);
     }
 
     #[test]

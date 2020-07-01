@@ -68,7 +68,7 @@ impl SgxsdMsgFrom {
             if let Some(mut msg_from) = self.0.take() {
                 let msg_from_ref = &mut *msg_from;
                 match unsafe { sgxsd_enclave_server_reply(msg_buf, msg_from_ref) } {
-                    0   => Ok(()),
+                    0 => Ok(()),
                     err => Err(err),
                 }
             } else {
@@ -137,7 +137,7 @@ where S: SgxsdServer {
     let args = unsafe { p_args.as_ref() };
     let state = unsafe { Box::from_raw(p_state) };
     match state.terminate(args) {
-        Ok(())   => 0,
+        Ok(()) => 0,
         Err(err) => err,
     }
 }

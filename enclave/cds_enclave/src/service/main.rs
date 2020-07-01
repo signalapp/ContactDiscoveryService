@@ -104,7 +104,7 @@ pub fn update_ratelimit_state(
     let (ratelimit_state_data, ratelimit_state_mac_data) =
         match encrypted_ratelimit_state.len().checked_sub(AesGcmMac::default().data.len()) {
             Some(ratelimit_state_data_len) => encrypted_ratelimit_state.split_at_mut(ratelimit_state_data_len),
-            None                           => return Err(CDS_ERROR_INVALID_RATE_LIMIT_STATE),
+            None => return Err(CDS_ERROR_INVALID_RATE_LIMIT_STATE),
         };
     let ratelimit_state_mac_data: &mut _ = ratelimit_state_mac_data.try_into().unwrap_or_else(|_| unreachable!());
 
@@ -272,11 +272,11 @@ impl SgxsdServer for SgxsdServerState {
     fn handle_call(&mut self, args: Option<&CallArgs>, request_data: &[u8], from: SgxsdMsgFrom) -> Result<(), (SgxStatus, SgxsdMsgFrom)> {
         let args = match args {
             Some(args) => args,
-            None       => return Err((SGX_ERROR_INVALID_PARAMETER, from)),
+            None => return Err((SGX_ERROR_INVALID_PARAMETER, from)),
         };
         let request = match self.decode_request(args, request_data) {
             Ok(request) => request,
-            Err(error)  => return Err((error, from)),
+            Err(error) => return Err((error, from)),
         };
 
         if let Some(ratelimit_state) = request.ratelimit_state {
@@ -289,7 +289,7 @@ impl SgxsdServer for SgxsdServerState {
             let request_phones_iter = request.phones.iter();
             let request_phone_count = match request_phones_iter.len().try_into() {
                 Ok(request_phone_count) => request_phone_count,
-                Err(_)                  => return Err((SGX_ERROR_INVALID_PARAMETER, from)),
+                Err(_) => return Err((SGX_ERROR_INVALID_PARAMETER, from)),
             };
             self.query_phones.extend(request_phones_iter);
             self.requests.push(PendingRequest { from, request_phone_count });
@@ -430,7 +430,9 @@ impl RatelimitState {
     ) -> Result<(Box<[u8]>, AesGcmMac), SgxStatus>
     {
         let ratelimit_state_data = if !ratelimit_state_data.get().iter().all(|b: &u8| b == &0) {
-            self.key.decrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &ratelimit_state_mac).map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+            self.key
+                .decrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &ratelimit_state_mac)
+                .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
             RatelimitStateData::new(ratelimit_state_data)
         } else {
             ratelimit_state_data.clear();
@@ -466,12 +468,11 @@ impl RatelimitStateData {
     pub fn new(data: SecretValue<Box<[u8]>>) -> Self {
         Self { data }
     }
+
     pub fn set_size_limit(&mut self, lower_limit_inclusive: u32, range: u32) -> Result<(), SgxStatus> {
         let mut size_limit_rand_data = [0; mem::size_of::<u32>()];
 
-        RdRand
-            .try_fill_bytes(&mut size_limit_rand_data)
-            .map_err(|_| SGX_ERROR_UNEXPECTED)?;
+        RdRand.try_fill_bytes(&mut size_limit_rand_data).map_err(|_| SGX_ERROR_UNEXPECTED)?;
 
         let mut size_limit_rand = CtU64::nan();
         let mut range_ct = CtU64::nan();
@@ -482,7 +483,8 @@ impl RatelimitStateData {
 
         let size_limit = (u64::from(&size_limit_rand) as u32).saturating_add(lower_limit_inclusive);
 
-        let size_limit_data: &mut [u8; mem::size_of::<u32>()] = self.data
+        let size_limit_data: &mut [u8; mem::size_of::<u32>()] = self
+            .data
             .get_mut()
             .get_mut(..mem::size_of::<u32>())
             .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?
@@ -833,18 +835,22 @@ mod tests {
                         let is_correct_hash = actual.len() == correct_hash_len;
                         assert!(!*is_correct_hash_shared.borrow() || !is_correct_hash);
                         *is_correct_hash_shared.borrow_mut() = is_correct_hash;
-                    })
+                    }),
             );
         }
 
         let mock_result = test_ffi::rand();
-        scenario.expect(mock.out().and_call_clone(move || {
-            if *is_correct_hash_shared.borrow() {
-                mock_result
-            } else {
-                Default::default()
-            }
-        }).times(20));
+        scenario.expect(
+            mock.out()
+                .and_call_clone(move || {
+                    if *is_correct_hash_shared.borrow() {
+                        mock_result
+                    } else {
+                        Default::default()
+                    }
+                })
+                .times(20),
+        );
 
         hash_query_phone(&mut phone);
         assert_eq!(phone, u64::from_ne_bytes(mock_result[..8].try_into().unwrap()));

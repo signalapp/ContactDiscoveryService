@@ -60,7 +60,7 @@ fn run_rustc(in_file: impl AsRef<Path>, out_file: impl AsRef<Path>) -> Result<()
     let rustflags_var = env::var("RUSTFLAGS").unwrap_or(String::new());
     let rustflags = rustflags_var.split(' ').flat_map(|flag: &str| match flag.trim() {
         flag if !flag.is_empty() => Some(flag),
-        _                        => None,
+        _ => None,
     });
 
     let mut rustc = Command::new(&rustc_path);

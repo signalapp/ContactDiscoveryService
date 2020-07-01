@@ -57,14 +57,14 @@ impl<'a> UntrustedSlice<'a> {
     pub fn len(&self) -> usize {
         match self {
             UntrustedSlice::NonEmpty { size, .. } => size.get(),
-            UntrustedSlice::Empty                 => 0,
+            UntrustedSlice::Empty => 0,
         }
     }
 
     pub fn as_ptr(&self) -> *const u8 {
         match self {
             Self::NonEmpty { data, .. } => data.as_ptr(),
-            Self::Empty                 => null(),
+            Self::Empty => null(),
         }
     }
 
@@ -86,7 +86,7 @@ impl<'a> UntrustedSlice<'a> {
                     UntrustedSlice::Empty
                 }
             }
-            UntrustedSlice::Empty                             => UntrustedSlice::Empty,
+            UntrustedSlice::Empty => UntrustedSlice::Empty,
         }
     }
 
@@ -104,7 +104,7 @@ impl<'a> UntrustedSlice<'a> {
                     Err(())
                 }
             }
-            UntrustedSlice::Empty                             => {
+            UntrustedSlice::Empty => {
                 if read_count == 0 {
                     Ok(Vec::new())
                 } else {
@@ -126,7 +126,7 @@ impl<'a> UntrustedSlice<'a> {
                     Err(())
                 }
             }
-            UntrustedSlice::Empty                             => {
+            UntrustedSlice::Empty => {
                 if write_bytes.is_empty() {
                     Ok(())
                 } else {

@@ -17,8 +17,8 @@ use test_ffi::*;
 pub use super::bindgen_wrapper::{sgxsd_aes_gcm_key_t, sgxsd_msg_buf_t, sgxsd_msg_from_t};
 
 use super::bindgen_wrapper::{
-    br_sha1_context, br_sha1_SIZE, br_sha224_context, br_sha256_context, br_sha256_SIZE, sgx_status_t, sgxsd_aes_gcm_iv_t, sgxsd_aes_gcm_mac_t,
-    sgxsd_msg_tag__bindgen_ty_1, sgxsd_msg_tag_t, sgxsd_rand_buf_t,
+    br_sha1_SIZE, br_sha1_context, br_sha224_context, br_sha256_SIZE, br_sha256_context, sgx_status_t, sgxsd_aes_gcm_iv_t,
+    sgxsd_aes_gcm_mac_t, sgxsd_msg_tag__bindgen_ty_1, sgxsd_msg_tag_t, sgxsd_rand_buf_t,
 };
 
 //

@@ -20,7 +20,7 @@ use self::in_phones_uuids::InPhonesUuids;
 //
 
 macro_rules! static_unreachable {
-    () => ({
+    () => {{
         #[cfg(not(debug_assertions))]
         {
             extern "C" {
@@ -30,18 +30,18 @@ macro_rules! static_unreachable {
         }
         #[cfg(debug_assertions)]
         unreachable!()
-    })
+    }};
 }
 
 //
 // public API
 //
 
-pub const CDS_HASH_LOOKUP_SUCCESS:                   u32 = 0;
-pub const CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER:   u32 = 1;
-pub const CDS_HASH_LOOKUP_ERROR_RDRAND:              u32 = 2;
+pub const CDS_HASH_LOOKUP_SUCCESS: u32 = 0;
+pub const CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER: u32 = 1;
+pub const CDS_HASH_LOOKUP_ERROR_RDRAND: u32 = 2;
 pub const CDS_HASH_LOOKUP_ERROR_HASH_TABLE_OVERFLOW: u32 = 3;
-pub const CDS_HASH_LOOKUP_ERROR_LAST:                u32 = 3;
+pub const CDS_HASH_LOOKUP_ERROR_LAST: u32 = 3;
 
 pub type phone_t = u64;
 pub type uuid_t = uuid;
@@ -82,12 +82,13 @@ pub extern "C" fn cds_hash_lookup(
     p_hash_slots: *mut HashSlot,
     p_hash_slot_results: *mut HashSlotResult,
     hash_slots_count: usize,
-) -> u32 {
+) -> u32
+{
     unsafe {
-        let in_phones_uuids   = InPhonesUuids::new(p_in_phones, p_in_uuids, in_phone_count);
-        let ab_phones         = core::slice::from_raw_parts(p_ab_phones, ab_phone_count);
-        let ab_phone_results  = core::slice::from_raw_parts_mut(p_ab_phone_results, ab_phone_count * size_of::<Uuid>());
-        let hash_slots        = core::slice::from_raw_parts_mut(p_hash_slots, hash_slots_count);
+        let in_phones_uuids = InPhonesUuids::new(p_in_phones, p_in_uuids, in_phone_count);
+        let ab_phones = core::slice::from_raw_parts(p_ab_phones, ab_phone_count);
+        let ab_phone_results = core::slice::from_raw_parts_mut(p_ab_phone_results, ab_phone_count * size_of::<Uuid>());
+        let hash_slots = core::slice::from_raw_parts_mut(p_hash_slots, hash_slots_count);
         let hash_slot_results = core::slice::from_raw_parts_mut(p_hash_slot_results, hash_slots_count);
         let res = hash_lookup(in_phones_uuids, ab_phones, ab_phone_results, hash_slots, hash_slot_results);
         _mm256_zeroall();
@@ -122,13 +123,14 @@ unsafe fn hash_phone_chain_block(
     in_uuid_blocks: &mut [__m256i; 2],
     chain_eq: &[__m256i; CHAIN_BLOCK_COUNT],
     chain_block_idx: usize,
-) {
+)
+{
     for (chain_result, in_uuid_block) in chain_results.blocks[chain_block_idx].iter_mut().zip(in_uuid_blocks.iter()) {
         let dummy_write_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
         *chain_result = _mm256_blendv_epi8(
             _mm256_xor_si256(*chain_result, dummy_write_mask),
             *in_uuid_block,
-            chain_eq[chain_block_idx]
+            chain_eq[chain_block_idx],
         );
     }
 }
@@ -140,7 +142,8 @@ unsafe fn hash_phone(
     hash_table_order: u32,
     hash_slots: &[HashSlot],
     hash_slot_results: &mut [HashSlotResult],
-) {
+)
+{
     // never allow comparing equal to our per-chain-block dummy value of zero
     let chain_block_dummy_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
     let in_phone_block = _mm256_or_si256(_mm256_set1_epi64x(*in_phone as i64), chain_block_dummy_mask);
@@ -175,7 +178,8 @@ unsafe fn hash_slot_collect_result(
     chain_results: &mut HashSlotResult,
     chain_eq: &[__m256i; CHAIN_BLOCK_COUNT],
     uuid_data64_idx: usize,
-) -> u64 {
+) -> u64
+{
     let mut chain_result;
     chain_result = _mm256_setzero_si256();
     chain_result = _mm256_blendv_epi8(chain_result, chain_results.blocks[0][uuid_data64_idx], chain_eq[0]);
@@ -184,9 +188,9 @@ unsafe fn hash_slot_collect_result(
     chain_result = _mm256_blendv_epi8(chain_result, chain_results.blocks[3][uuid_data64_idx], chain_eq[3]);
 
     (_mm256_extract_epi64(chain_result, 0) |
-     _mm256_extract_epi64(chain_result, 1) |
-     _mm256_extract_epi64(chain_result, 2) |
-     _mm256_extract_epi64(chain_result, 3)) as u64
+        _mm256_extract_epi64(chain_result, 1) |
+        _mm256_extract_epi64(chain_result, 2) |
+        _mm256_extract_epi64(chain_result, 3)) as u64
 }
 
 unsafe fn hash_lookup(
@@ -195,10 +199,11 @@ unsafe fn hash_lookup(
     ab_phone_results: &mut [u8],
     hash_slots: &mut [HashSlot],
     hash_slot_results: &mut [HashSlotResult],
-) -> Result<(), CdsHashLookupError> {
+) -> Result<(), CdsHashLookupError>
+{
     const CHAIN_LENGTH: HashSlotIdx = CHAIN_PHONE_COUNT;
 
-    let chain_block_dummy_mask     = _mm256_set_epi64x(0,          0,          0,          UINT64_MAX);
+    let chain_block_dummy_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
     let chain_block_non_dummy_mask = _mm256_set_epi64x(UINT64_MAX, UINT64_MAX, UINT64_MAX, 0);
 
     let hash_table_order = hash_slots.len().trailing_zeros();
@@ -216,9 +221,9 @@ unsafe fn hash_lookup(
         // NB: these variables need to be allocated as registers and will leak information if on the stack!
         let mut chain_blocks = [_mm256_setzero_si256(); CHAIN_BLOCK_COUNT];
         let mut chain_block_masks = [
-            _mm256_set_epi64x(UINT64_MAX - 0, UINT64_MAX -  1, UINT64_MAX -  2, 0),
-            _mm256_set_epi64x(UINT64_MAX - 3, UINT64_MAX -  4, UINT64_MAX -  5, 0),
-            _mm256_set_epi64x(UINT64_MAX - 6, UINT64_MAX -  7, UINT64_MAX -  8, 0),
+            _mm256_set_epi64x(UINT64_MAX - 0, UINT64_MAX - 1, UINT64_MAX - 2, 0),
+            _mm256_set_epi64x(UINT64_MAX - 3, UINT64_MAX - 4, UINT64_MAX - 5, 0),
+            _mm256_set_epi64x(UINT64_MAX - 6, UINT64_MAX - 7, UINT64_MAX - 8, 0),
             _mm256_set_epi64x(UINT64_MAX - 9, UINT64_MAX - 10, UINT64_MAX - 11, 0),
         ];
         let mut chain_idx: HashSlotIdx = 0;
@@ -228,12 +233,11 @@ unsafe fn hash_lookup(
 
             // branch-less-ly test if hash slot matches
             let hash_slot_matches =
-                (((ab_phone_hash_slot_idx as u64 ^ hash_slot_idx as u64) as i64 - 1) as u64
-                 >> (size_of::<HashSlotIdx>() * 8)) & 1;
+                (((ab_phone_hash_slot_idx as u64 ^ hash_slot_idx as u64) as i64 - 1) as u64 >> (size_of::<HashSlotIdx>() * 8)) & 1;
             //_Static_assert(((int64_t) (((uint64_t) ab_phone_hash_slot_idx) ^ ((uint64_t) hash_slot_idx))) >= 0, "hash_slot_matches overflow");
 
             // branch-less-ly find out if ab phone is already in chain
-            let mut chain_eq =                   _mm256_cmpeq_epi64(ab_phone_block, chain_blocks[0]);
+            let mut chain_eq = _mm256_cmpeq_epi64(ab_phone_block, chain_blocks[0]);
             chain_eq = _mm256_or_si256(chain_eq, _mm256_cmpeq_epi64(ab_phone_block, chain_blocks[1]));
             chain_eq = _mm256_or_si256(chain_eq, _mm256_cmpeq_epi64(ab_phone_block, chain_blocks[2]));
             chain_eq = _mm256_or_si256(chain_eq, _mm256_cmpeq_epi64(ab_phone_block, chain_blocks[3]));
@@ -243,10 +247,26 @@ unsafe fn hash_lookup(
             let should_insert_phone = hash_slot_matches & phone_not_in_chain as u64;
             chain_idx += should_insert_phone as u32;
 
-            chain_blocks[0] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[0]), _mm256_castsi256_pd(ab_phone_block), _mm256_castsi256_pd(chain_block_masks[0])));
-            chain_blocks[1] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[1]), _mm256_castsi256_pd(ab_phone_block), _mm256_castsi256_pd(chain_block_masks[1])));
-            chain_blocks[2] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[2]), _mm256_castsi256_pd(ab_phone_block), _mm256_castsi256_pd(chain_block_masks[2])));
-            chain_blocks[3] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[3]), _mm256_castsi256_pd(ab_phone_block), _mm256_castsi256_pd(chain_block_masks[3])));
+            chain_blocks[0] = _mm256_castpd_si256(_mm256_blendv_pd(
+                _mm256_castsi256_pd(chain_blocks[0]),
+                _mm256_castsi256_pd(ab_phone_block),
+                _mm256_castsi256_pd(chain_block_masks[0]),
+            ));
+            chain_blocks[1] = _mm256_castpd_si256(_mm256_blendv_pd(
+                _mm256_castsi256_pd(chain_blocks[1]),
+                _mm256_castsi256_pd(ab_phone_block),
+                _mm256_castsi256_pd(chain_block_masks[1]),
+            ));
+            chain_blocks[2] = _mm256_castpd_si256(_mm256_blendv_pd(
+                _mm256_castsi256_pd(chain_blocks[2]),
+                _mm256_castsi256_pd(ab_phone_block),
+                _mm256_castsi256_pd(chain_block_masks[2]),
+            ));
+            chain_blocks[3] = _mm256_castpd_si256(_mm256_blendv_pd(
+                _mm256_castsi256_pd(chain_blocks[3]),
+                _mm256_castsi256_pd(ab_phone_block),
+                _mm256_castsi256_pd(chain_block_masks[3]),
+            ));
 
             chain_block_masks[0] = _mm256_add_epi64(chain_block_masks[0], _mm256_set1_epi64x(should_insert_phone as i64));
             chain_block_masks[1] = _mm256_add_epi64(chain_block_masks[1], _mm256_set1_epi64x(should_insert_phone as i64));
@@ -255,10 +275,26 @@ unsafe fn hash_lookup(
         }
         // mask out last processed phone, with non-zero invalid values to force a cache line flush on write
         let dummy_block = _mm256_set1_epi64x(UINT64_MAX);
-        chain_blocks[0] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[0]), _mm256_castsi256_pd(dummy_block), _mm256_castsi256_pd(chain_block_masks[0])));
-        chain_blocks[1] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[1]), _mm256_castsi256_pd(dummy_block), _mm256_castsi256_pd(chain_block_masks[1])));
-        chain_blocks[2] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[2]), _mm256_castsi256_pd(dummy_block), _mm256_castsi256_pd(chain_block_masks[2])));
-        chain_blocks[3] = _mm256_castpd_si256(_mm256_blendv_pd(_mm256_castsi256_pd(chain_blocks[3]), _mm256_castsi256_pd(dummy_block), _mm256_castsi256_pd(chain_block_masks[3])));
+        chain_blocks[0] = _mm256_castpd_si256(_mm256_blendv_pd(
+            _mm256_castsi256_pd(chain_blocks[0]),
+            _mm256_castsi256_pd(dummy_block),
+            _mm256_castsi256_pd(chain_block_masks[0]),
+        ));
+        chain_blocks[1] = _mm256_castpd_si256(_mm256_blendv_pd(
+            _mm256_castsi256_pd(chain_blocks[1]),
+            _mm256_castsi256_pd(dummy_block),
+            _mm256_castsi256_pd(chain_block_masks[1]),
+        ));
+        chain_blocks[2] = _mm256_castpd_si256(_mm256_blendv_pd(
+            _mm256_castsi256_pd(chain_blocks[2]),
+            _mm256_castsi256_pd(dummy_block),
+            _mm256_castsi256_pd(chain_block_masks[2]),
+        ));
+        chain_blocks[3] = _mm256_castpd_si256(_mm256_blendv_pd(
+            _mm256_castsi256_pd(chain_blocks[3]),
+            _mm256_castsi256_pd(dummy_block),
+            _mm256_castsi256_pd(chain_block_masks[3]),
+        ));
 
         // write out hash slot chain values
         hash_slot.blocks[0] = chain_blocks[0];
@@ -312,12 +348,10 @@ unsafe fn hash_lookup(
     for chain_result in hash_slot_results {
         for chain_block_result in &mut chain_result.blocks {
             for chain_block_result_uuid in chain_block_result {
-                (chain_block_result_uuid as *mut __m256i).write_volatile(
-                    _mm256_xor_si256(
-                        _mm256_and_si256(*chain_block_result_uuid, chain_block_dummy_mask),
-                        chain_block_dummy_mask
-                    )
-                );
+                (chain_block_result_uuid as *mut __m256i).write_volatile(_mm256_xor_si256(
+                    _mm256_and_si256(*chain_block_result_uuid, chain_block_dummy_mask),
+                    chain_block_dummy_mask,
+                ));
             }
         }
     }
@@ -371,16 +405,16 @@ mod in_phones_uuids {
             let start_index = match range.start_bound() {
                 Bound::Included(start_index) => *start_index,
                 Bound::Excluded(start_index) => start_index + 1,
-                Bound::Unbounded             => 0,
+                Bound::Unbounded => 0,
             };
             let len = match range.end_bound() {
                 Bound::Included(end_index) => end_index - start_index + 1,
                 Bound::Excluded(end_index) => end_index - start_index,
-                Bound::Unbounded           => self.len - start_index,
+                Bound::Unbounded => self.len - start_index,
             };
             Iter {
                 phones: self.phones.add(start_index),
-                uuids:  self.uuids.add(start_index),
+                uuids: self.uuids.add(start_index),
                 len,
             }
         }
@@ -388,6 +422,7 @@ mod in_phones_uuids {
 
     impl Iterator for Iter {
         type Item = (phone_t, uuid_t);
+
         fn next(&mut self) -> Option<Self::Item> {
             if self.len == 0 {
                 return None;
@@ -400,13 +435,13 @@ mod in_phones_uuids {
                 Some(result)
             }
         }
+
         fn size_hint(&self) -> (usize, Option<usize>) {
             (self.len, Some(self.len))
         }
     }
     impl ExactSizeIterator for Iter {}
 }
-
 
 //
 // hash_key module
@@ -429,44 +464,46 @@ mod hash_key {
                 let mut hash_key_1 = 0;
                 let mut hash_key_2 = 0;
                 if _rdrand64_step(&mut hash_key_1) == 1 && _rdrand64_step(&mut hash_key_2) == 1 {
-                    return Ok(Self::new(&hash_key_1, &hash_key_2))
+                    return Ok(Self::new(&hash_key_1, &hash_key_2));
                 }
             }
             Err(())
         }
 
         pub unsafe fn new(hash_key_1: &u64, hash_key_2: &u64) -> Self {
-            let mut hash_key = Self { sk: [_mm_setzero_si128(); 11] };
+            let mut hash_key = Self {
+                sk: [_mm_setzero_si128(); 11],
+            };
             hash_key.set(hash_key_1, hash_key_2);
             hash_key
         }
 
         pub unsafe fn set(&mut self, hash_key_1: &u64, hash_key_2: &u64) {
-            self.sk[0]  = _mm_set_epi64x(*hash_key_1 as i64, *hash_key_2 as i64);
-            self.sk[1]  = expand_step128(self.sk[0], _mm_aeskeygenassist_si128(self.sk[0], 0x01));
-            self.sk[2]  = expand_step128(self.sk[1], _mm_aeskeygenassist_si128(self.sk[1], 0x02));
-            self.sk[3]  = expand_step128(self.sk[2], _mm_aeskeygenassist_si128(self.sk[2], 0x04));
-            self.sk[4]  = expand_step128(self.sk[3], _mm_aeskeygenassist_si128(self.sk[3], 0x08));
-            self.sk[5]  = expand_step128(self.sk[4], _mm_aeskeygenassist_si128(self.sk[4], 0x10));
-            self.sk[6]  = expand_step128(self.sk[5], _mm_aeskeygenassist_si128(self.sk[5], 0x20));
-            self.sk[7]  = expand_step128(self.sk[6], _mm_aeskeygenassist_si128(self.sk[6], 0x40));
-            self.sk[8]  = expand_step128(self.sk[7], _mm_aeskeygenassist_si128(self.sk[7], 0x80));
-            self.sk[9]  = expand_step128(self.sk[8], _mm_aeskeygenassist_si128(self.sk[8], 0x1B));
+            self.sk[0] = _mm_set_epi64x(*hash_key_1 as i64, *hash_key_2 as i64);
+            self.sk[1] = expand_step128(self.sk[0], _mm_aeskeygenassist_si128(self.sk[0], 0x01));
+            self.sk[2] = expand_step128(self.sk[1], _mm_aeskeygenassist_si128(self.sk[1], 0x02));
+            self.sk[3] = expand_step128(self.sk[2], _mm_aeskeygenassist_si128(self.sk[2], 0x04));
+            self.sk[4] = expand_step128(self.sk[3], _mm_aeskeygenassist_si128(self.sk[3], 0x08));
+            self.sk[5] = expand_step128(self.sk[4], _mm_aeskeygenassist_si128(self.sk[4], 0x10));
+            self.sk[6] = expand_step128(self.sk[5], _mm_aeskeygenassist_si128(self.sk[5], 0x20));
+            self.sk[7] = expand_step128(self.sk[6], _mm_aeskeygenassist_si128(self.sk[6], 0x40));
+            self.sk[8] = expand_step128(self.sk[7], _mm_aeskeygenassist_si128(self.sk[7], 0x80));
+            self.sk[9] = expand_step128(self.sk[8], _mm_aeskeygenassist_si128(self.sk[8], 0x1B));
             self.sk[10] = expand_step128(self.sk[9], _mm_aeskeygenassist_si128(self.sk[9], 0x36));
         }
 
         pub unsafe fn hash(&self, phone: &u64, hash_table_order: u32) -> u32 {
             let mut hash = _mm_cvtsi64_si128(*phone as i64);
-            hash =        _mm_xor_si128(hash, self.sk[0]);
-            hash =     _mm_aesenc_si128(hash, self.sk[1]);
-            hash =     _mm_aesenc_si128(hash, self.sk[2]);
-            hash =     _mm_aesenc_si128(hash, self.sk[3]);
-            hash =     _mm_aesenc_si128(hash, self.sk[4]);
-            hash =     _mm_aesenc_si128(hash, self.sk[5]);
-            hash =     _mm_aesenc_si128(hash, self.sk[6]);
-            hash =     _mm_aesenc_si128(hash, self.sk[7]);
-            hash =     _mm_aesenc_si128(hash, self.sk[8]);
-            hash =     _mm_aesenc_si128(hash, self.sk[9]);
+            hash = _mm_xor_si128(hash, self.sk[0]);
+            hash = _mm_aesenc_si128(hash, self.sk[1]);
+            hash = _mm_aesenc_si128(hash, self.sk[2]);
+            hash = _mm_aesenc_si128(hash, self.sk[3]);
+            hash = _mm_aesenc_si128(hash, self.sk[4]);
+            hash = _mm_aesenc_si128(hash, self.sk[5]);
+            hash = _mm_aesenc_si128(hash, self.sk[6]);
+            hash = _mm_aesenc_si128(hash, self.sk[7]);
+            hash = _mm_aesenc_si128(hash, self.sk[8]);
+            hash = _mm_aesenc_si128(hash, self.sk[9]);
             hash = _mm_aesenclast_si128(hash, self.sk[10]);
 
             (_mm_cvtsi128_si32(hash) & ((1u32 << hash_table_order) as i32 - 1)) as u32
@@ -487,7 +524,7 @@ mod hash_key {
 //
 
 mod panic {
-    use core::panic::{PanicInfo};
+    use core::panic::PanicInfo;
 
     #[inline(always)]
     #[panic_handler]

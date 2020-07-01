@@ -64,7 +64,7 @@ mod service;
 pub mod external {
     use core::ptr::NonNull;
 
-    use sgx_ffi::sgx::{SgxStatus, SGX_SUCCESS, SGX_ERROR_INVALID_PARAMETER};
+    use sgx_ffi::sgx::{SgxStatus, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS};
     use sgxsd_ffi::ecalls::SgxsdServer;
 
     use super::ffi::hash_lookup::{Phone, Uuid};
@@ -118,7 +118,7 @@ pub mod external {
         };
 
         match main::update_ratelimit_state(ratelimit_state_uuid, ratelimit_state_data, query_phones) {
-            Ok(())     => SGX_SUCCESS,
+            Ok(()) => SGX_SUCCESS,
             Err(error) => error,
         }
     }
@@ -126,7 +126,7 @@ pub mod external {
     #[no_mangle]
     pub extern "C" fn cds_enclave_delete_ratelimit_state(ratelimit_state_uuid: Uuid) -> SgxStatus {
         match main::delete_ratelimit_state(ratelimit_state_uuid) {
-            Ok(())     => SGX_SUCCESS,
+            Ok(()) => SGX_SUCCESS,
             Err(error) => error,
         }
     }
