@@ -112,18 +112,12 @@ where T: AsRef<[u8]> + AsMut<[u8]>
                     _mm256_set1_epi64x(0),
                     _mm256_or_si256(slot.get(), _mm256_set_epi64x(0, 0, 0, u64::MAX as i64)),
                 );
-                let slot_eq_zero_mask = _mm256_movemask_epi8(slot_eq_zero_block) as u64;
-                let query_phone_inserted = (slot_eq_zero_mask != 0) as u64;
-                let insert_phone_mask = slot_eq_zero_mask &
-                    !((slot_eq_zero_mask >> (1 * size_of::<u64>())) |
-                        (slot_eq_zero_mask >> (2 * size_of::<u64>())) |
-                        (slot_eq_zero_mask >> (3 * size_of::<u64>())));
-                let insert_phone_mask_pd = _mm256_set_epi64x(
-                    ((insert_phone_mask & (1 << 0)) << (63 - 0)) as i64,
-                    ((insert_phone_mask & (1 << 7)) << (63 - 7)) as i64,
-                    ((insert_phone_mask & (1 << 15)) << (63 - 15)) as i64,
-                    ((insert_phone_mask & (1 << 23)) << (63 - 23)) as i64,
-                );
+
+                let shifted_slot_eq_zero_block = _mm256_permute4x64_epi64(slot_eq_zero_block, 0b1001_0000i32);
+                let insert_phone_mask_pd = _mm256_xor_si256(slot_eq_zero_block, shifted_slot_eq_zero_block);
+                let insert_phone_mask = _mm256_movemask_epi8(insert_phone_mask_pd);
+                let query_phone_inserted = (insert_phone_mask != 0) as u64;
+
                 slot.set(_mm256_castpd_si256(_mm256_blendv_pd(
                     _mm256_castsi256_pd(slot.get()),
                     _mm256_castsi256_pd(insert_query_phone_block),
@@ -150,8 +144,8 @@ where T: AsRef<[u8]>
                 _mm256_set1_epi64x(0),
                 _mm256_or_si256(slot.get(), _mm256_set_epi64x(0, 0, 0, u64::MAX as i64)),
             );
-            let slot_eq_zero_mask = _mm256_movemask_epi8(slot_eq_zero_block) as u32;
-            used_slot_count += (slot_eq_zero_mask >> 0) & 1;
+
+            let slot_eq_zero_mask = !(_mm256_movemask_epi8(slot_eq_zero_block) as u32);
             used_slot_count += (slot_eq_zero_mask >> 8) & 1;
             used_slot_count += (slot_eq_zero_mask >> 16) & 1;
             used_slot_count += (slot_eq_zero_mask >> 24) & 1;
