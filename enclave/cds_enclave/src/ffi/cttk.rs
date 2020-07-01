@@ -69,6 +69,17 @@ impl CtU64 {
         self.divrem(rhs, &mut quotient, remainder);
         self.0 = quotient.0;
     }
+
+    pub fn rem(&mut self, rhs: &Self, remainder: &mut Self) {
+        let mut quotient = Self::nan();
+        self.divrem(rhs, &mut quotient, remainder);
+    }
+
+    pub fn rem_assign(&mut self, rhs: &Self) {
+        let mut remainder = Self::nan();
+        self.rem(rhs, &mut remainder);
+        self.0 = remainder.0;
+    }
 }
 
 impl From<&CtU64> for u64 {

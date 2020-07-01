@@ -75,6 +75,10 @@ struct RatelimitState {
     key:   AesGcmKey,
 }
 
+struct RatelimitStateData {
+    data: SecretValue<Box<[u8]>>,
+}
+
 struct PendingRequest {
     from:                SgxsdMsgFrom,
     request_phone_count: u32,
@@ -435,40 +439,22 @@ impl RatelimitState {
         query_phones: &[u64],
     ) -> Result<(Box<[u8]>, AesGcmMac), SgxStatus>
     {
-        if !ratelimit_state_data.get().iter().all(|b: &u8| b == &0) {
-            self.key
-                .decrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &ratelimit_state_mac)
-                .map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+        let ratelimit_state_data = if !ratelimit_state_data.get().iter().all(|b: &u8| b == &0) {
+            self.key.decrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &ratelimit_state_mac).map_err(|_| CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
+            RatelimitStateData::new(ratelimit_state_data)
         } else {
-            let ratelimit_set_size_limit_data = ratelimit_state_data
-                .get_mut()
-                .get_mut(..mem::size_of::<u32>())
-                .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-            RdRand
-                .try_fill_bytes(ratelimit_set_size_limit_data)
-                .map_err(|_| SGX_ERROR_UNEXPECTED)?;
-        }
-
-        let ratelimit_set_size_limit_data = ratelimit_state_data
-            .get()
-            .get(..mem::size_of::<u32>())
-            .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
-        let ratelimit_set_size_limit = u32::from_ne_bytes(ratelimit_set_size_limit_data.try_into().map_err(|_| SGX_ERROR_UNEXPECTED)?);
-        let ratelimit_state_slots_data = &mut ratelimit_state_data
-            .get_mut()
-            .get_mut(mem::size_of::<u32>()..)
-            .unwrap_or_else(|| static_unreachable!());
+            ratelimit_state_data.clear();
+            let mut ratelimit_state_data = RatelimitStateData::new(ratelimit_state_data);
+            let ratelimit_state_slot_count = ratelimit_state_data.slot_count();
+            ratelimit_state_data.set_size_limit(ratelimit_state_slot_count / 2, ratelimit_state_slot_count / 2)?;
+            ratelimit_state_data
+        };
 
         // increment nonce before revealing the result, to prevent replay of information leakage
         let encrypt_nonce = (self.nonce.get()).checked_add(1).ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?;
         self.nonce = NonZeroU32::new(encrypt_nonce).unwrap_or_else(|| unreachable!());
 
-        ratelimit_set_add(ratelimit_state_slots_data, query_phones);
-        let set_size = ratelimit_set_size(ratelimit_state_slots_data);
-
-        if set_size > ratelimit_set_size_limit {
-            return Err(CDS_ERROR_RATE_LIMIT_EXCEEDED);
-        }
+        let mut ratelimit_state_data = ratelimit_state_data.add(query_phones)?.into_inner();
 
         self.key
             .encrypt(ratelimit_state_data.get_mut(), &[], &self.get_iv(), &mut ratelimit_state_mac)?;
@@ -483,6 +469,70 @@ impl Default for RatelimitState {
             nonce: NonZeroU32::new(1).unwrap_or_else(|| static_unreachable!()),
             key:   Default::default(),
         }
+    }
+}
+
+impl RatelimitStateData {
+    pub fn new(data: SecretValue<Box<[u8]>>) -> Self {
+        Self { data }
+    }
+    pub fn set_size_limit(&mut self, lower_limit_inclusive: u32, range: u32) -> Result<(), SgxStatus> {
+        let mut size_limit_rand_data = [0; mem::size_of::<u32>()];
+
+        RdRand
+            .try_fill_bytes(&mut size_limit_rand_data)
+            .map_err(|_| SGX_ERROR_UNEXPECTED)?;
+
+        let mut size_limit_rand = CtU64::nan();
+        let mut range_ct = CtU64::nan();
+
+        size_limit_rand.set(u32::from_le_bytes(size_limit_rand_data).into());
+        range_ct.set(range.into());
+        size_limit_rand.rem_assign(&range_ct);
+
+        let size_limit = (u64::from(&size_limit_rand) as u32).saturating_add(lower_limit_inclusive);
+
+        let size_limit_data: &mut [u8; mem::size_of::<u32>()] = self.data
+            .get_mut()
+            .get_mut(..mem::size_of::<u32>())
+            .ok_or(CDS_ERROR_INVALID_RATE_LIMIT_STATE)?
+            .try_into()
+            .unwrap_or_else(|_| static_unreachable!());
+
+        *size_limit_data = u32::to_le_bytes(size_limit);
+
+        Ok(())
+    }
+
+    pub fn slot_count(&self) -> u32 {
+        let slots_data_len = self.data.get().len() - Self::size_limit_data_len();
+        let slot_count_raw = slots_data_len / 8;
+        // one quarter of the slots are dummy slots
+        (slot_count_raw.saturating_mul(3) / 4) as u32
+    }
+
+    pub fn add(mut self, phones: &[u64]) -> Result<Self, SgxStatus> {
+        if self.data.get().len() < Self::size_limit_data_len() {
+            return Err(CDS_ERROR_INVALID_RATE_LIMIT_STATE);
+        }
+        let (size_limit_data, slots_data) = self.data.get_mut().split_at_mut(Self::size_limit_data_len());
+
+        ratelimit_set_add(slots_data, phones);
+
+        let size_limit_data: &mut [u8; mem::size_of::<u32>()] = size_limit_data.try_into().unwrap_or_else(|_| static_unreachable!());
+        if ratelimit_set_size(slots_data) < u32::from_le_bytes(*size_limit_data) {
+            Ok(self)
+        } else {
+            Err(CDS_ERROR_RATE_LIMIT_EXCEEDED)
+        }
+    }
+
+    pub fn into_inner(self) -> SecretValue<Box<[u8]>> {
+        self.data
+    }
+
+    const fn size_limit_data_len() -> usize {
+        mem::size_of::<u32>()
     }
 }
 
