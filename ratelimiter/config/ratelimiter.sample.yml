@@ -1,0 +1,40 @@
+api:
+  listenHostPort:                      # host:port to listen on for the HTTP API
+  userAuthenticationTokenSharedSecret: # hex-encoded secret shared with Signal-Server used to generate auth tokens for Signal users
+  discoveryIdSecret:                   # hex-encoded secret used to calculate UUIDs assigned to Signal users
+  discoveryRateLimitSetSize:           # Size of CDS rate limit set
+  denyDiscovery:                       # Whether to deny all DiscoveryRequests [true|false]
+  limits:
+    attestation:                       # Rate limits for attestation requests
+      bucketSize:                      # Leaky bucket size
+      leakRatePerMinute:               # Leaky bucket rate per minute
+    discovery:                         # Rate limits for phone lookup requests
+      bucketSize:                      # Leaky bucket size
+      leakRatePerMinute:               # Leaky bucket rate per minute
+
+enclaves:                              # list of enclave instances
+  - mrenclave:                         # hex-encoded mrenclave value
+    debug:                             # Whether this is a debug or production enclave [true|false]
+    initialCapacity:                   # Initial capacity of HashMap<UUID, RateLimitState>.
+    stateDirectory:                    # state directory in which to store state files - relative to stateDirectoryRoot
+    range:
+      firstUserId:                     # First user Id in range this enclave serves
+      lastUserId:                      # Last (inclusive) user Id in range this enclave serves
+
+attestation:                           # IAS (Intel Attestation Services) configuration
+  hostName:                            # Intel Attestation Services (IAS) host
+  endPoint:                            # Intel Attestation Services (IAS) endPoint. Complete URL: https://${hostName}/${endPoint}
+  apiVersion:                          # Optional IAS API version: 3 (default) or 4 supported
+  apiKey:                              # hex-encoded 16-byte IAS assigned Service Provider API Key
+  spid:                                # hex-encoded 16-byte IAS assigned Service Provider ID
+  acceptGroupOutOfDate:                # Whether to serve IAS responses with GROUP_OUT_OF_DATE instead of OK [true|false]
+
+control:
+  listenHostPort:                      # host:port to listen on for the kbupctl API
+
+metrics:
+  reporters:
+    - type: json                       # JsonMetricsReporter config
+      hostname:                        # hostname of metrics server to upload to
+      token:                           # auth token to send to metrics server via the "t" query param
+      intervalSeconds:                 # interval to upload metrics, in seconds (default 60)

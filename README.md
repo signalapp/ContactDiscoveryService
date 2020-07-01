@@ -87,6 +87,18 @@ production, the generated libsabd-enclave.signdata file must be signed using a s
 whitelisted by Intel, which can then be saved as libsabd-enclave.sig with public key at
 libsabd-enclave.pub, and signed using `make signed install`.
 
+## Building the rate limiter daemon
+
+### Building reproducibly with Docker
+
+#### Prerequisites:
+- GNU Make
+- Docker (able to run debian image)
+
+`````
+$ make -C <repository_root>/ratelimiter
+`````
+
 ## Building the service
 
 `````

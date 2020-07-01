@@ -8,6 +8,7 @@
 /enclave/debian/cds-enclave/
 /enclave/debian/*.deb
 /enclave/*.key
+/enclave/cscope*
 
 # java
 /src/**/*.class
@@ -22,3 +23,8 @@ target
 /service/src/main/resources/enclave/current.mrenclave
 /service/src/main/resources/enclave-jni.so
 dependency-reduced-pom.xml
+
+/ratelimiter/config/production.ratelimiter.yml
+/ratelimiter/config/staging.ratelimiter.yml
+/ratelimiter/config/testing.ratelimiter.yml
+/ratelimiter/config/local.ratelimiter.yml
