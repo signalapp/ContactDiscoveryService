@@ -2605,7 +2605,6 @@ extern "C" {
     pub fn sgxsd_start(
         enclave_path: *const libc::c_char,
         debug: bool,
-        p_launch_token: *const sgx_launch_token_t,
         p_node_init_args: *const sgxsd_node_init_args_t,
         p_callback: sgxsd_start_callback_t,
         ...
