@@ -6,7 +6,7 @@ license = "AGPL-3.0-or-later"
 edition = "2018"
 
 [dependencies]
-failure = "0.1"
+failure     = "0.1"
 sgx_sdk_ffi = { git = "https://github.com/signalapp/sgx_common.git", rev = "580489343a37517d96451a5c0950d462d3e86a3b" }
 
 [build-dependencies]

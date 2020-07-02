@@ -35,6 +35,7 @@ fn main() {
         .blacklist_type("sgx_target_info_t")
         .blacklist_type("sgx_quote_t")
         .raw_line("use sgx_sdk_ffi::{SgxReport as sgx_report_t, SgxTargetInfo as sgx_target_info_t, SgxQuote as sgx_quote_t};")
+        .prepend_enum_name(false)
         .generate()
         .expect("error generating bindings")
         .write_to_file(out_path.join("bindgen_wrapper.rs"))

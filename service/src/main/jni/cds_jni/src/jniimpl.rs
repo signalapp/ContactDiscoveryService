@@ -606,7 +606,7 @@ fn server_stop(
         };
         return Err(err);
     }
-    if in_phone_count < in_uuids_capacity / size_of::<sgxsd::Uuid>() as i64 {
+    if in_phone_count < in_uuids_capacity / size_of::<sgxsd::SgxsdUuid>() as i64 {
         let err = PossibleError::SgxError {
             name: "uuid_buffer_too_small",
             code: 0,
@@ -635,8 +635,8 @@ fn server_stop(
     };
     let in_uuids = unsafe {
         slice::from_raw_parts_mut(
-            in_uuids_bytes_undrop.as_mut_ptr() as *mut sgxsd::Uuid,
-            in_uuids_bytes_undrop.len() / size_of::<sgxsd::Uuid>(),
+            in_uuids_bytes_undrop.as_mut_ptr() as *mut sgxsd::SgxsdUuid,
+            in_uuids_bytes_undrop.len() / size_of::<sgxsd::SgxsdUuid>(),
         )
     };
     let args = sgxsd::ServerStopArgs {
