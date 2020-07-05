@@ -1,5 +1,6 @@
 package org.whispersystems.contactdiscovery.resources;
 
+import io.dropwizard.testing.junit.ResourceTestRule;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
@@ -14,25 +15,30 @@ import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServiceClient;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
 
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.security.SecureRandom;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-import io.dropwizard.testing.junit.ResourceTestRule;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ContactDiscoveryResourceTest {
 
@@ -40,15 +46,18 @@ public class ContactDiscoveryResourceTest {
   private static final String invalidEnclaveId = "invalid_enclave";
 
   private final RequestManager requestManager = mock(RequestManager.class);
-  private final RateLimiter    rateLimiter    = mock(RateLimiter.class);
+  private final RateLimiter rateLimiter = mock(RateLimiter.class);
+  private final RateLimitServiceClient rateLimitClient = mock(RateLimitServiceClient.class);
+
 
   private final byte[] requestId = new byte[32];
-  private final byte[] iv        = new byte[12];
-  private final byte[] data      = new byte[512];
-  private final byte[] mac       = new byte[32];
+  private final byte[] iv = new byte[12];
+  private final byte[] data = new byte[512];
+  private final byte[] mac = new byte[32];
 
   private DiscoveryRequest validDiscoveryRequest;
   private DiscoveryRequest invalidDiscoveryRequest;
+  private DiscoveryRequest validMultipleAttestDiscRequest;
 
   @Rule
   public final ResourceTestRule resources = ResourceTestRule.builder()
@@ -59,7 +68,7 @@ public class ContactDiscoveryResourceTest {
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
                                                             .addProvider(new RateLimitExceededExceptionMapper())
                                                             .addProvider(new DirectoryUnavailableExceptionMapper())
-                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager))
+                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, rateLimitClient))
                                                             .build();
 
   @Before
@@ -70,12 +79,15 @@ public class ContactDiscoveryResourceTest {
     new SecureRandom().nextBytes(mac);
 
     DiscoveryRequestEnvelope validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
-    validDiscoveryRequest                  = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of("fake", validEnvelope));
-    invalidDiscoveryRequest                = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of("fake", validEnvelope));
+    validDiscoveryRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
+    invalidDiscoveryRequest = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
 
-    DiscoveryResponse                    discoveryResponse = new DiscoveryResponse(requestId, iv, data, mac);
-    CompletableFuture<DiscoveryResponse> responseFuture    = CompletableFuture.completedFuture(discoveryResponse);
-    CompletableFuture<DiscoveryResponse> exceptionFuture   = new CompletableFuture<>();
+    var envelopes = Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope, "fakehostid", validEnvelope);
+    validMultipleAttestDiscRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], envelopes);
+
+    DiscoveryResponse discoveryResponse = new DiscoveryResponse(requestId, iv, data, mac);
+    CompletableFuture<DiscoveryResponse> responseFuture = CompletableFuture.completedFuture(discoveryResponse);
+    CompletableFuture<DiscoveryResponse> exceptionFuture = new CompletableFuture<>();
     exceptionFuture.completeExceptionally(new NoSuchEnclaveException("bad enclave id"));
 
     when(requestManager.submit(eq(validEnclaveId), any())).thenReturn(responseFuture);
@@ -104,6 +116,44 @@ public class ContactDiscoveryResourceTest {
   }
 
   @Test
+  public void testMultipleAttestationsDiscovery() throws RateLimitExceededException, NoSuchEnclaveException {
+    String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
+
+    when(rateLimitClient.discoveryAllowed(any(), eq(authHeader), eq(validEnclaveId), eq(validMultipleAttestDiscRequest)))
+        .thenReturn(CompletableFuture.completedFuture(true));
+
+    DiscoveryResponse response = resources.getJerseyTest()
+                                          .target("/v1/discovery/" + validEnclaveId)
+                                          .request(MediaType.APPLICATION_JSON_TYPE)
+                                          .header("Authorization", authHeader)
+                                          .put(Entity.entity(validMultipleAttestDiscRequest, MediaType.APPLICATION_JSON_TYPE),
+                                               DiscoveryResponse.class);
+
+    verify(rateLimiter, times(1)).validate(AuthHelper.VALID_NUMBER, validMultipleAttestDiscRequest.getAddressCount());
+    verify(requestManager, times(1)).submit(eq(validEnclaveId), any());
+
+    assertArrayEquals(requestId, response.getRequestId());
+    assertArrayEquals(iv, response.getIv());
+    assertArrayEquals(data, response.getData());
+    assertArrayEquals(mac, response.getMac());
+  }
+
+  @Test(expected = BadRequestException.class)
+  public void testNoLocalEnclaveIdGiven() {
+    String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
+
+    var validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
+    var envelopes = Map.of("nope", validEnvelope, "fakehostid", validEnvelope);
+    var request = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], envelopes);
+    DiscoveryResponse response = resources.getJerseyTest()
+                                          .target("/v1/discovery/" + validEnclaveId)
+                                          .request(MediaType.APPLICATION_JSON_TYPE)
+                                          .header("Authorization", authHeader)
+                                          .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE),
+                                               DiscoveryResponse.class);
+  }
+
+  @Test
   public void testNoSuchEnclave() throws Exception {
     Response response = resources.getJerseyTest()
                                  .target("/v1/discovery/" + invalidEnclaveId)
@@ -123,6 +173,19 @@ public class ContactDiscoveryResourceTest {
                                  .put(Entity.entity(invalidDiscoveryRequest, MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(422, response.getStatus());
+  }
+
+  @Test
+  public void testMissingFrontendAttestation() {
+    var validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
+    var missingHostIdRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of("nope", validEnvelope));
+    Response response = resources.getJerseyTest()
+                                 .target("/v1/discovery/" + validEnclaveId)
+                                 .request(MediaType.APPLICATION_JSON_TYPE)
+                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                 .put(Entity.entity(missingHostIdRequest, MediaType.APPLICATION_JSON_TYPE));
+
+    assertEquals(400, response.getStatus());
   }
 
   @Test

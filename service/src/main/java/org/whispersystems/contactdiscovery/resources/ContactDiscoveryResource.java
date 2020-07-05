@@ -17,6 +17,7 @@
 package org.whispersystems.contactdiscovery.resources;
 
 import com.codahale.metrics.annotation.Timed;
+import io.dropwizard.auth.Auth;
 import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
@@ -24,10 +25,12 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -35,14 +38,11 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Function;
-
-import ch.qos.logback.core.status.Status;
-import io.dropwizard.auth.Auth;
 
 /**
  * API endpoint for submitting encrypted contact discovery requests
@@ -52,12 +52,14 @@ import io.dropwizard.auth.Auth;
 @Path("/v1/discovery")
 public class ContactDiscoveryResource {
 
-  private final RateLimiter    rateLimiter;
+  private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
+  private final PhoneRateLimiter phoneLimiter;
 
-  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager) {
-    this.rateLimiter    = rateLimiter;
+  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, PhoneRateLimiter phoneLimiter) {
+    this.rateLimiter = rateLimiter;
     this.requestManager = requestManager;
+    this.phoneLimiter = phoneLimiter;
   }
 
   @Timed
@@ -67,18 +69,38 @@ public class ContactDiscoveryResource {
   @Consumes(MediaType.APPLICATION_JSON)
   public void getRegisteredContacts(@Auth User user,
                                     @PathParam("enclaveId") String enclaveId,
+                                    @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
-      throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
+      throws NoSuchEnclaveException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
+    if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
+      asyncResponse.resume(Response.status(400).build());
+      return;
+    }
 
-    requestManager.submit(enclaveId, request)
-                  .thenAccept(asyncResponse::resume)
-                  .exceptionally(throwable -> {
-                    asyncResponse.resume(throwable.getCause());
-                    return null;
-                  });
+    var future = CompletableFuture.completedFuture(true);
+    if (request.getEnvelopes().size() > 1) {
+      // This condition will, once the rate limit svc is 100% productionized, be flipped and turned into a 400.
+      future = phoneLimiter.discoveryAllowed(user, authHeader, enclaveId, request);
+    }
+    future.exceptionally((ex) -> true).thenAccept((allowed) -> {
+      if (!allowed) {
+        asyncResponse.resume(Response.status(429).build());
+        return;
+      }
+      try {
+        requestManager.submit(enclaveId, request)
+                      .thenAccept(asyncResponse::resume)
+                      .exceptionally(throwable -> {
+                        asyncResponse.resume(throwable.getCause());
+                        return null;
+                      });
+      } catch (NoSuchEnclaveException e) {
+        asyncResponse.resume(e);
+      }
+    });
   }
 
   @Timed
@@ -89,9 +111,10 @@ public class ContactDiscoveryResource {
   public void testGetRegisteredContacts(@Auth User user,
                                         @PathParam("testName") String testName,
                                         @PathParam("enclaveId") String enclaveId,
+                                        @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                         @Valid DiscoveryRequest request,
                                         @Suspended AsyncResponse asyncResponse)
-          throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
+      throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
 

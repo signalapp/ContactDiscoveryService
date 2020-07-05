@@ -54,6 +54,11 @@ import org.whispersystems.contactdiscovery.metrics.FileDescriptorGauge;
 import org.whispersystems.contactdiscovery.metrics.FreeMemoryGauge;
 import org.whispersystems.contactdiscovery.metrics.NetworkReceivedGauge;
 import org.whispersystems.contactdiscovery.metrics.NetworkSentGauge;
+import org.whispersystems.contactdiscovery.phonelimiter.AlwaysSuccessfulPhoneRateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneLimiterPartitioner;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServiceClient;
+import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServicePartitioner;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
@@ -70,10 +75,14 @@ import org.whispersystems.dropwizard.simpleauth.BasicCredentialAuthFilter;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.net.http.HttpClient;
 import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.security.cert.CertificateException;
+import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -95,11 +104,12 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
   }
 
   @Override
-  public void initialize(Bootstrap<ContactDiscoveryConfiguration> bootstrap) {}
+  public void initialize(Bootstrap<ContactDiscoveryConfiguration> bootstrap) {
+  }
 
   @Override
   public void run(ContactDiscoveryConfiguration configuration, Environment environment)
-      throws CertificateException, KeyStoreException, IOException, DecoderException, URISyntaxException
+      throws CertificateException, KeyStoreException, IOException, DecoderException, URISyntaxException, NoSuchAlgorithmException
   {
     NativeUtils.loadNativeResource("/enclave-jni.so");
     Security.addProvider(new BouncyCastleProvider());
@@ -130,18 +140,40 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());
     DirectoryQueueManager    directoryQueueManager    = new DirectoryQueueManager(directoryQueue, directoryManager);
 
-    RateLimiter discoveryRateLimiter   = new RateLimiter(cacheClientFactory.getRedisClientPool(), "contactDiscovery", configuration.getLimitsConfiguration().getContactQueries().getBucketSize(), configuration.getLimitsConfiguration().getContactQueries().getLeakRatePerMinute()         );
+    RateLimiter discoveryRateLimiter   = new RateLimiter(cacheClientFactory.getRedisClientPool(), "contactDiscovery", configuration.getLimitsConfiguration().getContactQueries().getBucketSize(), configuration.getLimitsConfiguration().getContactQueries().getLeakRatePerMinute());
     RateLimiter attestationRateLimiter = new RateLimiter(cacheClientFactory.getRedisClientPool(), "remoteAttestation", configuration.getLimitsConfiguration().getRemoteAttestations().getBucketSize(), configuration.getLimitsConfiguration().getRemoteAttestations().getLeakRatePerMinute());
 
-    RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter);
-    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager);
+    // While we productionize the rate limiter service, it's nice to not need it up to boot this code. So, we just let
+    // the configuration guide us on actually using it.
+    PhoneRateLimiter              phoneLimiter     = new AlwaysSuccessfulPhoneRateLimiter();
+    RateLimitServiceConfiguration rateLimitSvcConf = configuration.getRateLimitSvc();
+    if (rateLimitSvcConf != null) {
+      var ranges = PhoneLimiterPartitioner.configToHostRanges(rateLimitSvcConf.getHostRanges());
+      var parter = new RateLimitServicePartitioner(ranges);
+      var executorService = environment.lifecycle()
+                                       .executorService("RateLimiterServiceClient")
+                                       // These numbers need some reworking when we have latency numbers, but are
+                                       // based on numbers from other Dropwizard HTTP client work.
+                                       .maxThreads(128)
+                                       .workQueue(new LinkedBlockingQueue<>(8))
+                                       .build();
+      var client = HttpClient.newBuilder()
+                             .executor(executorService)
+                             .connectTimeout(Duration.ofMillis(rateLimitSvcConf.getConnectTimeoutMs()))
+                             .build();
+      var requestTimeout = Duration.ofMillis(rateLimitSvcConf.getRequestTimeoutMs());
+      phoneLimiter = new RateLimitServiceClient(parter, client, requestTimeout);
+    }
+
+    RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter, phoneLimiter);
+    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, phoneLimiter);
     DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
 
     var healthCheckOverride = new AtomicBoolean(true);
-    var onResource = new HealthCheckOverride.HealthCheckOn(healthCheckOverride);
-    var offResource = new HealthCheckOverride.HealthCheckOff(healthCheckOverride);
-    var pingResource = new PingResource(healthCheckOverride);
+    var onResource          = new HealthCheckOverride.HealthCheckOn(healthCheckOverride);
+    var offResource         = new HealthCheckOverride.HealthCheckOff(healthCheckOverride);
+    var pingResource        = new PingResource(healthCheckOverride);
 
     environment.lifecycle().manage(sgxEnclaveManager);
     environment.lifecycle().manage(sgxRevocationListManager);

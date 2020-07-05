@@ -23,6 +23,8 @@ import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 import org.whispersystems.contactdiscovery.validation.ByteLength;
 
 import javax.validation.constraints.NotNull;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * An entity representing a remote attestation and handshake response
@@ -33,14 +35,14 @@ public class RemoteAttestationResponse {
 
   @JsonProperty
   @NotNull
-  @ByteLength(min=32, max=32)
+  @ByteLength(min = 32, max = 32)
   @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
   @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
   private byte[] serverEphemeralPublic;
 
   @JsonProperty
   @NotNull
-  @ByteLength(min=32, max=32)
+  @ByteLength(min = 32, max = 32)
   @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
   @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
   private byte[] serverStaticPublic;
@@ -84,20 +86,21 @@ public class RemoteAttestationResponse {
 
   public RemoteAttestationResponse(byte[] serverEphemeralPublic, byte[] serverStaticPublic,
                                    byte[] iv, byte[] ciphertext, byte[] tag,
-                                   byte[] quote,  String signature, String certificates, String signatureBody)
+                                   byte[] quote, String signature, String certificates, String signatureBody)
   {
     this.serverEphemeralPublic = serverEphemeralPublic;
-    this.serverStaticPublic    = serverStaticPublic;
-    this.iv                    = iv;
-    this.ciphertext            = ciphertext;
-    this.tag                   = tag;
-    this.quote                 = quote;
-    this.signature             = signature;
-    this.certificates          = certificates;
-    this.signatureBody         = signatureBody;
+    this.serverStaticPublic = serverStaticPublic;
+    this.iv = iv;
+    this.ciphertext = ciphertext;
+    this.tag = tag;
+    this.quote = quote;
+    this.signature = signature;
+    this.certificates = certificates;
+    this.signatureBody = signatureBody;
   }
 
-  public RemoteAttestationResponse() {}
+  public RemoteAttestationResponse() {
+  }
 
   public byte[] getServerEphemeralPublic() {
     return serverEphemeralPublic;
@@ -135,4 +138,31 @@ public class RemoteAttestationResponse {
     return signatureBody;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    RemoteAttestationResponse that = (RemoteAttestationResponse) o;
+    return Arrays.equals(serverEphemeralPublic, that.serverEphemeralPublic) &&
+           Arrays.equals(serverStaticPublic, that.serverStaticPublic) &&
+           Arrays.equals(quote, that.quote) &&
+           Arrays.equals(iv, that.iv) &&
+           Arrays.equals(ciphertext, that.ciphertext) &&
+           Arrays.equals(tag, that.tag) &&
+           Objects.equals(signature, that.signature) &&
+           Objects.equals(certificates, that.certificates) &&
+           Objects.equals(signatureBody, that.signatureBody);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Objects.hash(signature, certificates, signatureBody);
+    result = 31 * result + Arrays.hashCode(serverEphemeralPublic);
+    result = 31 * result + Arrays.hashCode(serverStaticPublic);
+    result = 31 * result + Arrays.hashCode(quote);
+    result = 31 * result + Arrays.hashCode(iv);
+    result = 31 * result + Arrays.hashCode(ciphertext);
+    result = 31 * result + Arrays.hashCode(tag);
+    return result;
+  }
 }

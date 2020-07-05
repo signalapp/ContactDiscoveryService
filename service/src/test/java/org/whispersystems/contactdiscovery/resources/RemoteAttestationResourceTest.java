@@ -1,5 +1,6 @@
 package org.whispersystems.contactdiscovery.resources;
 
+import io.dropwizard.testing.junit.ResourceTestRule;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
@@ -16,6 +17,7 @@ import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
+import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServiceClient;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
@@ -24,24 +26,29 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
 
-import io.dropwizard.testing.junit.ResourceTestRule;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
-import static org.whispersystems.contactdiscovery.requests.RequestManager.FAKE_ENCLAVE_OUTPUT_MAP_KEY;
+import static org.whispersystems.contactdiscovery.requests.RequestManager.LOCAL_ENCLAVE_HOST_ID;
 
 public class RemoteAttestationResourceTest {
 
-  private static final String VALID_ENCLAVE_ID   = "mrenclavevalue";
+  private static final String VALID_ENCLAVE_ID = "mrenclavevalue";
   private static final String INVALID_ENCLAVE_ID = "randomvalue";
 
   private final SgxHandshakeManager handshakeManager = mock(SgxHandshakeManager.class);
-  private final RateLimiter         rateLimiter      = mock(RateLimiter.class);
+  private final RateLimiter rateLimiter = mock(RateLimiter.class);
+  private final RateLimitServiceClient rateLimitClient = mock(RateLimitServiceClient.class);
 
   private byte[] serverEphemeral;
   private byte[] serverPublic;
@@ -57,17 +64,17 @@ public class RemoteAttestationResourceTest {
                                                             .setMapper(SystemMapper.getMapper())
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
-                                                            .addResource(new RemoteAttestationResource(handshakeManager, rateLimiter))
+                                                            .addResource(new RemoteAttestationResource(handshakeManager, rateLimiter, rateLimitClient))
                                                             .build();
 
   @Before
   public void setup() throws NoSuchEnclaveException, SgxException, NoSuchRevocationListException, SignedQuoteUnavailableException, StaleRevocationListException, QuoteVerificationException {
     this.serverEphemeral = new byte[32];
-    this.serverPublic    = new byte[32];
-    this.quote           = new byte[16];
-    this.iv              = new byte[12];
-    this.ciphertext      = new byte[16];
-    this.tag             = new byte[16];
+    this.serverPublic = new byte[32];
+    this.quote = new byte[16];
+    this.iv = new byte[12];
+    this.ciphertext = new byte[16];
+    this.tag = new byte[16];
 
     SecureRandom secureRandom = new SecureRandom();
     secureRandom.nextBytes(this.serverPublic);
@@ -95,19 +102,65 @@ public class RemoteAttestationResourceTest {
     byte[] clientPublic = new byte[32];
     new SecureRandom().nextBytes(clientPublic);
 
+    var rateLimitSvcResults = new HashMap<String, RemoteAttestationResponse>();
+    rateLimitSvcResults.put("fakehostid", new RemoteAttestationResponse(serverEphemeral,
+                                                                        serverPublic,
+                                                                        iv,
+                                                                        ciphertext,
+                                                                        tag,
+                                                                        quote,
+                                                                        "foo", "bar", "baz"));
+    String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
+    when(rateLimitClient.attest(any(), eq(authHeader), eq(VALID_ENCLAVE_ID), eq(clientPublic)))
+        .thenReturn(CompletableFuture.completedFuture(rateLimitSvcResults));
+
     MultipleRemoteAttestationResponse response =
         resources.getJerseyTest()
                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
                  .request(MediaType.APPLICATION_JSON_TYPE)
-                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                 .header("Authorization", authHeader)
+                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
+                      MultipleRemoteAttestationResponse.class);
+
+    assertEquals(response.getAttestations().size(), 2);
+
+    RemoteAttestationResponse attestation = response.getAttestations().get(LOCAL_ENCLAVE_HOST_ID);
+
+    assertNotNull("attestation didn't have the expected key", attestation);
+    assertArrayEquals(attestation.getQuote(), this.quote);
+    assertArrayEquals(attestation.getTag(), this.tag);
+    assertArrayEquals(attestation.getIv(), this.iv);
+
+    assertEquals(attestation.getCertificates(), "bar");
+    assertEquals(attestation.getSignature(), "foo");
+    assertEquals(attestation.getSignatureBody(), "baz");
+
+    verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic));
+  }
+
+  @Test
+  public void testRateLimitSvcFailureDoesntAffectResults() throws Exception {
+    // This test will have to change once we're using CDS rate limit service in production. That's likely around 2020-07
+    byte[] clientPublic = new byte[32];
+    new SecureRandom().nextBytes(clientPublic);
+
+    String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
+    when(rateLimitClient.attest(any(), eq(authHeader), eq(VALID_ENCLAVE_ID), eq(clientPublic)))
+        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("failed future stuff")));
+
+    MultipleRemoteAttestationResponse response =
+        resources.getJerseyTest()
+                 .target("/v1/attestation/" + VALID_ENCLAVE_ID)
+                 .request(MediaType.APPLICATION_JSON_TYPE)
+                 .header("Authorization", authHeader)
                  .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
                       MultipleRemoteAttestationResponse.class);
 
     assertEquals(response.getAttestations().size(), 1);
 
-    RemoteAttestationResponse attestation = response.getAttestations().get(FAKE_ENCLAVE_OUTPUT_MAP_KEY);
+    RemoteAttestationResponse attestation = response.getAttestations().get(LOCAL_ENCLAVE_HOST_ID);
 
-    assertNotNull("attestation didn't have the expected key", attestation);
+    assertNotNull("attestation didn't have the expected host id key", attestation);
     assertArrayEquals(attestation.getQuote(), this.quote);
     assertArrayEquals(attestation.getTag(), this.tag);
     assertArrayEquals(attestation.getIv(), this.iv);
@@ -166,6 +219,5 @@ public class RemoteAttestationResourceTest {
 
     verify(handshakeManager, times(1)).getHandshake(eq(INVALID_ENCLAVE_ID), eq(clientPublic));
   }
-
 
 }

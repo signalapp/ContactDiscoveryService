@@ -24,6 +24,7 @@ import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 import org.whispersystems.contactdiscovery.validation.ByteLength;
 
 import javax.validation.constraints.NotNull;
+import java.util.Arrays;
 
 public class DiscoveryRequestEnvelope {
 
@@ -59,9 +60,9 @@ public class DiscoveryRequestEnvelope {
 
   public DiscoveryRequestEnvelope(byte[] requestId, byte[] iv, byte[] data, byte[] mac) {
     this.requestId = requestId;
-    this.iv        = iv;
-    this.data      = data;
-    this.mac       = mac;
+    this.iv = iv;
+    this.data = data;
+    this.mac = mac;
   }
 
   public byte[] getRequestId() {
@@ -82,5 +83,25 @@ public class DiscoveryRequestEnvelope {
 
   public String toString() {
     return "{ requestId: " + requestId + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + " }";
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    DiscoveryRequestEnvelope that = (DiscoveryRequestEnvelope) o;
+    return Arrays.equals(requestId, that.requestId) &&
+           Arrays.equals(iv, that.iv) &&
+           Arrays.equals(data, that.data) &&
+           Arrays.equals(mac, that.mac);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Arrays.hashCode(requestId);
+    result = 31 * result + Arrays.hashCode(iv);
+    result = 31 * result + Arrays.hashCode(data);
+    result = 31 * result + Arrays.hashCode(mac);
+    return result;
   }
 }

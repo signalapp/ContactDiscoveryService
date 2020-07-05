@@ -19,6 +19,7 @@ package org.whispersystems.contactdiscovery.resources;
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
+import io.dropwizard.auth.Auth;
 import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
@@ -39,27 +40,27 @@ import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
+import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
-
-import io.dropwizard.auth.Auth;
-import org.whispersystems.contactdiscovery.requests.RequestManager;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -76,11 +77,13 @@ public class RemoteAttestationResource {
   private final Logger logger = LoggerFactory.getLogger(RemoteAttestationResource.class);
 
   private final SgxHandshakeManager sgxHandshakeManager;
-  private final RateLimiter         rateLimiter;
+  private final RateLimiter rateLimiter;
+  private final PhoneRateLimiter client;
 
-  public RemoteAttestationResource(SgxHandshakeManager sgxHandshakeManager, RateLimiter rateLimiter) {
+  public RemoteAttestationResource(SgxHandshakeManager sgxHandshakeManager, RateLimiter rateLimiter, PhoneRateLimiter client) {
     this.sgxHandshakeManager = sgxHandshakeManager;
-    this.rateLimiter         = rateLimiter;
+    this.rateLimiter = rateLimiter;
+    this.client = client;
   }
 
   @Timed
@@ -90,15 +93,20 @@ public class RemoteAttestationResource {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getAttestationHandshake(@Auth User user,
                                           @PathParam("enclaveId") String enclaveId,
+                                          @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                           @Valid RemoteAttestationRequest request)
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
-    // XXX 2019-05-17 remove cookie before going live
+    var svcFuture = client.attest(user, authHeader, enclaveId, request.getClientPublic());
     RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
-    return Response.ok(new MultipleRemoteAttestationResponse(Map.of(RequestManager.FAKE_ENCLAVE_OUTPUT_MAP_KEY, attestation)))
-                   .cookie(new NewCookie("dummy", "dummy"))
-                   .build();
+
+    // The exceptionally here is because we want to test the performance of the new rate limit service but not rely on
+    // it to respond, yet. See CDS-157.
+    return svcFuture.exceptionally((ex) -> new HashMap<>()).thenApply((resps) -> {
+      resps.put(RequestManager.LOCAL_ENCLAVE_HOST_ID, attestation);
+      return Response.ok(new MultipleRemoteAttestationResponse(resps)).build();
+    }).join();
   }
 
   @PUT
@@ -107,9 +115,10 @@ public class RemoteAttestationResource {
   @Produces(MediaType.APPLICATION_JSON)
   public MultipleRemoteAttestationResponse getAttestationHandshake(@Auth User user,
                                                                    @PathParam("testName") String testName,
+                                                                   @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                                                    @PathParam("enclaveId") String enclaveId,
                                                                    @Valid RemoteAttestationRequest request)
-          throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
+      throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
     Function<RemoteAttestationResponse, RemoteAttestationResponse> testFun;
@@ -146,37 +155,37 @@ public class RemoteAttestationResource {
       return readMockRemoteAttestationResponse();
     } else if ("no-certificates".equals(testName)) {
       testFun = response ->
-              new RemoteAttestationResponse(response.getServerEphemeralPublic(),
-                                            response.getServerStaticPublic(),
-                                            response.getIv(),
-                                            response.getCiphertext(),
-                                            response.getTag(),
-                                            response.getQuote(),
-                                            response.getSignature(),
-                                            "",
-                                            response.getSignatureBody());
+          new RemoteAttestationResponse(response.getServerEphemeralPublic(),
+                                        response.getServerStaticPublic(),
+                                        response.getIv(),
+                                        response.getCiphertext(),
+                                        response.getTag(),
+                                        response.getQuote(),
+                                        response.getSignature(),
+                                        "",
+                                        response.getSignatureBody());
     } else if ("wrong-certificates".equals(testName)) {
       testFun = response ->
-              new RemoteAttestationResponse(response.getServerEphemeralPublic(),
-                                            response.getServerStaticPublic(),
-                                            response.getIv(),
-                                            response.getCiphertext(),
-                                            response.getTag(),
-                                            response.getQuote(),
-                                            response.getSignature(),
-                                            readMockCertificate(),
-                                            response.getSignatureBody());
+          new RemoteAttestationResponse(response.getServerEphemeralPublic(),
+                                        response.getServerStaticPublic(),
+                                        response.getIv(),
+                                        response.getCiphertext(),
+                                        response.getTag(),
+                                        response.getQuote(),
+                                        response.getSignature(),
+                                        readMockCertificate(),
+                                        response.getSignatureBody());
     } else if ("untrusted-certificates".equals(testName)) {
       testFun = response -> {
         String mockSignature;
         try {
           byte[] signatureBodyBytes = response.getSignatureBody().getBytes("UTF-8");
 
-          Reader     mockKeyPairReader = new StringReader(readResourceAsString("/test/mock_private_key.pem"));
-          PEMKeyPair mockKeyPair       = (PEMKeyPair) new PEMParser(mockKeyPairReader).readObject();
+          Reader mockKeyPairReader = new StringReader(readResourceAsString("/test/mock_private_key.pem"));
+          PEMKeyPair mockKeyPair = (PEMKeyPair) new PEMParser(mockKeyPairReader).readObject();
 
           AsymmetricKeyParameter mockPrivateKey = PrivateKeyFactory.createKey(mockKeyPair.getPrivateKeyInfo());
-          RSADigestSigner        mockSigner     = new RSADigestSigner(new SHA256Digest());
+          RSADigestSigner mockSigner = new RSADigestSigner(new SHA256Digest());
 
           mockSigner.init(true, mockPrivateKey);
           mockSigner.update(signatureBodyBytes, 0, signatureBodyBytes.length);

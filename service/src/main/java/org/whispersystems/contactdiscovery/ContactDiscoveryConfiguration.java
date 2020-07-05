@@ -17,8 +17,7 @@
 package org.whispersystems.contactdiscovery;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import org.hibernate.validator.constraints.NotEmpty;
+import io.dropwizard.Configuration;
 import org.whispersystems.contactdiscovery.configuration.DirectoryConfiguration;
 import org.whispersystems.contactdiscovery.configuration.EnclaveConfiguration;
 import org.whispersystems.contactdiscovery.configuration.RateLimitsConfiguration;
@@ -27,8 +26,6 @@ import org.whispersystems.contactdiscovery.configuration.SignalServiceConfigurat
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
-
-import io.dropwizard.Configuration;
 
 /**
  * Service configuration
@@ -59,6 +56,10 @@ public class ContactDiscoveryConfiguration extends Configuration {
 
   @JsonProperty
   @NotNull
+  private RateLimitServiceConfiguration rateLimitSvc = new RateLimitServiceConfiguration();
+
+  @JsonProperty
+  @NotNull
   @Valid
   private RateLimitsConfiguration limits = new RateLimitsConfiguration();
 
@@ -77,6 +78,10 @@ public class ContactDiscoveryConfiguration extends Configuration {
 
   public DirectoryConfiguration getDirectoryConfiguration() {
     return directory;
+  }
+
+  public RateLimitServiceConfiguration getRateLimitSvc() {
+    return rateLimitSvc;
   }
 
   public RateLimitsConfiguration getLimitsConfiguration() {

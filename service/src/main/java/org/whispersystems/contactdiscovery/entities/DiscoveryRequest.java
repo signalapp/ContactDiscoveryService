@@ -26,8 +26,9 @@ import org.whispersystems.contactdiscovery.validation.ByteLength;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Entity representing an encrypted contact discovery request
@@ -79,11 +80,11 @@ public class DiscoveryRequest {
 
   public DiscoveryRequest(int addressCount, byte[] iv, byte[] data, byte[] mac, byte[] commitment, Map<String, DiscoveryRequestEnvelope> envelopes) {
     this.addressCount = addressCount;
-    this.iv           = iv;
-    this.data         = data;
-    this.mac          = mac;
-    this.commitment   = commitment;
-    this.envelopes    = envelopes;
+    this.iv = iv;
+    this.data = data;
+    this.mac = mac;
+    this.commitment = commitment;
+    this.envelopes = envelopes;
   }
 
   public int getAddressCount() {
@@ -112,5 +113,28 @@ public class DiscoveryRequest {
 
   public String toString() {
     return "{ addressCount: " + addressCount + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + ", commitment: " + Hex.encodeHexString(commitment) + ", envelopes: " + envelopes + " }";
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    DiscoveryRequest that = (DiscoveryRequest) o;
+    return addressCount == that.addressCount &&
+           Arrays.equals(iv, that.iv) &&
+           Arrays.equals(data, that.data) &&
+           Arrays.equals(mac, that.mac) &&
+           Arrays.equals(commitment, that.commitment) &&
+           Objects.equals(envelopes, that.envelopes);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Objects.hash(addressCount, envelopes);
+    result = 31 * result + Arrays.hashCode(iv);
+    result = 31 * result + Arrays.hashCode(data);
+    result = 31 * result + Arrays.hashCode(mac);
+    result = 31 * result + Arrays.hashCode(commitment);
+    return result;
   }
 }

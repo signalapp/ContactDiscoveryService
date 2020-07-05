@@ -59,10 +59,10 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class RequestManager implements Managed {
 
   /**
-   * FAKE_ENCLAVE_OUTPUT_MAP_KEY is just faked out key for the attestations map that will only hold one enclave. This
+   * LOCAL_ENCLAVE_HOST_ID is just faked out key for the attestations map that will only hold one enclave. This
    * will go away when we work out the routing code to the new rate limiter service.
    */
-  public static final String FAKE_ENCLAVE_OUTPUT_MAP_KEY = generateFakeEnclaveKey();
+  public static final String LOCAL_ENCLAVE_HOST_ID = generateFakeEnclaveKey();
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
@@ -156,7 +156,7 @@ public class RequestManager implements Managed {
           for (PendingRequest request : requests) {
             int                      addressCount = request.getRequest().getAddressCount();
             byte[]                   commitment   = request.getRequest().getCommitment();
-            DiscoveryRequestEnvelope envelope     = request.getRequest().getEnvelopes().get(FAKE_ENCLAVE_OUTPUT_MAP_KEY);
+            DiscoveryRequestEnvelope envelope     = request.getRequest().getEnvelopes().get(LOCAL_ENCLAVE_HOST_ID);
             byte[]                   requestId    = envelope.getRequestId();
 
             SgxsdMessage queryMessage    = new SgxsdMessage(request.getRequest().getData(),
