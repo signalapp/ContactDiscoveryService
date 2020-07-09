@@ -395,3 +395,52 @@ pub fn sgxsd_create_enclave(enclave_path: &str, debug: bool) -> SgxsdResult<SgxE
 pub fn sgxsd_init_quote() -> SgxsdResult<(u32, SgxTargetInfo)> {
     return sgx_sdk_ffi::init_quote().sgxsd_context("sgxsd_init_quote");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_from_u32_for_cds_error() {
+        let code = CDS_ERROR_INVALID_REQUEST_SIZE;
+        assert_eq!(CdsError::try_from(code), Ok(CdsError::InvalidRequestSize));
+
+        let code = CDS_ERROR_QUERY_COMMITMENT_MISMATCH;
+        assert_eq!(CdsError::try_from(code), Ok(CdsError::QueryCommitmentMismatch));
+
+        let code = CDS_ERROR_RATE_LIMIT_EXCEEDED;
+        assert_eq!(CdsError::try_from(code), Ok(CdsError::RateLimitExceeded));
+
+        let code = CDS_ERROR_INVALID_RATE_LIMIT_STATE;
+        assert_eq!(CdsError::try_from(code), Ok(CdsError::InvalidRateLimitState));
+
+        assert_eq!(CdsError::try_from(0), Err(()));
+        assert_eq!(CdsError::try_from(CDS_ERROR_INVALID_RATE_LIMIT_STATE + 10), Err(()));
+        assert_eq!(CdsError::try_from(CDS_ERROR_INVALID_RATE_LIMIT_STATE - 10), Err(()));
+    }
+
+    #[test]
+    fn test_try_from_u8_16_for_sgxsd_uuid() {
+        let data = [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf];
+
+        let uuid = SgxsdUuid::from(data.clone());
+        assert_eq!(uuid.data64[0], 0x0706050403020100u64);
+        assert_eq!(uuid.data64[1], 0x0f0e0d0c0b0a0908u64);
+
+        let uuid = SgxsdUuid::try_from(data.as_ref());
+        assert_eq!(uuid.is_ok(), true);
+        let uuid = uuid.unwrap();
+        assert_eq!(uuid.data64[0], 0x0706050403020100u64);
+        assert_eq!(uuid.data64[1], 0x0f0e0d0c0b0a0908u64);
+
+        let data_short = [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7];
+        let bad_uuid = SgxsdUuid::try_from(data_short.as_ref());
+        assert_eq!(bad_uuid.is_err(), true);
+
+        let uuid = SgxsdUuid {
+            data64: [0x0706050403020100, 0x0f0e0d0c0b0a0908],
+        };
+        let raw: [u8; 16] = uuid.into();
+        assert_eq!(raw, data);
+    }
+}
