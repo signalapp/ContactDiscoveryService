@@ -60,6 +60,12 @@ stages:
     jobs:
       - template: jobs/docker_build_cds_jni_builder.yml
 
+  - stage: enclave_ffi_test
+    displayName: enclave-ffi-rust cargo tests
+    dependsOn: docker_build_cds_jni_builder
+    jobs:
+      - template: jobs/enclave_ffi_tests.yml
+
   - stage: integration_test
     displayName: integration tests
     dependsOn:

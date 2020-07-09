@@ -1,0 +1,14 @@
+#
+# Azure Pipelines job to run the tests for the enclave-ffi-rust module from within in the cds-enclave-builder docker image.
+#
+
+jobs:
+  - job: enclave_ffi_tests
+    displayName: run the enclave-ffi-rust tests
+    pool:
+      name: jeff
+      vmImage: ubuntu-18.04
+    container: cds-jni-builder
+    steps:
+      - script: cargo test --manifest-path=./enclave-ffi-rust/Cargo.toml
+        displayName: run enclave-ffi-rust cargo test
