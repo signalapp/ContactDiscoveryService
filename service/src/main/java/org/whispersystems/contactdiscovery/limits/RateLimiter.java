@@ -27,6 +27,7 @@ import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 
 import java.io.IOException;
+import java.time.Clock;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import redis.clients.jedis.Jedis;
@@ -84,13 +85,13 @@ public class RateLimiter {
       String serialized = jedis.get(getBucketName(key));
 
       if (serialized != null) {
-        return LeakyBucket.fromSerialized(mapper, serialized);
+        return LeakyBucket.fromSerialized(mapper, serialized, Clock.systemUTC());
       }
     } catch (IOException e) {
       logger.warn("Deserialization error", e);
     }
 
-    return new LeakyBucket(bucketSize, leakRatePerMillis);
+    return new LeakyBucket(bucketSize, leakRatePerMillis, Clock.systemUTC());
   }
 
   private String getBucketName(String key) {

@@ -16,34 +16,41 @@
  */
 package org.whispersystems.contactdiscovery.limits;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.time.Clock;
 
 public class LeakyBucket {
 
   private final int    bucketSize;
   private final double leakRatePerMillis;
 
-  private int spaceRemaining;
+  private int  spaceRemaining;
   private long lastUpdateTimeMillis;
 
-  public LeakyBucket(int bucketSize, double leakRatePerMillis) {
-    this(bucketSize, leakRatePerMillis, bucketSize, System.currentTimeMillis());
+  private final Clock clock;
+
+  public LeakyBucket(int bucketSize, double leakRatePerMillis, Clock clock) {
+    this(bucketSize, leakRatePerMillis, bucketSize, clock.millis(), clock);
   }
 
-  private LeakyBucket(int bucketSize, double leakRatePerMillis, int spaceRemaining, long lastUpdateTimeMillis) {
+  private LeakyBucket(int bucketSize, double leakRatePerMillis, int spaceRemaining, long lastUpdateTimeMillis, Clock clock) {
     this.bucketSize           = bucketSize;
     this.leakRatePerMillis    = leakRatePerMillis;
     this.spaceRemaining       = spaceRemaining;
     this.lastUpdateTimeMillis = lastUpdateTimeMillis;
+    this.clock                = clock;
   }
 
   public boolean add(int amount) {
-    this.spaceRemaining       = getUpdatedSpaceRemaining();
-    this.lastUpdateTimeMillis = System.currentTimeMillis();
+    final long currentTimeMillis = clock.millis();
+
+    this.spaceRemaining       = getUpdatedSpaceRemaining(currentTimeMillis);
+    this.lastUpdateTimeMillis = currentTimeMillis;
 
     if (this.spaceRemaining >= amount) {
       this.spaceRemaining -= amount;
@@ -53,8 +60,8 @@ public class LeakyBucket {
     }
   }
 
-  private int getUpdatedSpaceRemaining() {
-    long elapsedTime = System.currentTimeMillis() - this.lastUpdateTimeMillis;
+  private int getUpdatedSpaceRemaining(long currentTimeMillis) {
+    long elapsedTime = currentTimeMillis - this.lastUpdateTimeMillis;
 
     return Math.min(this.bucketSize,
                     (int)Math.floor(this.spaceRemaining + (elapsedTime * this.leakRatePerMillis)));
@@ -64,30 +71,31 @@ public class LeakyBucket {
     return mapper.writeValueAsString(new LeakyBucketEntity(bucketSize, leakRatePerMillis, spaceRemaining, lastUpdateTimeMillis));
   }
 
-  public static LeakyBucket fromSerialized(ObjectMapper mapper, String serialized) throws IOException {
+  public static LeakyBucket fromSerialized(ObjectMapper mapper, String serialized, Clock clock) throws IOException {
     LeakyBucketEntity entity = mapper.readValue(serialized, LeakyBucketEntity.class);
 
     return new LeakyBucket(entity.bucketSize, entity.leakRatePerMillis,
-                           entity.spaceRemaining, entity.lastUpdateTimeMillis);
+                           entity.spaceRemaining, entity.lastUpdateTimeMillis, clock);
   }
 
   private static class LeakyBucketEntity {
     @JsonProperty
-    private int    bucketSize;
+    private final int    bucketSize;
 
     @JsonProperty
-    private double leakRatePerMillis;
+    private final double leakRatePerMillis;
 
     @JsonProperty
-    private int    spaceRemaining;
+    private final int    spaceRemaining;
 
     @JsonProperty
-    private long   lastUpdateTimeMillis;
+    private final long   lastUpdateTimeMillis;
 
-    public LeakyBucketEntity() {}
-
-    private LeakyBucketEntity(int bucketSize, double leakRatePerMillis,
-                              int spaceRemaining, long lastUpdateTimeMillis)
+    @JsonCreator
+    private LeakyBucketEntity(@JsonProperty("bucketSize")           int bucketSize,
+                              @JsonProperty("leakRatePerMillis")    double leakRatePerMillis,
+                              @JsonProperty("spaceRemaining")       int spaceRemaining,
+                              @JsonProperty("lastUpdateTimeMillis") long lastUpdateTimeMillis)
     {
       this.bucketSize           = bucketSize;
       this.leakRatePerMillis    = leakRatePerMillis;
