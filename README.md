@@ -123,10 +123,16 @@ and `mvn verify` will be run on hardware with SGX enabled. If you push to a
 "test-svc-" or "test_svc_" prefixed branch, the checked-in enclave will be used
 and `mvn verify` will be run on the SGX-enabled hardware.
 
+You can see results of those manual runs on
+[Azure's site](https://dev.azure.com/signal-testing/directory-testing/_build).
+
 # CI
 
 Azure Pipelines is what we currently use for CI. It has two separate Pipelines
-that run on PR and merges to master..
+that run on PR and merges to master. You can see results for the PR and master
+runs on
+[Azure's site](https://dev.azure.com/signal-testing/directory-testing/_build) or
+in GitHub's UI.
 
 There are two pipelines configured. They currently (2020-05) are configured in
 `service/ci/master.yml` and `service/ci/test_with_enclave_rebuild.yml`. The
@@ -138,3 +144,6 @@ Both pipelines are run simultaneously to allow the quicker `service` tests to
 give developer's feedback sooner. (`test_with_enclave_rebuild` caches the LLVM
 BOLT binary smartly so it's comfortable to run on every PR. A build with a
 cached BOLT binary takes roughly 11 minutes.)
+
+Manually triggering these can happen in the Azure UI or by pushing branches. See
+the "Local testing" section for the format of the branches.
