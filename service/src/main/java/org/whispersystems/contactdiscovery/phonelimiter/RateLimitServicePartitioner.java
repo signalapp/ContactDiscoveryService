@@ -37,7 +37,7 @@ public class RateLimitServicePartitioner implements PhoneLimiterPartitioner {
   @Override
   public Map<String, URI> lookup(String userNumber) {
     var hashed = hashFunc.newHasher().putString(userNumber, StandardCharsets.UTF_8).hash().toString();
-    var rangeEntry = ranges.floorEntry(hashed);
+    var rangeEntry = ranges.ceilingEntry(hashed);
     if (rangeEntry == null) {
       throw new RuntimeException("Hash function didn't work correctly. A code bug.");
     }
