@@ -81,7 +81,6 @@ impl DiscoveryRequestManager {
                     pending_request_state.add_waiter(reply_tx);
                 }
                 RequestState::Finished(finished_request_state) if finished_request_state.request_id == request_id => {
-                    info!("curt: start_request(): returning cached value ...");
                     let reply = finished_request_state.result.clone().map(Some);
                     let _ignore = reply_tx.send(reply);
                 }
