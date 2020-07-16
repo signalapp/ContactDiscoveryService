@@ -188,7 +188,6 @@ mod test {
         }
 
         pub fn hash_lookup(&self, in_phone_count: Option<usize>, query_phones: &[Phone]) -> Result<Vec<Uuid>, SgxStatus> {
-            let mut query_phone_results_data: Vec<u8> = vec![0; query_phones.len() * size_of::<Uuid>()];
             let in_phone_count = in_phone_count.unwrap_or(self.in_phone_count());
             test_hash_lookup(&self.in_phones[..in_phone_count], &self.in_uuids[..in_phone_count], query_phones)
         }

@@ -629,13 +629,6 @@ mod tests {
 
     use super::*;
 
-    pub struct TestQuery {
-        pub phone_count:  u32,
-        pub data:         Box<[u8]>,
-        pub commitment:   [u8; 32],
-        pub request_data: Box<[u8]>,
-    }
-
     pub struct TestRatelimitState {
         pub data: Box<[u8]>,
     }
@@ -925,11 +918,27 @@ mod tests {
             0x15234567896u64,
         ];
 
-        for i in 0..phones.len() {
-            let scenario = Scenario::new();
-            let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
-            scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
+        let scenario = Scenario::new();
+        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
+        scenario.expect(
+            sgx_is_outside_enclave
+                .sgx_is_outside_enclave(any(), any())
+                .and_return_clone(true)
+                .times(phones.len() as u32 + 1),
+        );
 
+        let aes_gcm_encrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_ENCRYPT, &scenario);
+        scenario.expect(
+            aes_gcm_encrypt_mock
+                .sgxsd_aes_gcm_encrypt(any(), any(), any(), any())
+                .and_call_clone(|_key, src, _iv, _add| Ok(src.to_vec()))
+                .times(phones.len() as u32 + 1),
+        );
+
+        let aes_gcm_decrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_DECRYPT, &scenario);
+        scenario.expect(aes_gcm_decrypt_mock.sgxsd_aes_gcm_decrypt(any(), any(), any(), any()).never());
+
+        for i in 0..phones.len() {
             let request_phones = make_rl_phones(&phones[0..(i + 1)]);
             let ratelimit_state_data = make_rl_state((phones.len() * 2) + 1);
             let mut ratelimit_state: RatelimitState = Default::default();
@@ -939,12 +948,8 @@ mod tests {
             assert_eq!(result.is_ok(), true);
         }
 
-        let scenario = Scenario::new();
-        let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
-        scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
-
         let request_phones = make_rl_phones(&phones);
-        let ratelimit_state_data = make_rl_state(16);
+        let ratelimit_state_data = make_rl_state((phones.len() * 2) + 1);
         let mut ratelimit_state: RatelimitState = Default::default();
 
         let result = ratelimit_state.update(ratelimit_state_data, AesGcmMac::default(), &request_phones);
@@ -974,7 +979,23 @@ mod tests {
             sgx_is_outside_enclave
                 .sgx_is_outside_enclave(any(), any())
                 .and_return_clone(true)
-                .times(1),
+                .once(),
+        );
+
+        let aes_gcm_encrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_ENCRYPT, &scenario);
+        scenario.expect(
+            aes_gcm_encrypt_mock
+                .sgxsd_aes_gcm_encrypt(any(), any(), any(), any())
+                .and_call_clone(|_key, src, _iv, _add| Ok(src.to_vec()))
+                .times(2),
+        );
+
+        let aes_gcm_decrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_DECRYPT, &scenario);
+        scenario.expect(
+            aes_gcm_decrypt_mock
+                .sgxsd_aes_gcm_decrypt(any(), any(), any(), any())
+                .and_call_clone(|_key, src, _iv, _add| Ok(src.to_vec()))
+                .once(),
         );
 
         // first make a query with half the phones
@@ -1019,7 +1040,18 @@ mod tests {
 
         let scenario = Scenario::new();
         let sgx_is_outside_enclave = test_ffi::mock_for(&sgx_ffi::mocks::SGX_IS_OUTSIDE_ENCLAVE, &scenario);
-        scenario.expect(sgx_is_outside_enclave.sgx_is_outside_enclave(any(), any()).and_return(true));
+        scenario.expect(
+            sgx_is_outside_enclave
+                .sgx_is_outside_enclave(any(), any())
+                .and_return_clone(true)
+                .once(),
+        );
+
+        let aes_gcm_encrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_ENCRYPT, &scenario);
+        scenario.expect(aes_gcm_encrypt_mock.sgxsd_aes_gcm_encrypt(any(), any(), any(), any()).never());
+
+        let aes_gcm_decrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_DECRYPT, &scenario);
+        scenario.expect(aes_gcm_decrypt_mock.sgxsd_aes_gcm_decrypt(any(), any(), any(), any()).never());
 
         let request_phones = make_rl_phones(&phones);
         let ratelimit_state_data = make_rl_state(8);
@@ -1029,8 +1061,7 @@ mod tests {
         assert_eq!(result, Err(CDS_ERROR_RATE_LIMIT_EXCEEDED));
     }
 
-    // TODO - update the test to work with the encryption mock code. CDS-118.
-    // #[test]
+    #[test]
     fn test_ratelimit_subsequent_query_fail() {
         let phones = [
             0x14234567890u64,
@@ -1055,7 +1086,23 @@ mod tests {
             sgx_is_outside_enclave
                 .sgx_is_outside_enclave(any(), any())
                 .and_return_clone(true)
-                .times(1),
+                .once(),
+        );
+
+        let aes_gcm_encrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_ENCRYPT, &scenario);
+        scenario.expect(
+            aes_gcm_encrypt_mock
+                .sgxsd_aes_gcm_encrypt(any(), any(), any(), any())
+                .and_call_clone(|_key, src, _iv, _add| Ok(src.to_vec()))
+                .once(),
+        );
+
+        let aes_gcm_decrypt_mock = test_ffi::mock_for(&sgxsd_ffi::mocks::SGXSD_AES_GCM_DECRYPT, &scenario);
+        scenario.expect(
+            aes_gcm_decrypt_mock
+                .sgxsd_aes_gcm_decrypt(any(), any(), any(), any())
+                .and_call_clone(|_key, src, _iv, _add| Ok(src.to_vec()))
+                .once(),
         );
 
         // first make a query with 1/4 of the phones
@@ -1069,28 +1116,12 @@ mod tests {
         let (ratelimit_state_result, ratelimit_state_mac) = result.unwrap();
         dump_rl_state(&ratelimit_state_result);
 
-        // now query the whole list, should still be OK.
+        // now query the whole list, should fail.
         let request_phones = make_rl_phones(&phones);
         let new_ratelimit_state = SecretValue::new(ratelimit_state_result);
 
         let result = ratelimit_state.update(new_ratelimit_state, ratelimit_state_mac, &request_phones);
         assert_eq!(result, Err(CDS_ERROR_RATE_LIMIT_EXCEEDED));
-    }
-
-    //
-    // TestQuery impls
-    //
-
-    impl TestQuery {
-        pub fn new(phone_count: u32) -> Self {
-            let query_data_size = COMMITMENT_NONCE_SIZE + phone_count as usize * mem::size_of::<Phone>();
-            Self {
-                phone_count,
-                data: vec![0; query_data_size].into(),
-                commitment: [0; 32],
-                request_data: vec![0; SGXSD_AES_GCM_KEY_SIZE as usize].into(),
-            }
-        }
     }
 
     //
@@ -1104,12 +1135,6 @@ mod tests {
             Self {
                 data: vec![0; data_size].into(),
             }
-        }
-
-        pub fn slots_data_mut(&mut self) -> &mut [u8] {
-            let slots_data_start = mem::size_of::<u32>();
-            let slots_data_end = self.data.len() - SGXSD_AES_GCM_MAC_SIZE as usize;
-            &mut self.data[slots_data_start..slots_data_end]
         }
     }
 }
