@@ -41,7 +41,7 @@ import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -55,11 +55,13 @@ public class ContactDiscoveryResource {
   private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
   private final PhoneRateLimiter phoneLimiter;
+  private final Set<String> enclaves;
 
-  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, PhoneRateLimiter phoneLimiter) {
+  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, PhoneRateLimiter phoneLimiter, Set<String> enclaves) {
     this.rateLimiter = rateLimiter;
     this.requestManager = requestManager;
     this.phoneLimiter = phoneLimiter;
+    this.enclaves = enclaves;
   }
 
   @Timed
@@ -72,35 +74,35 @@ public class ContactDiscoveryResource {
                                     @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
-      throws NoSuchEnclaveException, RateLimitExceededException
+      throws RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
     if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
       asyncResponse.resume(Response.status(400).build());
       return;
     }
-
-    var future = CompletableFuture.completedFuture(true);
-    if (request.getEnvelopes().size() > 1) {
-      // This condition will, once the rate limit svc is 100% productionized, be flipped and turned into a 400.
-      future = phoneLimiter.discoveryAllowed(user, authHeader, enclaveId, request);
+    if (!enclaves.contains(enclaveId)) {
+      asyncResponse.resume(new NoSuchEnclaveException(enclaveId));
+      return;
     }
-    future.exceptionally((ex) -> true).thenAccept((allowed) -> {
-      if (!allowed) {
-        asyncResponse.resume(Response.status(429).build());
-        return;
-      }
-      try {
-        requestManager.submit(enclaveId, request)
-                      .thenAccept(asyncResponse::resume)
-                      .exceptionally(throwable -> {
-                        asyncResponse.resume(throwable.getCause());
-                        return null;
-                      });
-      } catch (NoSuchEnclaveException e) {
-        asyncResponse.resume(e);
-      }
-    });
+
+    phoneLimiter.discoveryAllowed(user, authHeader, enclaveId, request)
+                .thenAccept((allowed) -> {
+                  if (!allowed) {
+                    asyncResponse.resume(Response.status(429).build());
+                    return;
+                  }
+                  try {
+                    requestManager.submit(enclaveId, request)
+                                  .thenAccept(asyncResponse::resume)
+                                  .exceptionally(throwable -> {
+                                    asyncResponse.resume(throwable.getCause());
+                                    return null;
+                                  });
+                  } catch (NoSuchEnclaveException e) {
+                    asyncResponse.resume(e);
+                  }
+                });
   }
 
   @Timed
@@ -116,6 +118,11 @@ public class ContactDiscoveryResource {
                                         @Suspended AsyncResponse asyncResponse)
       throws NoSuchEnclaveException, RateLimitExceededException, DirectoryUnavailableException
   {
+    if (!enclaves.contains(enclaveId)) {
+      asyncResponse.resume(new NoSuchEnclaveException(enclaveId));
+      return;
+    }
+
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
 
     Function<DiscoveryResponse, DiscoveryResponse> testFun;

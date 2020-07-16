@@ -27,6 +27,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.security.SecureRandom;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -68,7 +69,7 @@ public class ContactDiscoveryResourceTest {
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
                                                             .addProvider(new RateLimitExceededExceptionMapper())
                                                             .addProvider(new DirectoryUnavailableExceptionMapper())
-                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, rateLimitClient))
+                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, rateLimitClient, Set.of(validEnclaveId)))
                                                             .build();
 
   @Before
@@ -90,6 +91,7 @@ public class ContactDiscoveryResourceTest {
     CompletableFuture<DiscoveryResponse> exceptionFuture = new CompletableFuture<>();
     exceptionFuture.completeExceptionally(new NoSuchEnclaveException("bad enclave id"));
 
+    when(rateLimitClient.discoveryAllowed(any(), any(), eq(validEnclaveId), any())).thenReturn(CompletableFuture.completedFuture(true));
     when(requestManager.submit(eq(validEnclaveId), any())).thenReturn(responseFuture);
     when(requestManager.submit(eq(invalidEnclaveId), any())).thenReturn(exceptionFuture);
 

@@ -169,6 +169,24 @@ public class RateLimitServiceClientTest {
     assertFalse("should not be allowed", isAllowed);
   }
 
+  @Test
+  public void testDiscoveryAllowedNot200Not500Case() {
+    server1.stubFor(put(urlPathEqualTo("/v1/discovery/fakeenclave"))
+                        .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(400)));
+    var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
+    var hostsToHostIds = Map.of("anotherfakehostid", URI.create(server1.baseUrl()), "onemorehostid", URI.create(server2.baseUrl()));
+    var parter = Mockito.mock(PhoneLimiterPartitioner.class);
+    when(parter.lookup(user.getNumber())).thenReturn(hostsToHostIds);
+    var client = new RateLimitServiceClient(parter, httpClient, requestTimeout);
+
+    var envelopes = Map.of(
+        "anotherfakehostid", new DiscoveryRequestEnvelope(randBytes(32), randBytes(12), randBytes(32), randBytes(16))
+    );
+    var discRequest = new DiscoveryRequest(10, null, null, null, null, envelopes);
+    var isAllowed = client.discoveryAllowed(user, "", "fakeenclave", discRequest).orTimeout(5, TimeUnit.SECONDS).join();
+    assertFalse("should not be allowed", isAllowed);
+  }
+
   private byte[] randBytes(int count) {
     var rand = new SecureRandom();
     var bytes = new byte[count];

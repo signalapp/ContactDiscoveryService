@@ -223,7 +223,7 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
     if (response.statusCode() >= 500) {
       return CompletableFuture.failedFuture(new RuntimeException("internal server error response"));
     }
-    return CompletableFuture.completedFuture(response.statusCode() != 429);
+    return CompletableFuture.completedFuture(response.statusCode() == 200);
   }
 
   private RemoteAttestationResponse handleAttestationResponse(HttpResponse<byte[]> resp) {

@@ -82,8 +82,10 @@ import java.security.Security;
 import java.security.cert.CertificateException;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -165,8 +167,13 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
       phoneLimiter = new RateLimitServiceClient(parter, client, requestTimeout);
     }
 
+    Set<String>                       enclaves                          = configuration.getEnclaveConfiguration()
+                                                                                       .getInstances().stream()
+                                                                                       .map((it) -> it.getMrenclave())
+                                                                                       .collect(Collectors.toSet());
+
     RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter, phoneLimiter);
-    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, phoneLimiter);
+    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, phoneLimiter, enclaves);
     DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
 
