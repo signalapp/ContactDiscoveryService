@@ -94,7 +94,7 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
     var builder = HttpRequest.newBuilder().timeout(Duration.ofSeconds(2))
                              .header(HttpHeaders.CONTENT_TYPE, "application/json")
                              .header(HttpHeaders.AUTHORIZATION, authHeader)
-                             .POST(BodyPublishers.ofByteArray(body));
+                             .PUT(BodyPublishers.ofByteArray(body));
 
     var hostIdToFutures = new HashMap<String, CompletableFuture<RemoteAttestationResponse>>();
     var hostIdToHostAddress = parter.lookup(user.getNumber());
@@ -171,7 +171,7 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
       } catch (JsonProcessingException e) {
         return CompletableFuture.failedFuture(e);
       }
-      var request = builder.copy().uri(uri.resolve("/v1/discovery/" + enclaveId)).POST(BodyPublishers.ofByteArray(body))
+      var request = builder.copy().uri(uri.resolve("/v1/discovery/" + enclaveId)).PUT(BodyPublishers.ofByteArray(body))
                            .build();
       // TODO(CDS-153): add retries
       CompletableFuture<Boolean> fut = client.sendAsync(request, BodyHandlers.ofByteArray())

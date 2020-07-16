@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.any;
+import static com.github.tomakehurst.wiremock.client.WireMock.put;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -42,7 +42,7 @@ public class RateLimitServiceClientTest {
 
   @Test
   public void testAttestationGoldenPath() {
-    server1.stubFor(any(urlPathEqualTo("/v1/attestation/fakeenclave"))
+    server1.stubFor(put(urlPathEqualTo("/v1/attestation/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody(OKAY_ATTEST)));
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
 
@@ -68,9 +68,9 @@ public class RateLimitServiceClientTest {
 
   @Test
   public void testAttestationErrorFromOneServer() {
-    server1.stubFor(any(urlPathEqualTo("/v1/attestation/fakeenclave"))
+    server1.stubFor(put(urlPathEqualTo("/v1/attestation/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody(OKAY_ATTEST)));
-    server2.stubFor(any(urlPathEqualTo("/v1/attestation/fakeenclave"))
+    server2.stubFor(put(urlPathEqualTo("/v1/attestation/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(500)));
 
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
@@ -93,9 +93,9 @@ public class RateLimitServiceClientTest {
     thrown.expect(RuntimeException.class);
     thrown.expectMessage("the rate limit service machines failed to respond or we were unable to parse their responses");
 
-    server1.stubFor(any(urlPathEqualTo("/v1/attestation/fakeenclave"))
+    server1.stubFor(put(urlPathEqualTo("/v1/attestation/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(500)));
-    server2.stubFor(any(urlPathEqualTo("/v1/attestation/fakeenclave"))
+    server2.stubFor(put(urlPathEqualTo("/v1/attestation/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(400)));
 
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
@@ -111,7 +111,7 @@ public class RateLimitServiceClientTest {
 
   @Test
   public void testDiscoveryAllowedGoldenPath() {
-    server1.stubFor(any(urlPathEqualTo("/v1/discovery/fakeenclave")).willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(200)));
+    server1.stubFor(put(urlPathEqualTo("/v1/discovery/fakeenclave")).willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(200)));
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
     var hostsToHostIds = Map.of("anotherfakehostid", URI.create(server1.baseUrl()));
 
@@ -129,9 +129,9 @@ public class RateLimitServiceClientTest {
 
   @Test
   public void testDiscoveryAllowedOneFailingServer() {
-    server1.stubFor(any(urlPathEqualTo("/v1/discovery/fakeenclave"))
+    server1.stubFor(put(urlPathEqualTo("/v1/discovery/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(200)));
-    server2.stubFor(any(urlPathEqualTo("/v1/discovery/fakeenclave"))
+    server2.stubFor(put(urlPathEqualTo("/v1/discovery/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(500)));
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
     var hostsToHostIds = Map.of("anotherfakehostid", URI.create(server1.baseUrl()), "onemorehostid", URI.create(server2.baseUrl()));
@@ -152,7 +152,7 @@ public class RateLimitServiceClientTest {
 
   @Test
   public void testDiscoveryAllowedDisallowedCase() {
-    server1.stubFor(any(urlPathEqualTo("/v1/discovery/fakeenclave"))
+    server1.stubFor(put(urlPathEqualTo("/v1/discovery/fakeenclave"))
                         .willReturn(aResponse().withHeader("Content-Type", "application/json").withStatus(429)));
     var httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(200)).build();
     var hostsToHostIds = Map.of("anotherfakehostid", URI.create(server1.baseUrl()), "onemorehostid", URI.create(server2.baseUrl()));
