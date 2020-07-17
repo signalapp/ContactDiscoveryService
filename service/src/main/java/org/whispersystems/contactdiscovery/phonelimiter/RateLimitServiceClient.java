@@ -28,6 +28,7 @@ import javax.validation.ValidatorFactory;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
@@ -62,11 +63,14 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
   private static final Counter ATTEST_ATTEMPTS = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "attest", "attempts"));
   private static final Counter ATTEST_SUCCESSES = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "attest", "successes"));
   private static final Counter ATTEST_ERRORS = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "attest", "errors"));
+  private static final Counter ATTEST_PARTIAL_FAILURES = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "attest", "partial_failures"));
 
   private static final Timer DISCOVERY_TIMER = METRIC_REGISTRY.timer(name(RateLimitServiceClient.class, "discovery", "latency"));
   private static final Counter DISCOVERY_ATTEMPTS = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "discovery", "attempts"));
   private static final Counter DISCOVERY_SUCCESSES = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "discovery", "successes"));
   private static final Counter DISCOVERY_ERRORS = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "discovery", "errors"));
+  private static final Counter DISCOVERY_PARTIAL_FAILURES = METRIC_REGISTRY.counter(name(RateLimitServiceClient.class, "discovery", "partial_failures"));
+
 
   private final PhoneLimiterPartitioner parter;
   private final HttpClient client;
@@ -105,7 +109,10 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
       // TODO(CDS-153): add retries
       CompletableFuture<RemoteAttestationResponse> fut = client.sendAsync(request, BodyHandlers.ofByteArray())
                                                                .thenApply(this::handleAttestationResponse)
-                                                               .orTimeout(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
+                                                               .orTimeout(requestTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                                                               .whenComplete((resp, t) -> {
+                                                                 logWhenFailed("attestation", uri, t, ATTEST_PARTIAL_FAILURES);
+                                                               });
       hostIdToFutures.put(hostId, fut);
     }
 
@@ -115,6 +122,14 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
     var allFutures = hostIdToFutures.values();
     return CompletableFuture.allOf(allFutures.toArray(CompletableFuture[]::new)).exceptionally((t) -> null)
                             .thenCompose((Void v) -> composeAttestationResponses(hostIdToFutures));
+  }
+
+  private void logWhenFailed(String requestType, URI uri, Throwable t, Counter partialFailCount) {
+    if (t == null) {
+      return;
+    }
+    partialFailCount.inc();
+    LOGGER.warn(String.format("%s: partial failure occurred when requesting %s", requestType, uri, t));
   }
 
   private CompletableFuture<Map<String, RemoteAttestationResponse>> composeAttestationResponses(Map<String, CompletableFuture<RemoteAttestationResponse>> hostIdToFutures) {
@@ -176,7 +191,10 @@ public class RateLimitServiceClient implements PhoneRateLimiter {
       // TODO(CDS-153): add retries
       CompletableFuture<Boolean> fut = client.sendAsync(request, BodyHandlers.ofByteArray())
                                              .thenCompose(this::handleDiscoveryAllowedResponse)
-                                             .orTimeout(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
+                                             .orTimeout(requestTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                                             .whenComplete((resp, t) -> {
+                                               logWhenFailed("discovery", uri, t, DISCOVERY_PARTIAL_FAILURES);
+                                             });
       allFutures.add(fut);
     }
 
