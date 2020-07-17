@@ -21,8 +21,9 @@ use try_future::{try_future, TryFuture};
 
 #[derive(Clone)]
 pub struct RateLimiterApiClient {
-    client:   hyper::Client<HttpConnector, Body>,
-    base_uri: Uri,
+    client:     hyper::Client<HttpConnector, Body>,
+    base_uri:   Uri,
+    user_agent: String,
 }
 
 #[derive(Clone)]
@@ -37,7 +38,12 @@ impl RateLimiterApiClient {
         http_connector.enforce_http(false);
 
         let client = hyper::Client::builder().build(http_connector);
-        Ok(Self { client, base_uri })
+        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        Ok(Self {
+            client,
+            base_uri,
+            user_agent,
+        })
     }
 
     pub fn discovery_request(
@@ -187,6 +193,9 @@ impl RateLimiterApiClient {
         hyper_request
             .headers_mut()
             .insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        hyper_request
+            .headers_mut()
+            .insert(header::USER_AGENT, HeaderValue::from_str(&self.user_agent).unwrap());
         hyper_request.headers_mut().insert(header::AUTHORIZATION, credentials.into());
 
         for cookie in cookies {
