@@ -30,6 +30,7 @@ use crate::discovery::manager::*;
 use crate::discovery::request_manager::*;
 use crate::intel_client::*;
 use crate::limits::rate_limiter::*;
+use crate::logger;
 use crate::metrics::{JsonReporter, PeriodicReporter, METRICS};
 use crate::*;
 
@@ -42,6 +43,7 @@ const PENDING_REQUESTS_TABLE_ORDER: u8 = 15;
 pub struct RateLimiterService {
     runtime:               tokio::runtime::Runtime,
     enclave_thread_joiner: Box<dyn Future<Item = Result<(), failure::Error>, Error = Box<dyn std::any::Any + Send + 'static>> + Send>,
+    access_logger_guard:   slog_async::AsyncGuard,
 }
 
 #[derive(Clone)]
@@ -200,11 +202,16 @@ impl RateLimiterService {
             cmdline_config.state_directory.to_owned(),
             discovery_request_manager_tx,
         );
+
+        let (access_logger, access_logger_guard) =
+            logger::AccessLogger::new_with_guard().with_context(|_| format!("Unable to start syslog access logger:"))?;
+
         let api_service = SignalApiService::new(
             signal_user_authenticator,
             discovery_manager,
             config.api.denyDiscovery,
             api_rate_limiters,
+            access_logger,
         );
         let api_listener = ApiListener::new(&config.api.listenHostPort, api_service).context("error starting api listener")?;
 
@@ -265,6 +272,7 @@ impl RateLimiterService {
         Ok(Self {
             runtime,
             enclave_thread_joiner,
+            access_logger_guard,
         })
     }
 
@@ -275,5 +283,6 @@ impl RateLimiterService {
             Err(_join_error) => error!("enclave thread died"),
         }
         drop(self.runtime);
+        drop(self.access_logger_guard);
     }
 }

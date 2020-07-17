@@ -40,6 +40,7 @@ serde_yaml       = "0.8"
 sgx_sdk_ffi      = { git = "https://github.com/signalapp/sgx_common.git", rev = "580489343a37517d96451a5c0950d462d3e86a3b" }
 slog             = "2.4"
 slog-async       = "2.3"
+slog-syslog      = "0.12"
 structopt        = "0.3"
 tk-listen        = "0.2"
 time             = "0.1"

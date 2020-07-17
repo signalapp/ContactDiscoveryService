@@ -13,7 +13,7 @@ use futures::prelude::*;
 use http::header;
 use http::header::HeaderValue;
 use http::request;
-use hyper::{Body, Chunk, Method, Request, Response, StatusCode};
+use hyper::{body::Payload, Body, Chunk, Method, Request, Response, StatusCode};
 use rld_api::entities::*;
 use serde::{Deserialize, Serialize};
 use try_future::TryFuture;
@@ -23,6 +23,7 @@ use super::auth::signal_user::*;
 use super::auth::*;
 use super::*;
 use crate::limits::rate_limiter::*;
+use crate::logger::AccessLogger;
 use crate::metrics::*;
 use crate::*;
 
@@ -35,6 +36,7 @@ where DiscoveryManagerTy: Clone
     deny_discovery:            bool,
     rate_limiters:             SignalApiRateLimiters,
     signal_user_authenticator: Arc<SignalUserAuthenticator>,
+    access_logger:             AccessLogger,
 }
 
 #[derive(Clone)]
@@ -95,6 +97,7 @@ where DiscoveryManagerTy: DiscoveryManager<User = SignalUser> + Clone + Send + '
         discovery_manager: DiscoveryManagerTy,
         deny_discovery: bool,
         rate_limiters: SignalApiRateLimiters,
+        access_logger: AccessLogger,
     ) -> Self
     {
         init_metrics();
@@ -137,6 +140,7 @@ where DiscoveryManagerTy: DiscoveryManager<User = SignalUser> + Clone + Send + '
             deny_discovery,
             signal_user_authenticator,
             rate_limiters,
+            access_logger,
         }
     }
 
@@ -396,13 +400,18 @@ where DiscoveryManagerTy: Clone
     type ResBody = Body;
 
     fn call(&mut self, request: Request<Body>) -> Self::Future {
+        let (logger, request_parts) = self.access_logger.request_parts(&request);
         match self.router.recognize(request.uri().path()) {
             Ok(matched) => {
                 let response = matched.handler.handle(self, matched.params, request);
-
-                let logged_response = response.then(|result: Result<Response<Self::ResBody>, Self::Error>| {
+                let logged_response = response.then(move |result: Result<Response<Self::ResBody>, Self::Error>| {
                     match &result {
                         Ok(response) => {
+                            logger.log_access(
+                                &request_parts,
+                                response.status().as_u16(),
+                                response.body().content_length().unwrap_or(0),
+                            );
                             if response.status().is_client_error() {
                                 HTTP_4XX_METER.mark();
                             } else if response.status().is_server_error() {
@@ -421,7 +430,13 @@ where DiscoveryManagerTy: Clone
             }
             Err(_) => {
                 HTTP_4XX_METER.mark();
-                Box::new(Ok(error_response(StatusCode::NOT_FOUND, None)).into_future())
+                let error_response = error_response(StatusCode::NOT_FOUND, None);
+                logger.log_access(
+                    &request_parts,
+                    error_response.status().as_u16(),
+                    error_response.body().content_length().unwrap_or(0),
+                );
+                Box::new(Ok(error_response).into_future())
             }
         }
     }

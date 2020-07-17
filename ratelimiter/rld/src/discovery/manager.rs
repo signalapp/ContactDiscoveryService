@@ -13,7 +13,7 @@ use std::sync::{Arc, RwLock};
 use futures::future;
 use futures::prelude::*;
 use futures::sync::oneshot;
-use log::{info, warn};
+use log::warn;
 use rld_api::entities::*;
 
 use super::request_manager::*;

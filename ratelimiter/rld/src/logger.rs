@@ -11,8 +11,12 @@ use std::io::{BufWriter, Stderr, Write};
 use std::thread;
 
 use chrono::format::StrftimeItems;
-use slog::{Drain, KV};
+use http::header;
+use http::request;
+use hyper::Body;
+use slog::{slog_info, Drain, KV};
 use slog_async::OverflowStrategy;
+use slog_syslog::Facility;
 
 use crate::metrics::*;
 
@@ -243,5 +247,69 @@ where Fun: FnMut(slog::Key, &fmt::Arguments<'_>) -> std::io::Result<()>
 {
     fn emit_arguments(&mut self, key: slog::Key, val: &fmt::Arguments<'_>) -> slog::Result {
         self.0(key, val).map_err(slog::Error::from)
+    }
+}
+
+#[derive(Clone)]
+pub struct AccessLogger {
+    slogger: slog::Logger,
+}
+
+#[derive(Clone)]
+pub struct AccessLogRequestParts {
+    user_agent:  String,
+    request_str: String,
+}
+
+impl AccessLogger {
+    pub fn new_with_guard() -> std::io::Result<(Self, slog_async::AsyncGuard)> {
+        let syslog_drain = slog_syslog::SyslogBuilder::new()
+            .facility(Facility::LOG_LOCAL1)
+            .level(slog::Level::Info)
+            .unix("/run/systemd/journal/syslog")
+            .start()?;
+
+        let slog_async = slog_async::Async::new(syslog_drain.ignore_res());
+
+        let (slog_async, slog_async_guard) = slog_async
+            .chan_size(ASYNC_QUEUE_SIZE)
+            .overflow_strategy(OverflowStrategy::DropAndReport)
+            .thread_name("access-logger".to_string())
+            .build_with_guard();
+
+        let slogger = slog::Logger::root(slog_async.ignore_res(), slog::o!());
+
+        Ok((Self { slogger }, slog_async_guard))
+    }
+
+    pub fn request_parts(&self, request: &request::Request<Body>) -> (Self, AccessLogRequestParts) {
+        let user_agent = match request.headers().get(header::USER_AGENT) {
+            Some(v) => match v.to_str() {
+                Ok(v) => v.to_owned(),
+                Err(_) => "-".to_owned(),
+            },
+            None => "-".to_owned(),
+        };
+
+        (self.clone(), AccessLogRequestParts {
+            user_agent,
+            request_str: format!("{} {} {:?}", request.method().as_str(), request.uri().path(), request.version()),
+        })
+    }
+
+    pub fn log_access(&self, request_parts: &AccessLogRequestParts, status_code: u16, content_length: u64) {
+        let timespec = get_coarse_time();
+        let datetime = chrono::NaiveDateTime::from_timestamp(timespec.0, timespec.1);
+        let formatted_timestamp = datetime.format_with_items(TIMESTAMP_FORMAT_ITEMS.iter().cloned());
+
+        slog_info!(
+            self.slogger,
+            "{} {} {} {} {}",
+            formatted_timestamp,
+            request_parts.request_str,
+            status_code,
+            content_length,
+            request_parts.user_agent
+        );
     }
 }
