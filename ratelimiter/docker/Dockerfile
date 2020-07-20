@@ -25,9 +25,13 @@ RUN    apt-get update \
     && apt-key add /tmp/docker/intel-sgx-apt-repo-key.gpg \
     && apt-add-repository "deb https://download.01.org/intel-sgx/sgx_repo/ubuntu bionic main" \
     && apt-get install -y \
+        libsgx-enclave-common="${SGX_DEB_VERSION}" \
         libsgx-enclave-common-dev="${SGX_DEB_VERSION}" \
+        libsgx-epid="${SGX_DEB_VERSION}" \
         libsgx-epid-dev="${SGX_DEB_VERSION}" \
+        libsgx-launch="${SGX_DEB_VERSION}" \
         libsgx-launch-dev="${SGX_DEB_VERSION}" \
+        libsgx-quote-ex="${SGX_DEB_VERSION}" \
         libsgx-quote-ex-dev="${SGX_DEB_VERSION}" \
         libsgx-urts="${SGX_DEB_VERSION}" \
         libsgx-uae-service="${SGX_DEB_VERSION}" \
