@@ -1,0 +1,35 @@
+#
+# Azure Pipelines job to build the cds-ratelimiter-builder docker
+# image used to build the cds rate limiter service.
+#
+
+jobs:
+  - job: docker_build_cds_ratelimiter_builder
+    displayName: docker build cds-ratelimiter-builder
+    pool:
+      vmImage: ubuntu-18.04
+    steps:
+      - task: Docker@2
+        displayName: docker login
+        inputs:
+          command:           login
+          containerRegistry: signalbackupci-container-registry
+
+      - script: docker pull signalbackupci.azurecr.io/signalbackupci:cds-ratelimiter-builder || true
+        displayName: docker pull
+
+      - task: Docker@2
+        displayName: docker build
+        inputs:
+          command:    build
+          dockerfile: ratelimiter/docker/Dockerfile
+          arguments:  --build-arg UID=1000 --build-arg GID=1000 --cache-from signalbackupci.azurecr.io/signalbackupci:cds-ratelimiter-builder
+          repository: signalbackupci
+          tags:       cds-ratelimiter-builder
+
+      - task: Docker@2
+        displayName: docker push
+        inputs:
+          command:    push
+          repository: signalbackupci
+          tags:       cds-ratelimiter-builder

@@ -20,6 +20,10 @@ resources:
       options:   --user 0:0 --device /dev/isgx
       volumes:
         - /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
+    - container: cds-ratelimiter-builder
+      image:     signalbackupci:cds-ratelimiter-builder
+      endpoint:  signalbackupci-container-registry
+      options:   --user 0:0 --device /dev/isgx -v /var/run/aesmd/aesm.socket:/var/run/aesmd/aesm.socket
 
 stages:
   - stage: docker_build_cds_jni_builder
@@ -38,3 +42,14 @@ stages:
     dependsOn: docker_build_cds_jni_builder
     jobs:
       - template: jobs/service_tests.yml
+
+  - stage: docker_build_cds_ratelimiter_builder
+    displayName: docker build cds-ratelimiter-builder
+    jobs:
+      - template: jobs/docker_build_cds_ratelimiter_builder.yml
+
+  - stage: ratelimiter_service_tests
+    displayName: rate limiter service cargo tests
+    dependsOn: docker_build_cds_ratelimiter_builder
+    jobs:
+      - template: jobs/ratelimiter_service_tests.yml

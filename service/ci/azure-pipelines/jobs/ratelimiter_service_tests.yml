@@ -1,0 +1,15 @@
+#
+# Azure Pipelines job to run the tests for the ratelimiter module from
+# within the cds-ratelimiter-builder docker image.
+#
+
+jobs:
+  - job: ratelimiter_service_tests
+    displayName: run the rate limiter service tests
+    pool:
+      name: jeff
+      vmImage: ubuntu-18.04
+    container: cds-ratelimiter-builder
+    steps:
+      - script: cargo test --manifest-path=./ratelimiter/Cargo.toml
+        displayName: run rate limiter service cargo tests
