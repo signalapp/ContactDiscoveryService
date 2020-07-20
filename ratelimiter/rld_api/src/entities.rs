@@ -91,3 +91,9 @@ pub struct DiscoveryRequestEnvelope {
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveryResponse {}
+
+impl From<Vec<u8>> for RequestId {
+    fn from(vec: Vec<u8>) -> Self {
+        RequestId(vec)
+    }
+}

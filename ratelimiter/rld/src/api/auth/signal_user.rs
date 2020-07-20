@@ -38,13 +38,6 @@ pub enum SignalUserAuthenticationError {
     ExpiredAuthorizationToken,
 }
 
-impl SignalUser {
-    #[cfg(test)]
-    pub fn new(username: String) -> Self {
-        Self { username, _private: () }
-    }
-}
-
 //
 // SignalUserAuthenticator impls
 //

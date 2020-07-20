@@ -157,27 +157,23 @@ mod test {
     use std::time::{Duration, Instant};
 
     use futures::sync::oneshot;
-    use kbupd_api::entities::*;
+    use rld_api::entities::*;
     use tokio::runtime::current_thread::Runtime;
     use tokio::timer::Delay;
 
     use super::*;
     use crate::mocks::{rand_array, rand_bytes};
 
-    fn backup_id() -> BackupId {
-        rand_array::<[u8; 32]>().into()
+    fn user_id() -> UserId {
+        rand_array::<[u8; 16]>().into()
     }
 
-    fn request_id() -> [u8; 32] {
-        rand_array()
+    fn request_id() -> RequestId {
+        rand_bytes(vec![0; 32]).into()
     }
 
     fn response() -> DiscoveryResponse {
-        DiscoveryResponse {
-            iv:   rand_array(),
-            data: rand_bytes(vec![0; 32]),
-            mac:  rand_array(),
-        }
+        DiscoveryResponse {}
     }
 
     fn runtime() -> Runtime {
@@ -225,7 +221,7 @@ mod test {
         let mut runtime = runtime();
         let request_ttl = Duration::from_millis(0);
         let request_manager = TestDiscoveryRequestManager::new(DiscoveryRequestManager::new(request_ttl));
-        let (backup_id, request_id) = (backup_id(), request_id());
+        let (user_id, request_id) = (user_id(), request_id());
 
         let (reply_1_tx, mut reply_1_rx) = oneshot::channel();
         let (reply_2_tx, mut reply_2_rx) = oneshot::channel();
@@ -233,11 +229,23 @@ mod test {
         let (reply_4_tx, mut reply_4_rx) = oneshot::channel();
         let (reply_5_tx, mut reply_5_rx) = oneshot::channel();
 
+        let request_id_clone1 = request_id.clone();
         request_manager
             .sender()
             .cast(move |request_manager: &mut DiscoveryRequestManager| {
-                request_manager.start_request(backup_id, request_id.to_vec(), reply_1_tx);
-                request_manager.start_request(backup_id, request_id.to_vec(), reply_2_tx);
+                request_manager.start_request(user_id, request_id_clone1.clone(), reply_1_tx);
+                request_manager.start_request(user_id, request_id_clone1.clone(), reply_2_tx);
+            })
+            .unwrap();
+
+        let request_manager = request_manager.flush(&mut runtime);
+        sleep(&mut runtime, request_ttl);
+
+        let request_id_clone2 = request_id.clone();
+        request_manager
+            .sender()
+            .cast(move |request_manager: &mut DiscoveryRequestManager| {
+                request_manager.start_request(user_id, request_id_clone2.clone(), reply_3_tx);
             })
             .unwrap();
 
@@ -247,20 +255,10 @@ mod test {
         request_manager
             .sender()
             .cast(move |request_manager: &mut DiscoveryRequestManager| {
-                request_manager.start_request(backup_id, request_id.to_vec(), reply_3_tx);
-            })
-            .unwrap();
-
-        let request_manager = request_manager.flush(&mut runtime);
-        sleep(&mut runtime, request_ttl);
-
-        request_manager
-            .sender()
-            .cast(move |request_manager: &mut DiscoveryRequestManager| {
-                request_manager.finish_request(backup_id, request_id.to_vec(), Ok(response()));
-                request_manager.start_request(backup_id, request_id.to_vec(), reply_4_tx);
-                request_manager.start_request(backup_id, request_id.to_vec(), reply_5_tx);
-                request_manager.finish_request(backup_id, request_id.to_vec(), Ok(response()));
+                request_manager.finish_request(user_id, request_id.clone(), Ok(response()));
+                request_manager.start_request(user_id, request_id.clone(), reply_4_tx);
+                request_manager.start_request(user_id, request_id.clone(), reply_5_tx);
+                request_manager.finish_request(user_id, request_id.clone(), Ok(response()));
             })
             .unwrap();
 
@@ -285,7 +283,7 @@ mod test {
     #[test]
     fn test_replace_request() {
         let mut request_manager = DiscoveryRequestManager::new(Duration::from_secs(86400));
-        let backup_id = backup_id();
+        let user_id = user_id();
         let request_id_1 = request_id();
         let request_id_2 = request_id();
 
@@ -293,9 +291,9 @@ mod test {
         let (reply_2_tx, mut reply_2_rx) = oneshot::channel();
         let (reply_3_tx, mut reply_3_rx) = oneshot::channel();
 
-        request_manager.start_request(backup_id, request_id_1.to_vec(), reply_1_tx);
-        request_manager.start_request(backup_id, request_id_1.to_vec(), reply_2_tx);
-        request_manager.start_request(backup_id, request_id_2.to_vec(), reply_3_tx);
+        request_manager.start_request(user_id, request_id_1.clone(), reply_1_tx);
+        request_manager.start_request(user_id, request_id_1.clone(), reply_2_tx);
+        request_manager.start_request(user_id, request_id_2, reply_3_tx);
 
         let reply_1 = reply_1_rx.try_recv().unwrap().unwrap();
         assert!(reply_1.unwrap().is_none());
@@ -309,17 +307,17 @@ mod test {
     #[test]
     fn test_finish_request_ok() {
         let mut request_manager = DiscoveryRequestManager::new(Duration::from_secs(86400));
-        let backup_id = backup_id();
+        let user_id = user_id();
         let request_id = request_id();
 
         let (reply_1_tx, mut reply_1_rx) = oneshot::channel();
         let (reply_2_tx, mut reply_2_rx) = oneshot::channel();
         let (reply_3_tx, mut reply_3_rx) = oneshot::channel();
 
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_1_tx);
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_2_tx);
-        request_manager.finish_request(backup_id, request_id.to_vec(), Ok(response()));
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_3_tx);
+        request_manager.start_request(user_id, request_id.clone(), reply_1_tx);
+        request_manager.start_request(user_id, request_id.clone(), reply_2_tx);
+        request_manager.finish_request(user_id, request_id.clone(), Ok(response()));
+        request_manager.start_request(user_id, request_id.clone(), reply_3_tx);
 
         let reply_1 = reply_1_rx.try_recv().unwrap().unwrap();
         assert!(reply_1.unwrap().is_none());
@@ -334,17 +332,17 @@ mod test {
     #[test]
     fn test_finish_request_err() {
         let mut request_manager = DiscoveryRequestManager::new(Duration::from_secs(86400));
-        let backup_id = backup_id();
+        let user_id = user_id();
         let request_id = request_id();
 
         let (reply_1_tx, mut reply_1_rx) = oneshot::channel();
         let (reply_2_tx, mut reply_2_rx) = oneshot::channel();
         let (reply_3_tx, mut reply_3_rx) = oneshot::channel();
 
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_1_tx);
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_2_tx);
-        request_manager.finish_request(backup_id, request_id.to_vec(), Err(DiscoveryError::RequestCanceled));
-        request_manager.start_request(backup_id, request_id.to_vec(), reply_3_tx);
+        request_manager.start_request(user_id, request_id.clone(), reply_1_tx);
+        request_manager.start_request(user_id, request_id.clone(), reply_2_tx);
+        request_manager.finish_request(user_id, request_id.clone(), Err(DiscoveryError::RequestCanceled));
+        request_manager.start_request(user_id, request_id.clone(), reply_3_tx);
 
         let reply_1 = reply_1_rx.try_recv().unwrap().unwrap();
         assert!(reply_1.unwrap().is_none());
@@ -359,7 +357,7 @@ mod test {
     #[test]
     fn test_finish_replaced_request() {
         let mut request_manager = DiscoveryRequestManager::new(Duration::from_secs(86400));
-        let backup_id = backup_id();
+        let user_id = user_id();
         let request_id_1 = request_id();
         let request_id_2 = request_id();
 
@@ -368,12 +366,12 @@ mod test {
         let (reply_3_tx, mut reply_3_rx) = oneshot::channel();
         let (reply_4_tx, mut reply_4_rx) = oneshot::channel();
 
-        request_manager.start_request(backup_id, request_id_1.to_vec(), reply_1_tx);
-        request_manager.start_request(backup_id, request_id_1.to_vec(), reply_2_tx);
-        request_manager.start_request(backup_id, request_id_2.to_vec(), reply_3_tx);
-        request_manager.start_request(backup_id, request_id_2.to_vec(), reply_4_tx);
-        request_manager.finish_request(backup_id, request_id_1.to_vec(), Err(DiscoveryError::RequestCanceled));
-        request_manager.finish_request(backup_id, request_id_2.to_vec(), Ok(response()));
+        request_manager.start_request(user_id, request_id_1.clone(), reply_1_tx);
+        request_manager.start_request(user_id, request_id_1.clone(), reply_2_tx);
+        request_manager.start_request(user_id, request_id_2.clone(), reply_3_tx);
+        request_manager.start_request(user_id, request_id_2.clone(), reply_4_tx);
+        request_manager.finish_request(user_id, request_id_1.clone(), Err(DiscoveryError::RequestCanceled));
+        request_manager.finish_request(user_id, request_id_2.clone(), Ok(response()));
 
         let reply_1 = reply_1_rx.try_recv().unwrap().unwrap();
         assert!(reply_1.unwrap().is_none());
@@ -390,7 +388,7 @@ mod test {
     #[test]
     fn test_replace_finished_request() {
         let mut request_manager = DiscoveryRequestManager::new(Duration::from_secs(86400));
-        let backup_id = backup_id();
+        let user_id = user_id();
         let request_id_1 = request_id();
         let request_id_2 = request_id();
 
@@ -398,11 +396,11 @@ mod test {
         let (reply_2_tx, mut reply_2_rx) = oneshot::channel();
         let (reply_3_tx, mut reply_3_rx) = oneshot::channel();
 
-        request_manager.start_request(backup_id, request_id_1.to_vec(), reply_1_tx);
-        request_manager.finish_request(backup_id, request_id_1.to_vec(), Err(DiscoveryError::RequestCanceled));
-        request_manager.start_request(backup_id, request_id_2.to_vec(), reply_2_tx);
-        request_manager.start_request(backup_id, request_id_2.to_vec(), reply_3_tx);
-        request_manager.finish_request(backup_id, request_id_2.to_vec(), Ok(response()));
+        request_manager.start_request(user_id, request_id_1.clone(), reply_1_tx);
+        request_manager.finish_request(user_id, request_id_1.clone(), Err(DiscoveryError::RequestCanceled));
+        request_manager.start_request(user_id, request_id_2.clone(), reply_2_tx);
+        request_manager.start_request(user_id, request_id_2.clone(), reply_3_tx);
+        request_manager.finish_request(user_id, request_id_2.clone(), Ok(response()));
 
         let reply_1 = reply_1_rx.try_recv().unwrap().unwrap();
         assert!(reply_1.unwrap().is_none());

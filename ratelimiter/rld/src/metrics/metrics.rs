@@ -113,6 +113,7 @@ impl From<Timer> for Metric {
 //
 
 impl Counter {
+    #[allow(dead_code)]
     pub fn inc(&self, value: u64) {
         self.count.fetch_add(value, Ordering::SeqCst);
     }
@@ -121,6 +122,7 @@ impl Counter {
         self.count.fetch_sub(value, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn guard(&self, value: u64) -> CounterGuard {
         self.inc(value);
         CounterGuard {
@@ -157,6 +159,7 @@ impl TryFrom<Metric> for Counter {
 //
 
 impl CounterGuard {
+    #[allow(dead_code)]
     pub fn update(&mut self, new_counter: &Counter) {
         if new_counter != &self.counter {
             self.counter.dec(self.value);
@@ -177,6 +180,7 @@ impl Drop for CounterGuard {
 //
 
 impl Gauge {
+    #[allow(dead_code)]
     pub fn update(&self, value: impl num_traits::AsPrimitive<f64>) {
         let value = value.as_();
         self.value.store(value.to_bits(), Ordering::SeqCst);
@@ -213,6 +217,7 @@ impl Meter {
         self.shared.tick_total.fetch_add(value, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn set(&self, new_count: u64) {
         self.tick_to(self.shared.start_time.elapsed());
         let old_count = self.shared.count.swap(new_count, Ordering::SeqCst);

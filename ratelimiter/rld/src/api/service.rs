@@ -211,10 +211,9 @@ where DiscoveryManagerTy: DiscoveryManager<User = SignalUser> + Clone + Send + '
                 Err(DiscoveryError::EnclaveNotFound) => Ok(Err(error_response(StatusCode::NOT_FOUND, Some("EnclaveNotFound")))),
                 Err(DiscoveryError::InvalidInput) => Ok(Err(error_response(StatusCode::BAD_REQUEST, Some("EnclaveInvalidInput")))),
                 Err(DiscoveryError::MacMismatch) => Ok(Err(error_response(StatusCode::BAD_REQUEST, Some("EnclaveMacMismatch")))),
-                Err(DiscoveryError::PendingRequestIdNotFound) => Ok(Err(error_response(
-                    StatusCode::BAD_REQUEST,
-                    Some("EnclavePendingRequestIdNotFound"),
-                ))),
+                Err(DiscoveryError::PendingRequestIdNotFound) => {
+                    Ok(Err(error_response(StatusCode::GONE, Some("EnclavePendingRequestIdNotFound"))))
+                }
                 Err(DiscoveryError::InvalidRequestSize) => {
                     Ok(Err(error_response(StatusCode::BAD_REQUEST, Some("DiscoveryInvalidRequestSize"))))
                 }
@@ -505,7 +504,7 @@ mod test {
 
     struct SignalApiServiceTestBuilder {
         ratelimiter_size: u64,
-        deny_backup:      bool,
+        deny_discovery:   bool,
     }
 
     struct SignalApiServiceTest {
@@ -518,19 +517,6 @@ mod test {
 
     impl DiscoveryManager for actor::Sender<DiscoveryManagerMock<SignalUser>> {
         type User = SignalUser;
-
-        fn get_token(
-            &self,
-            enclave_name: String,
-            user: &Self::User,
-        ) -> Box<dyn Future<Item = GetTokenResponse, Error = EnclaveTransactionError> + Send>
-        {
-            let user = user.clone();
-            let call_result = self.sync_call(move |discovery_manager: &mut DiscoveryManagerMock<SignalUser>| {
-                Ok(discovery_manager.get_token(enclave_name, &user))
-            });
-            Box::new(call_result.then(|result: Result<_, futures::Canceled>| result.unwrap()))
-        }
 
         fn get_attestation(
             &self,
@@ -546,16 +532,16 @@ mod test {
             Box::new(call_result.then(|result: Result<_, futures::Canceled>| result.unwrap()))
         }
 
-        fn put_backup_request(
+        fn put_discovery_request(
             &self,
             enclave_name: String,
             user: &Self::User,
-            request: KeyBackupRequest,
-        ) -> Box<dyn Future<Item = KeyBackupResponse, Error = KeyBackupError> + Send>
+            request: DiscoveryRequest,
+        ) -> Box<dyn Future<Item = DiscoveryResponse, Error = DiscoveryError> + Send>
         {
             let user = user.clone();
             let call_result = self.sync_call(move |discovery_manager: &mut DiscoveryManagerMock<SignalUser>| {
-                Ok(discovery_manager.put_backup_request(enclave_name, &user, request))
+                Ok(discovery_manager.put_discovery_request(enclave_name, &user, request))
             });
             Box::new(call_result.then(|result: Result<_, futures::Canceled>| result.unwrap()))
         }
@@ -566,8 +552,8 @@ mod test {
             Self { ratelimiter_size, ..self }
         }
 
-        pub fn deny_backup(self, deny_backup: bool) -> Self {
-            Self { deny_backup, ..self }
+        pub fn deny_discovery(self, deny_discovery: bool) -> Self {
+            Self { deny_discovery, ..self }
         }
 
         pub fn build(self) -> SignalApiServiceTest {
@@ -586,14 +572,6 @@ mod test {
             let valid_user = MockSignalUserToken::new(hmac_secret, "valid_user".to_string());
             let authenticator = SignalUserAuthenticator::new(&hmac_secret);
             let rate_limiters = SignalApiRateLimiters {
-                token:       actor::spawn(
-                    RateLimiter::new("token", LeakyBucketParameters {
-                        size:      self.ratelimiter_size,
-                        leak_rate: self.ratelimiter_size as f64,
-                    }),
-                    &runtime_handle,
-                )
-                .unwrap(),
                 attestation: actor::spawn(
                     RateLimiter::new("attestation", LeakyBucketParameters {
                         size:      self.ratelimiter_size,
@@ -602,8 +580,8 @@ mod test {
                     &runtime_handle,
                 )
                 .unwrap(),
-                backup:      actor::spawn(
-                    RateLimiter::new("backup", LeakyBucketParameters {
+                discovery:   actor::spawn(
+                    RateLimiter::new("discovery", LeakyBucketParameters {
                         size:      self.ratelimiter_size,
                         leak_rate: self.ratelimiter_size as f64,
                     }),
@@ -611,7 +589,15 @@ mod test {
                 )
                 .unwrap(),
             };
-            let service = SignalApiService::new(Arc::new(authenticator), discovery_manager_tx, self.deny_backup, rate_limiters);
+
+            let noop_logger = AccessLogger::new_noop_logger();
+            let service = SignalApiService::new(
+                Arc::new(authenticator),
+                discovery_manager_tx,
+                self.deny_discovery,
+                rate_limiters,
+                noop_logger,
+            );
             SignalApiServiceTest {
                 scenario,
                 runtime,
@@ -626,7 +612,7 @@ mod test {
         pub fn builder() -> SignalApiServiceTestBuilder {
             SignalApiServiceTestBuilder {
                 ratelimiter_size: 10000,
-                deny_backup:      false,
+                deny_discovery:   false,
             }
         }
 
@@ -657,13 +643,19 @@ mod test {
         }
     }
 
-    fn valid_key_backup_request(request_type: KeyBackupRequestType) -> KeyBackupRequest {
-        KeyBackupRequest {
-            requestId: mocks::rand_bytes(vec![0; 50]),
-            iv:        mocks::rand_array(),
-            data:      mocks::rand_bytes(vec![0; 50]),
-            mac:       mocks::rand_array(),
-            r#type:    request_type,
+    fn valid_discovery_request() -> DiscoveryRequest {
+        DiscoveryRequest {
+            addressCount: mocks::rand(),
+            commitment:   mocks::rand_array(),
+            data:         mocks::rand_bytes(vec![0; 50]),
+            iv:           mocks::rand_array(),
+            mac:          mocks::rand_array(),
+            envelope:     DiscoveryRequestEnvelope {
+                requestId: mocks::rand_bytes(vec![0; 32]).into(),
+                data:      mocks::rand_bytes(vec![0; 50]),
+                iv:        mocks::rand_array(),
+                mac:       mocks::rand_array(),
+            },
         }
     }
 
@@ -681,104 +673,6 @@ mod test {
         let client = test.client();
         let response = test.runtime.block_on(client.request(request)).unwrap();
         assert_eq!(response.status(), http::StatusCode::NOT_FOUND);
-    }
-
-    #[test]
-    fn test_get_token_no_authorization() {
-        let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::get("http://invalid/v1/token/test_enclave").body(Body::empty()).unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
-    }
-
-    #[test]
-    fn test_get_token_bad_authorization() {
-        let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::get("http://invalid/v1/token/test_enclave")
-            .header(header::AUTHORIZATION, "zzzz")
-            .body(Body::empty())
-            .unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn test_get_token_unauthorized() {
-        let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::get("http://invalid/v1/token/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, "invalid_password"),
-            )
-            .body(Body::empty())
-            .unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
-    }
-
-    #[test]
-    fn test_get_token_ratelimit_exceeded() {
-        let mut test = SignalApiServiceTest::builder().ratelimiter_size(0).build();
-
-        test.scenario.expect(
-            test.discovery_manager
-                .get_token("test_enclave".to_string(), ANY)
-                .and_return(Box::new(future::lazy(|| -> Result<_, _> { panic!("response future was polled") }))),
-        );
-
-        let request = Request::get("http://invalid/v1/token/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::empty())
-            .unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::TOO_MANY_REQUESTS);
-    }
-
-    #[test]
-    fn test_get_token_valid() {
-        let mut test = SignalApiServiceTest::builder().build();
-
-        let mock_response = GetTokenResponse {
-            backupId: mocks::rand_array::<[u8; 32]>().into(),
-            token:    mocks::rand_array(),
-            tries:    mocks::rand(),
-        };
-        test.scenario.expect(
-            test.discovery_manager
-                .get_token("test_enclave".to_string(), ANY)
-                .and_return(Box::new(Ok(mock_response.clone()).into_future())),
-        );
-
-        let request = Request::get("http://invalid/v1/token/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::empty())
-            .unwrap();
-
-        let client = test.client();
-        let response_data = test
-            .runtime
-            .block_on(
-                client
-                    .request(request)
-                    .and_then(|response: Response<Body>| response.into_body().concat2().from_err()),
-            )
-            .unwrap();
-        let response: GetTokenResponse = serde_json::from_slice(&response_data).unwrap();
-        assert_eq!(mock_response, response)
     }
 
     #[test]
@@ -839,7 +733,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_attestation_ratelimit_exceeded() {
+    fn test_get_attestation_api_ratelimit_exceeded() {
         let mut test = SignalApiServiceTest::builder().ratelimiter_size(0).build();
 
         test.scenario.expect(
@@ -879,27 +773,33 @@ mod test {
     }
 
     #[test]
-    fn test_get_attestation_invalid_input() {
-        let mut test = SignalApiServiceTest::builder().build();
+    fn test_get_attestation_error_mappings() {
+        let error_mapping = [
+            (RemoteAttestationError::InvalidInput, http::StatusCode::BAD_REQUEST),
+            (RemoteAttestationError::EnclaveNotFound, http::StatusCode::NOT_FOUND),
+        ];
+        for (attestation_error, http_status) in &error_mapping {
+            let mut test = SignalApiServiceTest::builder().build();
 
-        let mock_error = RemoteAttestationError::InvalidInput;
-        test.scenario.expect(
-            test.discovery_manager
-                .get_attestation("test_enclave".to_string(), ANY, ANY)
-                .and_return(Box::new(Err(mock_error).into_future())),
-        );
+            let mock_error = attestation_error.clone();
+            test.scenario.expect(
+                test.discovery_manager
+                    .get_attestation("test_enclave".to_string(), ANY, ANY)
+                    .and_return(Box::new(Err(mock_error).into_future())),
+            );
 
-        let request = Request::put("http://invalid/v1/attestation/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(serde_json::to_string(&valid_remote_attestation_request()).unwrap()))
-            .unwrap();
+            let request = Request::put("http://invalid/v1/attestation/test_enclave")
+                .header(
+                    header::AUTHORIZATION,
+                    mocks::basic_auth(&test.valid_user.username, &test.valid_user),
+                )
+                .body(Body::from(serde_json::to_string(&valid_remote_attestation_request()).unwrap()))
+                .unwrap();
 
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+            let client = test.client();
+            let response = test.runtime.block_on(client.request(request)).unwrap();
+            assert_eq!(response.status(), *http_status);
+        }
     }
 
     #[test]
@@ -944,16 +844,14 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_bad_method() {
+    fn test_put_discovery_request_bad_method() {
         let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::get("http://invalid/v1/backup/test_enclave")
+        let request = Request::get("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, &test.valid_user),
             )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -962,12 +860,10 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_no_authorization() {
+    fn test_put_discovery_request_no_authorization() {
         let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -976,13 +872,11 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_bad_authorization() {
+    fn test_put_discovery_request_bad_authorization() {
         let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(header::AUTHORIZATION, "zzzz")
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -991,16 +885,14 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_unauthorized() {
+    fn test_put_discovery_request_unauthorized() {
         let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, "invalid_password"),
             )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -1009,23 +901,21 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_ratelimit_exceeded() {
+    fn test_put_discovery_request_api_ratelimit_exceeded() {
         let mut test = SignalApiServiceTest::builder().ratelimiter_size(0).build();
 
         test.scenario.expect(
             test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
+                .put_discovery_request("test_enclave".to_string(), ANY, ANY)
                 .and_return(Box::new(future::lazy(|| -> Result<_, _> { panic!("response future was polled") }))),
         );
 
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, &test.valid_user),
             )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -1034,9 +924,9 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_empty() {
+    fn test_put_discovery_request_empty() {
         let mut test = SignalApiServiceTest::builder().build();
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, &test.valid_user),
@@ -1050,106 +940,58 @@ mod test {
     }
 
     #[test]
-    fn test_put_backup_request_invalid_input() {
-        let mut test = SignalApiServiceTest::builder().build();
+    fn test_put_discovery_request_error_mappings() {
+        let error_mapping = [
+            (DiscoveryError::EnclaveNotFound, http::StatusCode::NOT_FOUND),
+            (DiscoveryError::InvalidInput, http::StatusCode::BAD_REQUEST),
+            (DiscoveryError::MacMismatch, http::StatusCode::BAD_REQUEST),
+            (DiscoveryError::PendingRequestIdNotFound, http::StatusCode::GONE),
+            (DiscoveryError::InvalidRequestSize, http::StatusCode::BAD_REQUEST),
+            (DiscoveryError::QueryCommitmentMismatch, http::StatusCode::BAD_REQUEST),
+            (DiscoveryError::RateLimitExceeded, http::StatusCode::TOO_MANY_REQUESTS),
+            (DiscoveryError::InvalidRateLimitState, http::StatusCode::INTERNAL_SERVER_ERROR),
+        ];
+        for (discovery_error, http_status) in &error_mapping {
+            let mut test = SignalApiServiceTest::builder().build();
 
-        let mock_error = KeyBackupError::InvalidInput;
-        test.scenario.expect(
-            test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
-                .and_return(Box::new(Err(mock_error).into_future())),
-        );
+            let mock_error = discovery_error.clone();
+            test.scenario.expect(
+                test.discovery_manager
+                    .put_discovery_request("test_enclave".to_string(), ANY, ANY)
+                    .and_return(Box::new(Err(mock_error).into_future())),
+            );
 
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
-            .unwrap();
+            let request = Request::put("http://invalid/v1/discovery/test_enclave")
+                .header(
+                    header::AUTHORIZATION,
+                    mocks::basic_auth(&test.valid_user.username, &test.valid_user),
+                )
+                .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
+                .unwrap();
 
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+            let client = test.client();
+            let response = test.runtime.block_on(client.request(request)).unwrap();
+            assert_eq!(response.status(), *http_status);
+        }
     }
 
     #[test]
-    fn test_put_backup_request_mac_mismatch() {
+    fn test_put_discovery_request_valid() {
         let mut test = SignalApiServiceTest::builder().build();
 
-        let mock_error = KeyBackupError::MacMismatch;
+        let mock_response = DiscoveryResponse {};
         test.scenario.expect(
             test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
-                .and_return(Box::new(Err(mock_error).into_future())),
-        );
-
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
-            .unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn test_put_backup_request_pending_request_id_not_found() {
-        let mut test = SignalApiServiceTest::builder().build();
-
-        let mock_error = KeyBackupError::PendingRequestIdNotFound;
-        test.scenario.expect(
-            test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
-                .and_return(Box::new(Err(mock_error).into_future())),
-        );
-
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
-            .unwrap();
-
-        let client = test.client();
-        let response = test.runtime.block_on(client.request(request)).unwrap();
-        assert_eq!(response.status(), http::StatusCode::GONE);
-    }
-
-    #[test]
-    fn test_put_backup_request_valid() {
-        let mut test = SignalApiServiceTest::builder().build();
-
-        let mock_response = KeyBackupResponse {
-            iv:   mocks::rand_array(),
-            data: mocks::rand_bytes(vec![0; 50]),
-            mac:  mocks::rand_array(),
-        };
-        test.scenario.expect(
-            test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
+                .put_discovery_request("test_enclave".to_string(), ANY, ANY)
                 .and_return(Box::new(Ok(mock_response.clone()).into_future())),
         );
 
-        let request = Request::put("http://invalid/v1/backup/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, &test.valid_user),
             )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
@@ -1160,106 +1002,24 @@ mod test {
                 response.into_body().concat2().from_err()
             }))
             .unwrap();
-        let response: KeyBackupResponse = serde_json::from_slice(&response_data).unwrap();
-        assert_eq!(mock_response, response)
+        let response: DiscoveryResponse = serde_json::from_slice(&response_data).unwrap();
+        assert_eq!(mock_response, response);
     }
 
     #[test]
-    fn test_put_backup_request_deny_backup() {
-        let mut test = SignalApiServiceTest::builder().deny_backup(true).build();
+    fn test_put_discovery_request_deny() {
+        let mut test = SignalApiServiceTest::builder().deny_discovery(true).build();
 
-        let mock_token_response = GetTokenResponse {
-            backupId: mocks::rand_array::<[u8; 32]>().into(),
-            token:    mocks::rand_array(),
-            tries:    mocks::rand(),
-        };
-        let mock_backup_response = KeyBackupResponse {
-            iv:   mocks::rand_array(),
-            data: mocks::rand_bytes(vec![0; 50]),
-            mac:  mocks::rand_array(),
-        };
-
-        let mock_backup_response_2 = mock_backup_response.clone();
-        test.scenario.expect(
-            test.discovery_manager
-                .get_token("test_enclave".to_string(), ANY)
-                .and_return(Box::new(Ok(mock_token_response.clone()).into_future())),
-        );
-        test.scenario.expect(
-            test.discovery_manager
-                .put_backup_request("test_enclave".to_string(), ANY, ANY)
-                .and_call_clone(move |_, _, _| Box::new(Ok(mock_backup_response_2.clone()).into_future()))
-                .times(2),
-        );
-
-        let token_request = Request::get("http://invalid/v1/token/test_enclave")
+        let request = Request::put("http://invalid/v1/discovery/test_enclave")
             .header(
                 header::AUTHORIZATION,
                 mocks::basic_auth(&test.valid_user.username, &test.valid_user),
             )
-            .body(Body::empty())
-            .unwrap();
-        let backup_request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Backup)).unwrap(),
-            ))
-            .unwrap();
-        let restore_request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Restore)).unwrap(),
-            ))
-            .unwrap();
-        let delete_request = Request::put("http://invalid/v1/backup/test_enclave")
-            .header(
-                header::AUTHORIZATION,
-                mocks::basic_auth(&test.valid_user.username, &test.valid_user),
-            )
-            .body(Body::from(
-                serde_json::to_string(&valid_key_backup_request(KeyBackupRequestType::Delete)).unwrap(),
-            ))
+            .body(Body::from(serde_json::to_string(&valid_discovery_request()).unwrap()))
             .unwrap();
 
         let client = test.client();
-        test.runtime
-            .block_on(client.request(backup_request).map(|response: Response<Body>| {
-                assert!(response.status().is_server_error());
-            }))
-            .unwrap();
-
-        let response_data = test
-            .runtime
-            .block_on(client.request(restore_request).and_then(|response: Response<Body>| {
-                assert!(response.status().is_success());
-                response.into_body().concat2().from_err()
-            }))
-            .unwrap();
-        assert_eq!(mock_backup_response, serde_json::from_slice(&response_data).unwrap());
-
-        let response_data = test
-            .runtime
-            .block_on(client.request(delete_request).and_then(|response: Response<Body>| {
-                assert!(response.status().is_success());
-                response.into_body().concat2().from_err()
-            }))
-            .unwrap();
-        assert_eq!(mock_backup_response, serde_json::from_slice(&response_data).unwrap());
-
-        let response_data = test
-            .runtime
-            .block_on(
-                client
-                    .request(token_request)
-                    .and_then(|response: Response<Body>| response.into_body().concat2().from_err()),
-            )
-            .unwrap();
-        assert_eq!(mock_token_response, serde_json::from_slice(&response_data).unwrap());
+        let response = test.runtime.block_on(client.request(request)).unwrap();
+        assert_eq!(response.status(), http::StatusCode::FORBIDDEN);
     }
 }

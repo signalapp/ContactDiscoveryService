@@ -312,4 +312,11 @@ impl AccessLogger {
             request_parts.user_agent
         );
     }
+
+    pub fn new_noop_logger() -> Self {
+        let drain = slog::Discard;
+        let slogger = slog::Logger::root(drain, slog::o!());
+
+        Self { slogger }
+    }
 }
