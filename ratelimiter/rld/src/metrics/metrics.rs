@@ -55,8 +55,9 @@ pub struct Timer {
 }
 
 pub struct TimerGuard<'a> {
-    timer: &'a Timer,
-    start: Instant,
+    timer:  &'a Timer,
+    start:  Instant,
+    cancel: AtomicBool,
 }
 
 struct MeterShared {
@@ -363,8 +364,9 @@ impl ExponentiallyWeightedMovingAverage {
 impl Timer {
     pub fn time(&self) -> TimerGuard<'_> {
         TimerGuard {
-            timer: self,
-            start: Instant::now(),
+            timer:  self,
+            start:  Instant::now(),
+            cancel: Default::default(),
         }
     }
 
@@ -392,11 +394,17 @@ impl<'a> TimerGuard<'a> {
     pub fn stop(self) {
         drop(self);
     }
+
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::SeqCst);
+    }
 }
 
 impl<'a> Drop for TimerGuard<'a> {
     fn drop(&mut self) {
-        self.timer.update(self.start.elapsed());
+        if self.cancel.load(Ordering::SeqCst) == false {
+            self.timer.update(self.start.elapsed());
+        }
     }
 }
 
@@ -420,5 +428,34 @@ impl Histogram {
             Err(poison) => poison.into_inner(),
         };
         sample_guard.snapshot()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::super::*;
+    use super::*;
+
+    lazy_static::lazy_static! {
+        static ref TEST_TIMER_CANCEL_TIMER: Timer = METRICS.metric(&metric_name!("test-timer-cancel"));
+    }
+
+    #[test]
+    fn test_timer_time() {
+        {
+            let timer = TEST_TIMER_CANCEL_TIMER.time();
+            timer.stop();
+        }
+        assert_eq!(TEST_TIMER_CANCEL_TIMER.meter().count(), 1);
+    }
+
+    #[test]
+    fn test_timer_cancel() {
+        {
+            let timer = TEST_TIMER_CANCEL_TIMER.time();
+            timer.cancel();
+            timer.stop();
+        }
+        assert_eq!(TEST_TIMER_CANCEL_TIMER.meter().count(), 0);
     }
 }
