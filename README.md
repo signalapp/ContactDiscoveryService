@@ -117,26 +117,62 @@ $ cd <repository_root>
 $ java -jar service/target/contactdiscovery-<version>.jar server service/config/yourconfig.yml
 `````
 
-## Testing
+# Testing
 
-# Local testing
-You can locally run tests in `enclave/` with `cargo test` in that directroy. For
-`service/`, run `mvn test -pl ./service` from the top level. (Note that those
-won't run tests that require working SGX hardware.) If you have a machine with
-the SGX dependencies installed and working SGX hardware, you can run `mvn verify
--pl ./service` to run tests that depend on them.
+## Local Testing
 
-You can also use our Azure Pipelines set up to run the SGX-required tests with
-manual triggers.
+### Enclave Testing
 
-To run the pipelines, if you have a change in `enclave/`, you can push to a
-branch that starts with either "test-" or "test_" and the enclave will rebuild
-and `mvn verify` will be run on hardware with SGX enabled. If you push to a
-"test-svc-" or "test_svc_" prefixed branch, the checked-in enclave will be used
-and `mvn verify` will be run on the SGX-enabled hardware.
+You can locally run tests in `enclave/` with `cargo test` in that directory.
+
+### Front End Service Testing
+
+For `service/`, run `mvn test -pl ./service` from the top level. (Note
+that those won't run tests that require working SGX hardware.) If you
+have a machine with the SGX dependencies installed and working SGX
+hardware, you can run `mvn verify -pl ./service` to run tests that
+depend on them.
+
+### Rate Limiter Service Testing
+
+You can locally run tests in `ratelimiter/` with `cargo test` in that
+directory.
+
+## Remote Azure Pipeline Testing
+
+You can also use our Azure Pipelines set up to run the SGX-required
+tests with manual triggers.
 
 You can see results of those manual runs on
 [Azure's site](https://dev.azure.com/signal-testing/directory-testing/_build).
+
+### Enclave Only Changes
+
+If you have a change in `enclave/`, you can push to a branch that
+starts with either `test-` or `test_` and the enclave will rebuild and
+service tests will be run on hardware with SGX enabled.
+
+- For the front end service, the tests run `mvn verify` will be run on
+hardware with SGX enabled.
+
+- For the rate limiter service, the tests run `cargo test` in the rate
+  limiter directory.
+
+### Service Code Changes
+
+If you are only touching the service code (front end or rate limiter)
+without touching the enclave, then you can use the existing checked in
+enclave.
+
+If you push to a branch that starts with `test-svc-` or `test_svc_`, the
+checked-in enclave will be used and service tests will be run on the
+SGX-enabled hardware.
+
+- For the front end service, the tests run `mvn verify` will be run on
+hardware with SGX enabled.
+
+- For the rate limiter service, the tests run `cargo test` in the rate
+  limiter directory.
 
 # CI
 
