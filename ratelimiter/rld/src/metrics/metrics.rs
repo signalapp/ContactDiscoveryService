@@ -437,16 +437,17 @@ mod test {
     use super::*;
 
     lazy_static::lazy_static! {
+        static ref TEST_TIMER_OK_TIMER:     Timer = METRICS.metric(&metric_name!("test-timer-ok"));
         static ref TEST_TIMER_CANCEL_TIMER: Timer = METRICS.metric(&metric_name!("test-timer-cancel"));
     }
 
     #[test]
     fn test_timer_time() {
         {
-            let timer = TEST_TIMER_CANCEL_TIMER.time();
+            let timer = TEST_TIMER_OK_TIMER.time();
             timer.stop();
         }
-        assert_eq!(TEST_TIMER_CANCEL_TIMER.meter().count(), 1);
+        assert_eq!(TEST_TIMER_OK_TIMER.meter().count(), 1);
     }
 
     #[test]

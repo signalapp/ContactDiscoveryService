@@ -20,15 +20,25 @@ use crate::metrics::*;
 use crate::util::ToHex;
 
 lazy_static::lazy_static! {
-    static ref RATE_LIMIT_SET_READ_TIMER:   Timer = METRICS.metric(&metric_name!("read"));
-    static ref RATE_LIMIT_SET_WRITE_TIMER:  Timer = METRICS.metric(&metric_name!("write"));
-    static ref RATE_LIMIT_SET_CREATE_METER: Meter = METRICS.metric(&metric_name!("create"));
+    static ref RATE_LIMIT_SET_READ_TIMER:                   Timer = METRICS.metric(&metric_name!("read"));
+    static ref RATE_LIMIT_SET_WRITE_TIMER:                  Timer = METRICS.metric(&metric_name!("write"));
+    static ref RATE_LIMIT_SET_CREATE_METER:                 Meter = METRICS.metric(&metric_name!("create"));
+    static ref RATE_LIMIT_SET_CREATE_DIRECTORY_ERROR_METER: Meter = METRICS.metric(&metric_name!("error", "create-directory"));
+    static ref RATE_LIMIT_SET_FILE_OPEN_READ_ERROR_METER:   Meter = METRICS.metric(&metric_name!("error", "file-open-read"));
+    static ref RATE_LIMIT_SET_FILE_OPEN_WRITE_ERROR_METER:  Meter = METRICS.metric(&metric_name!("error", "file-open-write"));
+    static ref RATE_LIMIT_SET_FILE_READ_ERROR_METER:        Meter = METRICS.metric(&metric_name!("error", "file-read"));
+    static ref RATE_LIMIT_SET_FILE_WRITE_ERROR_METER:       Meter = METRICS.metric(&metric_name!("error", "file-write"));
 }
 
 pub fn init_ratelimit_state_metrics() {
     lazy_static::initialize(&RATE_LIMIT_SET_READ_TIMER);
     lazy_static::initialize(&RATE_LIMIT_SET_WRITE_TIMER);
     lazy_static::initialize(&RATE_LIMIT_SET_CREATE_METER);
+    lazy_static::initialize(&RATE_LIMIT_SET_CREATE_DIRECTORY_ERROR_METER);
+    lazy_static::initialize(&RATE_LIMIT_SET_FILE_OPEN_READ_ERROR_METER);
+    lazy_static::initialize(&RATE_LIMIT_SET_FILE_OPEN_WRITE_ERROR_METER);
+    lazy_static::initialize(&RATE_LIMIT_SET_FILE_READ_ERROR_METER);
+    lazy_static::initialize(&RATE_LIMIT_SET_FILE_WRITE_ERROR_METER);
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -126,11 +136,26 @@ impl RateLimitState {
             let timer = RATE_LIMIT_SET_READ_TIMER.time();
 
             let mut buffer = Vec::with_capacity(state_size);
-            let mut file = fs::File::open(path)
-                .map_err(|err| DiscoveryError::OpenStateFileFailed(format!("failed to open file for reading: {:?}. {:?}", path, err)))?;
-            let _ = file
-                .read_to_end(buffer.as_mut())
-                .map_err(|err| DiscoveryError::ReadStateFileFailed(format!("failed to read file: {:?}. {:?}", path, err)))?;
+            let mut file = match fs::File::open(path) {
+                Ok(file) => file,
+                Err(err) => {
+                    timer.cancel();
+                    RATE_LIMIT_SET_FILE_OPEN_READ_ERROR_METER.mark();
+                    return Err(DiscoveryError::OpenStateFileFailed(format!(
+                        "failed to open file for reading: {:?}. {:?}",
+                        path, err
+                    )));
+                }
+            };
+
+            if let Err(err) = file.read_to_end(buffer.as_mut()) {
+                timer.cancel();
+                RATE_LIMIT_SET_FILE_READ_ERROR_METER.mark();
+                return Err(DiscoveryError::ReadStateFileFailed(format!(
+                    "failed to read file: {:?}. {:?}",
+                    path, err
+                )));
+            }
 
             timer.stop();
             Ok(buffer)
@@ -140,8 +165,14 @@ impl RateLimitState {
                 "failed to find parent directory: {:?}.",
                 path
             )))?;
-            fs::create_dir_all(parent_dir)
-                .map_err(|err| DiscoveryError::DirectoryCreateFailed(format!("failed to create: {:?}. {:?}", parent_dir, err)))?;
+
+            if let Err(err) = fs::create_dir_all(parent_dir) {
+                RATE_LIMIT_SET_CREATE_DIRECTORY_ERROR_METER.mark();
+                return Err(DiscoveryError::DirectoryCreateFailed(format!(
+                    "failed to create directory: {:?}. {:?}",
+                    parent_dir, err
+                )));
+            }
 
             RATE_LIMIT_SET_CREATE_METER.mark();
 
@@ -154,11 +185,26 @@ impl RateLimitState {
         let timer = RATE_LIMIT_SET_WRITE_TIMER.time();
 
         let path = &self.inner.path;
-        let mut file = fs::File::create(path)
-            .map_err(|err| DiscoveryError::OpenStateFileFailed(format!("failed to open file for writing: {:?}. {:?}", path, err)))?;
-        let _ignore = file
-            .write_all(self)
-            .map_err(|err| DiscoveryError::WriteStateFileFailed(format!("failed to write file: {:?}. {:?}", path, err)))?;
+        let mut file = match fs::File::create(path) {
+            Ok(file) => file,
+            Err(err) => {
+                timer.cancel();
+                RATE_LIMIT_SET_FILE_OPEN_WRITE_ERROR_METER.mark();
+                return Err(DiscoveryError::OpenStateFileFailed(format!(
+                    "failed to open file for writing: {:?}. {:?}",
+                    path, err
+                )));
+            }
+        };
+
+        if let Err(err) = file.write_all(self) {
+            timer.cancel();
+            RATE_LIMIT_SET_FILE_WRITE_ERROR_METER.mark();
+            return Err(DiscoveryError::WriteStateFileFailed(format!(
+                "failed to write file: {:?}. {:?}",
+                path, err
+            )));
+        }
 
         timer.stop();
         Ok(())
