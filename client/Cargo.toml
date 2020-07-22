@@ -1,0 +1,2 @@
+[workspace]
+members = ["cds_api_client", "cds_api", "cds_client"]

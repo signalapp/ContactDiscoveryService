@@ -1,0 +1,16 @@
+[package]
+authors = ["Signal Messenger, LLC."]
+name    = "cds_client"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[dependencies]
+bytes        = "0.5"
+byteorder    = "1.3"
+cds_api      = { path = "../cds_api" }
+rand         = "0.7"
+ring         = "0.16"
+thiserror    = "1.0"
+x25519-dalek = { version = "0.6", default-features = false, features = ["u64_backend"] }
+uuid         = { version = "0.8", features = ["v4"] }

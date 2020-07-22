@@ -1,0 +1,11 @@
+[package]
+authors = ["Signal Messenger, LLC."]
+name    = "cds_api"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+
+[dependencies]
+kbupd_util   = { git = "https://github.com/signalapp/sgx_common.git", rev = "580489343a37517d96451a5c0950d462d3e86a3b" }
+serde        = "1.0"
+serde_derive = "1.0"
