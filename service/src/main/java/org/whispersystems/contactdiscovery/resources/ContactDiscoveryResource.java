@@ -25,7 +25,6 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
-import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
@@ -54,13 +53,11 @@ public class ContactDiscoveryResource {
 
   private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
-  private final PhoneRateLimiter phoneLimiter;
   private final Set<String> enclaves;
 
-  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, PhoneRateLimiter phoneLimiter, Set<String> enclaves) {
+  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, Set<String> enclaves) {
     this.rateLimiter = rateLimiter;
     this.requestManager = requestManager;
-    this.phoneLimiter = phoneLimiter;
     this.enclaves = enclaves;
   }
 
@@ -74,7 +71,7 @@ public class ContactDiscoveryResource {
                                     @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
-      throws RateLimitExceededException
+      throws NoSuchEnclaveException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
     if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
@@ -86,23 +83,12 @@ public class ContactDiscoveryResource {
       return;
     }
 
-    phoneLimiter.discoveryAllowed(user, authHeader, enclaveId, request)
-                .thenAccept((allowed) -> {
-                  if (!allowed) {
-                    asyncResponse.resume(Response.status(429).build());
-                    return;
-                  }
-                  try {
-                    requestManager.submit(enclaveId, request)
-                                  .thenAccept(asyncResponse::resume)
-                                  .exceptionally(throwable -> {
-                                    asyncResponse.resume(throwable.getCause());
-                                    return null;
-                                  });
-                  } catch (NoSuchEnclaveException e) {
-                    asyncResponse.resume(e);
-                  }
-                });
+    requestManager.submit(enclaveId, request)
+                  .thenAccept(asyncResponse::resume)
+                  .exceptionally(throwable -> {
+                    asyncResponse.resume(throwable.getCause());
+                    return null;
+                  });
   }
 
   @Timed

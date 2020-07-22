@@ -15,7 +15,6 @@ import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
-import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServiceClient;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
@@ -48,8 +47,6 @@ public class ContactDiscoveryResourceTest {
 
   private final RequestManager requestManager = mock(RequestManager.class);
   private final RateLimiter rateLimiter = mock(RateLimiter.class);
-  private final RateLimitServiceClient rateLimitClient = mock(RateLimitServiceClient.class);
-
 
   private final byte[] requestId = new byte[32];
   private final byte[] iv = new byte[12];
@@ -58,7 +55,6 @@ public class ContactDiscoveryResourceTest {
 
   private DiscoveryRequest validDiscoveryRequest;
   private DiscoveryRequest invalidDiscoveryRequest;
-  private DiscoveryRequest validMultipleAttestDiscRequest;
 
   @Rule
   public final ResourceTestRule resources = ResourceTestRule.builder()
@@ -69,7 +65,7 @@ public class ContactDiscoveryResourceTest {
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
                                                             .addProvider(new RateLimitExceededExceptionMapper())
                                                             .addProvider(new DirectoryUnavailableExceptionMapper())
-                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, rateLimitClient, Set.of(validEnclaveId)))
+                                                            .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, Set.of(validEnclaveId)))
                                                             .build();
 
   @Before
@@ -83,15 +79,11 @@ public class ContactDiscoveryResourceTest {
     validDiscoveryRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
     invalidDiscoveryRequest = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
 
-    var envelopes = Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope, "fakehostid", validEnvelope);
-    validMultipleAttestDiscRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], envelopes);
-
     DiscoveryResponse discoveryResponse = new DiscoveryResponse(requestId, iv, data, mac);
     CompletableFuture<DiscoveryResponse> responseFuture = CompletableFuture.completedFuture(discoveryResponse);
     CompletableFuture<DiscoveryResponse> exceptionFuture = new CompletableFuture<>();
     exceptionFuture.completeExceptionally(new NoSuchEnclaveException("bad enclave id"));
 
-    when(rateLimitClient.discoveryAllowed(any(), any(), eq(validEnclaveId), any())).thenReturn(CompletableFuture.completedFuture(true));
     when(requestManager.submit(eq(validEnclaveId), any())).thenReturn(responseFuture);
     when(requestManager.submit(eq(invalidEnclaveId), any())).thenReturn(exceptionFuture);
 
@@ -109,29 +101,6 @@ public class ContactDiscoveryResourceTest {
                                                DiscoveryResponse.class);
 
     verify(rateLimiter, times(1)).validate(AuthHelper.VALID_NUMBER, validDiscoveryRequest.getAddressCount());
-    verify(requestManager, times(1)).submit(eq(validEnclaveId), any());
-
-    assertArrayEquals(requestId, response.getRequestId());
-    assertArrayEquals(iv, response.getIv());
-    assertArrayEquals(data, response.getData());
-    assertArrayEquals(mac, response.getMac());
-  }
-
-  @Test
-  public void testMultipleAttestationsDiscovery() throws RateLimitExceededException, NoSuchEnclaveException {
-    String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
-
-    when(rateLimitClient.discoveryAllowed(any(), eq(authHeader), eq(validEnclaveId), eq(validMultipleAttestDiscRequest)))
-        .thenReturn(CompletableFuture.completedFuture(true));
-
-    DiscoveryResponse response = resources.getJerseyTest()
-                                          .target("/v1/discovery/" + validEnclaveId)
-                                          .request(MediaType.APPLICATION_JSON_TYPE)
-                                          .header("Authorization", authHeader)
-                                          .put(Entity.entity(validMultipleAttestDiscRequest, MediaType.APPLICATION_JSON_TYPE),
-                                               DiscoveryResponse.class);
-
-    verify(rateLimiter, times(1)).validate(AuthHelper.VALID_NUMBER, validMultipleAttestDiscRequest.getAddressCount());
     verify(requestManager, times(1)).submit(eq(validEnclaveId), any());
 
     assertArrayEquals(requestId, response.getRequestId());
