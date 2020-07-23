@@ -1,6 +1,0 @@
-[workspace]
-members = ["rld", "rld_api", "rld_api_client", "rld_client", "rld_config", "kbuptlsd", "rustunnel"]
-
-[patch.crates-io]
-openssl = { rev = "ea6761d5e7b63b415b7fda6ba5c5026f4218bcd0", git = "https://github.com/signalapp/rust-openssl.git" }
-openssl-sys = { rev = "ea6761d5e7b63b415b7fda6ba5c5026f4218bcd0", git = "https://github.com/signalapp/rust-openssl.git" }

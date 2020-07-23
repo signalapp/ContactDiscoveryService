@@ -87,18 +87,6 @@ production, the generated libsabd-enclave.signdata file must be signed using a s
 whitelisted by Intel, which can then be saved as libsabd-enclave.sig with public key at
 libsabd-enclave.pub, and signed using `make signed install`.
 
-## Building the rate limiter daemon
-
-### Building reproducibly with Docker
-
-#### Prerequisites:
-- GNU Make
-- Docker (able to run debian image)
-
-`````
-$ make -C <repository_root>/ratelimiter
-`````
-
 ## Building the service
 
 `````
@@ -125,18 +113,13 @@ $ java -jar service/target/contactdiscovery-<version>.jar server service/config/
 
 You can locally run tests in `enclave/` with `cargo test` in that directory.
 
-### Front End Service Testing
+### Service Testing
 
 For `service/`, run `mvn test -pl ./service` from the top level. (Note
 that those won't run tests that require working SGX hardware.) If you
 have a machine with the SGX dependencies installed and working SGX
 hardware, you can run `mvn verify -pl ./service` to run tests that
 depend on them.
-
-### Rate Limiter Service Testing
-
-You can locally run tests in `ratelimiter/` with `cargo test` in that
-directory.
 
 ## Remote Azure Pipeline Testing
 
@@ -152,27 +135,14 @@ If you have a change in `enclave/`, you can push to a branch that
 starts with either `test-` or `test_` and the enclave will rebuild and
 service tests will be run on hardware with SGX enabled.
 
-- For the front end service, the tests run `mvn verify` will be run on
-hardware with SGX enabled.
+### Service Only Changes
 
-- For the rate limiter service, the tests run `cargo test` in the rate
-  limiter directory.
-
-### Service Code Changes
-
-If you are only touching the service code (front end or rate limiter)
-without touching the enclave, then you can use the existing checked in
-enclave.
+If you are only touching the service code without touching the
+enclave, then you can use the existing checked in enclave.
 
 If you push to a branch that starts with `test-svc-` or `test_svc_`, the
 checked-in enclave will be used and service tests will be run on the
 SGX-enabled hardware.
-
-- For the front end service, the tests run `mvn verify` will be run on
-hardware with SGX enabled.
-
-- For the rate limiter service, the tests run `cargo test` in the rate
-  limiter directory.
 
 # CI
 
