@@ -15,6 +15,7 @@ RUN    apt-get update \
                devscripts \
                fakeroot \
                git \
+               gawk \
                gnupg \
                libclang-dev \
                libcurl4-openssl-dev \
@@ -29,6 +30,8 @@ RUN    apt-get update \
                pkg-config \
                protobuf-compiler \
                python \
+               python3-distutils \
+               python3-dev \
                wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -55,7 +58,7 @@ COPY rustup-init.sha256 /tmp/docker/
 RUN    curl -f https://static.rust-lang.org/rustup/archive/1.20.2/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
     && [ `sha256sum /tmp/rustup-init|cut -d' ' -f1` = `cut -d' ' -f1</tmp/docker/rustup-init.sha256` ] \
     && chmod a+x /tmp/rustup-init \
-    && /tmp/rustup-init -y --profile minimal --component rustfmt --default-toolchain "${TOOLCHAIN}" \
+    && /tmp/rustup-init -y --profile minimal --component rustfmt clippy --default-toolchain "${TOOLCHAIN}" \
     && rm -rf /tmp/rustup-init /tmp/docker
 
 ENV PATH="/home/rust/.cargo/bin:${PATH}"

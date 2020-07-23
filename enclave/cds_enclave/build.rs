@@ -77,6 +77,7 @@ fn run_rustc(in_file: impl AsRef<Path>, out_file: impl AsRef<Path>) -> Result<()
             "-C", "panic=abort",
             "-C", "llvm-args=-max-jump-table-size=1",
             "-C", "llvm-args=-disable-tail-duplicate",
+            "-C", "no-redzone",
         ])
         .arg("-o")
         .arg(out_file.as_ref())

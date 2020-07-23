@@ -1,0 +1,12 @@
+#!/usr/bin/gawk -f
+
+match($2, /<(.+)>:/, m) {
+    fn = m[1];
+}
+
+/jmpq.+[(]/ {
+    if (fn) {
+        print fn;
+    }
+    fn = "";
+}

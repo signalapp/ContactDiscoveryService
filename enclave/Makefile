@@ -213,7 +213,7 @@ clean:
 FORCE:
 
 $(targetdir)/release/lib%.a: FORCE
-	env -u CFLAGS \
+	env CFLAGS="-mno-red-zone" \
 		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
 ## sgxsd

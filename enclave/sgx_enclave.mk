@@ -25,7 +25,7 @@ SGX_LIBDIR ?= $(SGX_SDK_SOURCE_LIBDIR)
 export SGX_LIBDIR
 SGX_SIGN ?= $(SGX_SDK_SOURCE_LIBDIR)/sgx_sign
 SGX_EDGER8R ?= $(SGX_SDK_SOURCE_LIBDIR)/sgx_edger8r
-SGX_SDK_MAKE = env -u LDFLAGS -u CPPFLAGS CFLAGS="-D_TLIBC_USE_REP_STRING_ -fno-jump-tables -Wno-error=implicit-fallthrough" $(MAKE)
+SGX_SDK_MAKE = env -u LDFLAGS -u CPPFLAGS CFLAGS="-D_TLIBC_USE_REP_STRING_ -fno-jump-tables -mno-red-zone -mindirect-branch-register -Wno-error=implicit-fallthrough" $(MAKE)
 
 $(SGX_SDK_SOURCE_INCLUDEDIR): | $(SGX_SDK_SOURCE_DIR)
 
@@ -90,7 +90,7 @@ $(builddir)/linux-sgx/linux-sgx-$(SGX_SDK_SOURCE_GIT_REV):
 LLVM_BOLT ?= $(builddir)/bin/llvm-bolt
 BOLT_DIR   = $(builddir)/bolt
 
-BOLT_GIT_REV      = 0655e9a71f43b3fc6a87e3c9be779dc76bc9efb9
+BOLT_GIT_REV      = 130d2c758964950cf713bddef123104b41642161
 BOLT_SRC_DIR      = $(BOLT_DIR)/llvm-bolt-$(BOLT_GIT_REV)
 BOLT_LLVM_GIT_REV = f137ed238db11440f03083b1c88b7ffc0f4af65e
 BOLT_LLVM_SRC_DIR = $(BOLT_DIR)/llvm-$(BOLT_LLVM_GIT_REV)
@@ -114,10 +114,32 @@ $(builddir)/bin/llvm-bolt: | $(BOLT_SRC_DIR)
 	strip -o $@ $(BOLT_DIR)/build/bin/llvm-bolt
 
 ##
+## pyxed/Intel Xed
+##
+PYXED_DIR = $(builddir)/pyxed
+PYXED_PYTHONPATH = $(builddir)/pyxed/build/instdir/lib/python3.7/site-packages
+
+PYXED_GIT = https://github.com/huku-/pyxed
+PYXED_GIT_REV = b197cfe675533bd4720ff890002ee98ae52ceb3f
+
+$(PYXED_PYTHONPATH):
+	rm -rf $(PYXED_DIR)
+	mkdir -p $(PYXED_DIR)
+	git init $(PYXED_DIR)
+	git -C $(PYXED_DIR) remote add origin $(PYXED_GIT)
+	git -C $(PYXED_DIR) fetch --depth 1 $(PYXED_GIT) $(PYXED_GIT_REV)
+	git -C $(PYXED_DIR) checkout FETCH_HEAD
+	git -C $(PYXED_DIR) submodule update --init --recursive --depth 1
+	awk '/^static PyMethodDef methods\[\] =$$/ {ARG=4}; { if (ARG>0) {ARG=ARG-1} else {print} }' < $(PYXED_DIR)/pyxed.c > $(PYXED_DIR)/pyxed.c.new
+	mv $(PYXED_DIR)/pyxed.c.new $(PYXED_DIR)/pyxed.c #XXX Hack remove after pyxed bugfix.
+	mkdir -p $(PYXED_DIR)/build/instdir
+	( cd $(PYXED_DIR); python3 setup.py install --prefix build/instdir )
+
+##
 ## linking
 ##
 
-ENCLAVE_CFLAGS = -fvisibility=hidden -fPIC -I$(SGX_INCLUDEDIR)/tlibc -fno-jump-tables -fno-builtin -ffreestanding
+ENCLAVE_CFLAGS = -fvisibility=hidden -fPIC -I$(SGX_INCLUDEDIR)/tlibc -fno-jump-tables -mno-red-zone -fno-builtin -ffreestanding
 
 ENCLAVE_LDFLAGS = \
 	-Wl,-z,relro,-z,now,-z,noexecstack \
@@ -138,18 +160,14 @@ $(builddir)/%.hardened.unstripped.so: $(builddir)/%.unstripped.so | $(LLVM_BOLT)
 		-skip-funcs=$(shell cat bolt_skip_funcs.txt) \
 		-eliminate-unreachable=0 -strip-rep-ret=0 -simplify-conditional-tail-calls=0 \
 		-align-macro-fusion=none \
-		-insert-retpolines -insert-lfences \
+		-insert-lfences \
 		-o $@ $<
 
-$(builddir)/%.hardened.unsigned.so: $(builddir)/%.hardened.unstripped.so
-	objdump -j .text --no-show-raw-insn -d $< | \
-	perl   -ne '$$cur{"branch"} = /^\s+[0-9a-f]+:\s+j[^m][a-z]*\s/;' \
-		-e '$$cur{"lfence"} = /^\s+[0-9a-f]+:\s+lfence/;' \
-		-e '$$fn = $$1 if /^[0-9a-f]+ <([^>]+)>:/;' \
-		-e 'if ($$cur{"branch"} && !$$prev{"branch"} && !$$prev{"lfence"}) { print "fn $$fn:\n$$prev$$_\n"; die if !grep(/$$fn\/1/, `cat bolt_skip_funcs.txt`); };' \
-		-e '%prev = %cur; $$prev = $$_;' \
-		-e '$$total{$$_} += $$cur{$$_} for (keys %cur);' \
-		-e 'END { print "$$_: ", $$total{$$_}, "\n" for (keys %total); }'
+$(builddir)/%.hardened.unsigned.so: $(builddir)/%.hardened.unstripped.so $(PYXED_PYTHONPATH)
+	objdump -w -j .text --no-show-raw-insn -d $(builddir)/$*.unstripped.so | \
+	  bin/funcs_with_memindjmp > $(builddir)/funcs_with_memindjmp
+	objdump -w -j .text -d $< | \
+	  PYTHONPATH=$(PYXED_PYTHONPATH) python3 bin/lvi_checker $(builddir)/funcs_with_memindjmp
 	objdump -j .text --no-show-raw-insn -d $< | \
 	  egrep '^\s+[0-9a-f]+:\s+(cpuid|getsec|rdpmc|sgdt|sidt|sldt|str|vmcall|vmfunc|rdtscp?|int[0-9a-z]*|iret|syscall|sysenter)\s+' | \
 	  wc -l | grep -q '^0$$'
@@ -170,12 +188,12 @@ $(builddir)/%.unsigned.so: $(builddir)/%.unstripped.so
 	cp $< $@
 %.debug.config.xml: %.config.xml
 	sed -e 's@<DisableDebug>1</DisableDebug>@<DisableDebug>0</DisableDebug>@' $< > $@
-$(builddir)/%.debug.signdata: $(builddir)/%.unsigned.so %.debug.config.xml | $(SGX_SIGN)
-	$(SGX_SIGN) gendata -out $@ -enclave $(builddir)/$*.unsigned.so -config $*.debug.config.xml
-$(builddir)/%.debug.so: $(builddir)/%.unsigned.so $(builddir)/%.debug.signdata %.debug.config.xml %.debug.pub $(builddir)/%.debug.sig | $(SGX_SIGN)
+$(builddir)/%.debug.signdata: $(builddir)/%.unstripped.so %.debug.config.xml | $(SGX_SIGN)
+	$(SGX_SIGN) gendata -out $@ -enclave $(builddir)/$*.unstripped.so -config $*.debug.config.xml
+$(builddir)/%.debug.so: $(builddir)/%.unstripped.so $(builddir)/%.debug.signdata %.debug.config.xml %.debug.pub $(builddir)/%.debug.sig | $(SGX_SIGN)
 	$(SGX_SIGN) catsig \
 		-out $@ \
-		-enclave $(builddir)/$*.unsigned.so \
+		-enclave $(builddir)/$*.unstripped.so \
 		-unsigned $(builddir)/$*.debug.signdata \
 		-config $*.debug.config.xml \
 		-key $*.debug.pub \
