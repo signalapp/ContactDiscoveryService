@@ -94,7 +94,7 @@ include sgx_enclave.mk
 
 docker-install: docker install
 
-all: $(CDS_ENCLAVE_TARGET) $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so $(builddir)/$(CDS_ENCLAVE_NAME).signdata $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave $(includedir)/cds_enclave_u.c $(includedir)/cds_enclave_u.h
+all: $(CDS_ENCLAVE_TARGET) $(builddir)/$(CDS_ENCLAVE_NAME).unstripped.so $(builddir)/$(CDS_ENCLAVE_NAME).unsigned.so $(builddir)/$(CDS_ENCLAVE_NAME).debug.so $(builddir)/$(CDS_ENCLAVE_NAME).signdata $(builddir)/$(CDS_ENCLAVE_NAME).debug.signdata $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave $(builddir)/$(CDS_ENCLAVE_NAME).debug.mrenclave $(includedir)/cds_enclave_u.c $(includedir)/cds_enclave_u.h
 
 unstripped: $(CDS_ENCLAVE_TARGET)
 
@@ -163,13 +163,13 @@ sign: $(builddir)/$(CDS_ENCLAVE_NAME).signed.so
 
 install:
 	$(INSTALL_DATA) $(builddir)/$(CDS_ENCLAVE_NAME).debug.so \
-			$(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave).so
+			$(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).debug.mrenclave).so
 	if [ -e $(builddir)/$(CDS_ENCLAVE_NAME).signed.so ]; then \
 		cp $(builddir)/$(CDS_ENCLAVE_NAME).signed.so \
 		   $(resourcedir)/enclave/$$(cat $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave).so; \
+		cp $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave \
+		   $(resourcedir)/enclave/current.mrenclave; \
 	fi
-	cp $(builddir)/$(CDS_ENCLAVE_NAME).mrenclave \
-			$(resourcedir)/enclave/current.mrenclave
 
 edger8r: $(includedir)/cds_enclave.edl | $(SGX_EDGER8R)
 	 $(SGX_EDGER8R) --untrusted --untrusted-dir $(includedir) \

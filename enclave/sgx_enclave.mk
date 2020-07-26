@@ -190,7 +190,7 @@ $(builddir)/%.unsigned.so: $(builddir)/%.unstripped.so
 	sed -e 's@<DisableDebug>1</DisableDebug>@<DisableDebug>0</DisableDebug>@' $< > $@
 $(builddir)/%.debug.signdata: $(builddir)/%.unstripped.so %.debug.config.xml | $(SGX_SIGN)
 	$(SGX_SIGN) gendata -out $@ -enclave $(builddir)/$*.unstripped.so -config $*.debug.config.xml
-$(builddir)/%.debug.so: $(builddir)/%.unstripped.so $(builddir)/%.debug.signdata %.debug.config.xml %.debug.pub $(builddir)/%.debug.sig | $(SGX_SIGN)
+$(builddir)/%.debug.so: $(builddir)/%.unstripped.so $(builddir)/%.debug.signdata %.debug.config.xml %.debug.pub $(builddir)/%.debug.sig $(builddir)/%.debug.mrenclave | $(SGX_SIGN)
 	$(SGX_SIGN) catsig \
 		-out $@ \
 		-enclave $(builddir)/$*.unstripped.so \
