@@ -23,7 +23,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
-pub enum CdsClientApiError {
+pub enum CdsApiClientError {
     #[error(transparent)]
     CdsClientError(#[from] cds_client::error::CdsClientError),
 
@@ -58,7 +58,19 @@ pub enum CdsClientApiError {
     EmptyAttestationMapError,
 
     #[error(transparent)]
-    TaskJoinError(#[from] tokio::task::JoinError),
+    TokioTaskJoinError(#[from] tokio::task::JoinError),
+
+    #[error("Error sending on tokio channel")]
+    TokioChannelSendError,
+
+    #[error("Timeout sending request")]
+    RequestTimeoutError,
+
+    #[error("Uuid list length mismatch")]
+    UuidListLengthMismatchError { phone_len: usize, uuid_len: usize },
+
+    #[error("Error creating random distribution")]
+    CreateRandDistributionError,
 }
 
 #[derive(Clone)]
@@ -75,12 +87,12 @@ pub struct CdsApiCredentials {
 }
 
 impl CdsApiClient {
-    pub fn new(base_uri: Uri, insecure_ssl: bool) -> Result<Self, CdsClientApiError> {
+    pub fn new(base_uri: Uri, insecure_ssl: bool) -> Result<Self, CdsApiClientError> {
         let tls_connector = TlsConnector::builder()
             .min_protocol_version(Some(Protocol::Tlsv12))
             .danger_accept_invalid_certs(insecure_ssl)
             .build()
-            .map_err(CdsClientApiError::from)?;
+            .map_err(CdsApiClientError::from)?;
 
         let mut http_connector = HttpConnector::new();
         http_connector.enforce_http(false);
@@ -100,7 +112,7 @@ impl CdsApiClient {
         credentials: &CdsApiCredentials,
         enclave_name: &str,
         phone_list: &[u64],
-    ) -> Result<Vec<Uuid>, CdsClientApiError>
+    ) -> Result<Vec<Uuid>, CdsApiClientError>
     {
         let client = cds_client::Client::new(&mut rand::thread_rng());
 
@@ -114,7 +126,7 @@ impl CdsApiClient {
             .attestations
             .iter()
             .next()
-            .ok_or(CdsClientApiError::EmptyAttestationMapError)?;
+            .ok_or(CdsApiClientError::EmptyAttestationMapError)?;
 
         let credentials = credentials.clone();
         let enclave_name = enclave_name.to_string();
@@ -136,7 +148,7 @@ impl CdsApiClient {
             .await?;
         debug!("discovery_response: {:#?}", discovery_response);
 
-        cds_client::Client::decode_discovery_response(server_key, discovery_response).map_err(CdsClientApiError::from)
+        cds_client::Client::decode_discovery_response(server_key, discovery_response).map_err(CdsApiClientError::from)
     }
 
     pub async fn get_attestation(
@@ -144,15 +156,15 @@ impl CdsApiClient {
         credentials: &CdsApiCredentials,
         enclave_name: &str,
         request: RemoteAttestationRequest,
-    ) -> Result<(Vec<String>, RemoteAttestationResponse), CdsClientApiError>
+    ) -> Result<(Vec<String>, RemoteAttestationResponse), CdsApiClientError>
     {
         let mut uri_parts = self.base_uri.clone().into_parts();
         let uri_path_and_query = format!("/v1/attestation/{}", enclave_name)
             .parse::<http::uri::PathAndQuery>()
-            .map_err(|_| CdsClientApiError::RequestPathError)?;
+            .map_err(|_| CdsApiClientError::RequestPathError)?;
 
         uri_parts.path_and_query = Some(uri_path_and_query);
-        let uri = Uri::from_parts(uri_parts).map_err(|_| CdsClientApiError::RequestUriError)?;
+        let uri = Uri::from_parts(uri_parts).map_err(|_| CdsApiClientError::RequestUriError)?;
 
         let cookies = Vec::new();
         let (response_parts, response) = self.put_request(uri, credentials, cookies, request).await?;
@@ -160,9 +172,9 @@ impl CdsApiClient {
         let cookie_headers = response_parts.headers.get_all(header::SET_COOKIE);
         let cookies = cookie_headers
             .into_iter()
-            .map(|cookie_header: &HeaderValue| -> Result<String, CdsClientApiError> {
-                let cookie_str = cookie_header.to_str().map_err(|_| CdsClientApiError::CookieHeaderStringError)?;
-                let cookie = Cookie::parse(cookie_str).map_err(|_| CdsClientApiError::CookieHeaderParseError)?;
+            .map(|cookie_header: &HeaderValue| -> Result<String, CdsApiClientError> {
+                let cookie_str = cookie_header.to_str().map_err(|_| CdsApiClientError::CookieHeaderStringError)?;
+                let cookie = Cookie::parse(cookie_str).map_err(|_| CdsApiClientError::CookieHeaderParseError)?;
                 Ok(format!("{}={}", cookie.name(), cookie.value()))
             });
         let cookies_vec = cookies.collect::<Result<Vec<String>, _>>()?;
@@ -175,15 +187,15 @@ impl CdsApiClient {
         enclave_name: &str,
         cookies: Vec<String>,
         request: DiscoveryRequest,
-    ) -> Result<DiscoveryResponse, CdsClientApiError>
+    ) -> Result<DiscoveryResponse, CdsApiClientError>
     {
         let mut uri_parts = self.base_uri.clone().into_parts();
         let uri_path_and_query = format!("/v1/discovery/{}", enclave_name)
             .parse::<http::uri::PathAndQuery>()
-            .map_err(|_| CdsClientApiError::RequestPathError)?;
+            .map_err(|_| CdsApiClientError::RequestPathError)?;
 
         uri_parts.path_and_query = Some(uri_path_and_query);
-        let uri = Uri::from_parts(uri_parts).map_err(|_| CdsClientApiError::RequestUriError)?;
+        let uri = Uri::from_parts(uri_parts).map_err(|_| CdsApiClientError::RequestUriError)?;
 
         let (_parts, response) = self.put_request(uri, credentials, cookies, request).await?;
         Ok(response)
@@ -195,12 +207,12 @@ impl CdsApiClient {
         credentials: &CdsApiCredentials,
         cookies: Vec<String>,
         request: RequestTy,
-    ) -> Result<(response::Parts, ResponseTy), CdsClientApiError>
+    ) -> Result<(response::Parts, ResponseTy), CdsApiClientError>
     where
         RequestTy: Serialize,
         ResponseTy: DeserializeOwned,
     {
-        let encoded_request = serde_json::to_vec(&request).map_err(|_| CdsClientApiError::RequestUriError)?;
+        let encoded_request = serde_json::to_vec(&request).map_err(|_| CdsApiClientError::RequestUriError)?;
         debug!(
             "sending discovery request: {:?}\n{}",
             uri,
@@ -219,24 +231,24 @@ impl CdsApiClient {
         hyper_request.headers_mut().insert(header::AUTHORIZATION, credentials.into());
 
         for cookie in cookies {
-            let cookie_header_value = HeaderValue::from_str(&cookie).map_err(|_| CdsClientApiError::CookieHeaderStringError)?;
+            let cookie_header_value = HeaderValue::from_str(&cookie).map_err(|_| CdsApiClientError::CookieHeaderStringError)?;
             hyper_request.headers_mut().insert(header::COOKIE, cookie_header_value);
         }
 
-        let response = self.client.request(hyper_request).map_err(CdsClientApiError::from).await?;
+        let response = self.client.request(hyper_request).map_err(CdsApiClientError::from).await?;
         let decoded_response = Self::decode_response(response);
         decoded_response.await
     }
 
-    async fn decode_response<ResponseTy>(response: Response<Body>) -> Result<(response::Parts, ResponseTy), CdsClientApiError>
+    async fn decode_response<ResponseTy>(response: Response<Body>) -> Result<(response::Parts, ResponseTy), CdsApiClientError>
     where ResponseTy: DeserializeOwned {
         let (response_parts, response_body) = response.into_parts();
 
-        let response_data = hyper::body::to_bytes(response_body).map_err(CdsClientApiError::from).await?;
+        let response_data = hyper::body::to_bytes(response_body).map_err(CdsApiClientError::from).await?;
 
         let status = response_parts.status;
         if !response_parts.status.is_success() {
-            Err(CdsClientApiError::ServerResponseError {
+            Err(CdsApiClientError::ServerResponseError {
                 code:     format!("{}", response_parts.status),
                 response: format!("{:?}", String::from_utf8_lossy(&response_data.to_vec())),
             })
@@ -249,7 +261,7 @@ impl CdsApiClient {
                         &error,
                         String::from_utf8_lossy(&response_data.to_vec())
                     );
-                    CdsClientApiError::InvalidServerResponse {
+                    CdsApiClientError::InvalidServerResponse {
                         code:     format!("{}", status),
                         response: format!("{:?}", &error),
                     }

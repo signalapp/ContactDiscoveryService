@@ -21,6 +21,7 @@ hyper-tls    = "0.4"
 log          = { version = "0.4", features = ["std"] }
 native-tls   = "0.2"
 rand         = "0.7"
+rand_distr   = "0.2"
 ring         = "0.16"
 serde        = "1.0"
 serde_derive = "1.0"

@@ -144,7 +144,7 @@ impl Client {
     pub fn discovery_request(
         &self,
         random: &mut (impl rand::RngCore + rand::CryptoRng),
-        attestation_key: &String,
+        attestation_key: &str,
         negotiation: RequestNegotiation,
         phone_list: &[u64],
     ) -> Result<([u8; 32], DiscoveryRequest), CdsClientError>
@@ -200,7 +200,7 @@ impl Client {
         let query_data_message = Self::encrypt_data(random, &query_data_key_entropy, query_data, &[])?;
 
         let mut envelopes = HashMap::new();
-        let _ = envelopes.insert(attestation_key.clone(), discovery_envelope);
+        let _ = envelopes.insert(attestation_key.to_owned(), discovery_envelope);
 
         let discovery_request = DiscoveryRequest {
             addressCount: phone_list.len() as u32,
