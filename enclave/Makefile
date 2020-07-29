@@ -132,6 +132,7 @@ clippy:
 	$(CARGO) clippy --manifest-path=cds_enclave/Cargo.toml --features=test
 
 benchmark:
+	env CFLAGS="-mno-red-zone" LDFLAGS="--emit-relocs" RUSTFLAGS="-C link-arg=-Wl,--emit-relocs" \
 	$(CARGO) bench --manifest-path=cds_enclave/Cargo.toml --all --features=test
 
 bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)

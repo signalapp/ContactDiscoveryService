@@ -37,6 +37,7 @@ cbindgen = { version = "0.12", optional = true }
 
 [lib]
 crate-type = ["staticlib"]
+#crate-type = ["rlib"] #For benchmark
 doctest    = false
 
 [[bench]]

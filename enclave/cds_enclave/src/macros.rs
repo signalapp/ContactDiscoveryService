@@ -4,17 +4,16 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-
 macro_rules! static_unreachable {
     () => {{
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(feature = "test", debug_assertions)))]
         {
             extern "C" {
                 pub fn __static_unreachable() -> !;
             }
             unsafe { __static_unreachable() };
         }
-        #[cfg(debug_assertions)]
+        #[cfg(any(feature = "test", debug_assertions))]
         unreachable!()
     }};
 }

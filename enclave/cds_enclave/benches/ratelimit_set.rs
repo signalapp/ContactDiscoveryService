@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-use cds_enclave::test::ratelimit_set::*;
+extern crate cds_enclave;
+use cds_enclave::ffi::ratelimit_set::*;
 use criterion::{black_box, criterion_group, criterion_main, Bencher, BenchmarkId, Criterion, Throughput};
 
 fn bench_ratelimit_set_add(criterion: &mut Criterion) {

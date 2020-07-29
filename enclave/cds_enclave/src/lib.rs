@@ -57,7 +57,7 @@ mod macros;
 
 #[cfg(not(any(test, feature = "test")))]
 mod allocator;
-mod ffi;
+pub mod ffi;
 mod hasher;
 mod service;
 
