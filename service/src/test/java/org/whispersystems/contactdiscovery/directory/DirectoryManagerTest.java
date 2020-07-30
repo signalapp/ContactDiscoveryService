@@ -91,7 +91,7 @@ public class DirectoryManagerTest {
   public void testGetAddressListDirectoryUnavailable() throws Exception {
     when(directoryCache.isAddressSetBuilt(any())).thenReturn(false);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
     directoryManager.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       // Never called.
@@ -103,7 +103,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
 
     verify(directoryMap).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
@@ -147,8 +147,7 @@ public class DirectoryManagerTest {
 
   }
 
-  @Test
-  public void testReconcileAll() throws Exception {
+  private void reconcileAll(boolean enableReconciliation) throws Exception {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
     when(directoryCache.removeAddress(any(), eq("+14152222222"))).thenReturn(true);
@@ -156,11 +155,11 @@ public class DirectoryManagerTest {
     List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), enableReconciliation);
     directoryManager.start();
     boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList(validUserOne));
 
-    assertThat(reconciled).isEqualTo(false);
+    assertThat(reconciled).isEqualTo(!enableReconciliation);
 
     verify(directoryCache).isAddressSetBuilt(any());
     verify(directoryCache).isUserSetBuilt(any());
@@ -175,6 +174,16 @@ public class DirectoryManagerTest {
   }
 
   @Test
+  public void testReconcileAll() throws Exception {
+    reconcileAll(true);
+  }
+
+  @Test
+  public void testReconcileDisable() throws Exception {
+    reconcileAll(false);
+  }
+
+  @Test
   public void testReconcileRange() throws Exception {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
@@ -182,7 +191,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
     when(directoryCache.getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()))).thenReturn(Arrays.asList(validUserTwo));
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
     boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of(validUserOne.getLeft()), Arrays.asList(validUserOne));
 

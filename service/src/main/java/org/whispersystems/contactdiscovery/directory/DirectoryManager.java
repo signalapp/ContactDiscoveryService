@@ -73,7 +73,8 @@ public class DirectoryManager implements Managed {
   private static final int SCAN_CHUNK_SIZE = 5_000;
 
   private final RedisClientFactory      redisFactory;
-  private final DirectoryMapFactory directoryMapFactory;
+  private final DirectoryMapFactory     directoryMapFactory;
+  private final boolean                 isReconciliationEnabled;
 
   private final AtomicBoolean built = new AtomicBoolean(false);
 
@@ -85,11 +86,12 @@ public class DirectoryManager implements Managed {
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap, boolean isReconciliationEnabled) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
     this.directoryMapFactory     = directoryMapFactory;
     this.currentDirectoryMap     = currentDirectoryMap;
+    this.isReconciliationEnabled = isReconciliationEnabled;
   }
 
   public boolean isConnected() {
@@ -113,6 +115,10 @@ public class DirectoryManager implements Managed {
   public boolean reconcile(Optional<UUID> fromUuid, Optional<UUID> toUuid, List<Pair<UUID, String>> users)
       throws InvalidAddressException, DirectoryUnavailableException
   {
+    if (!isReconciliationEnabled) {
+      return true;
+    }
+
     try (Jedis jedis = jedisPool.getResource()) {
       if (fromUuid.isPresent()) {
         Optional<UUID> lastUuidReconciled = directoryCache.getUuidLastReconciled(jedis);

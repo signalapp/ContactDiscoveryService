@@ -43,6 +43,9 @@ public class DirectoryConfiguration {
   @NotNull
   private DirectorySqsConfiguration sqs;
 
+  @JsonProperty
+  private boolean enableReconciliation = true;
+
   public int getInitialSize() {
     return initialSize;
   }
@@ -58,4 +61,6 @@ public class DirectoryConfiguration {
   public DirectorySqsConfiguration getSqsConfiguration() {
     return sqs;
   }
+
+  public boolean isReconciliationEnabled() { return enableReconciliation; }
 }
