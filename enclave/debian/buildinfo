@@ -4,14 +4,14 @@ Binary: cds-enclave
 Architecture: amd64
 Version: 1.0
 Checksums-Md5:
- 75636608a7eecdb1aeeb26e7d7a532dd 81140 cds-enclave_1.0_amd64.deb
+ c081aed2f1d55493c96e800651761256 84844 cds-enclave_1.0_amd64.deb
 Checksums-Sha1:
- 98dc0b07c212ea422d382dc0bf4d1ab244f8b8d0 81140 cds-enclave_1.0_amd64.deb
+ af75048e3a547e968834fddfc638abb310bd1565 84844 cds-enclave_1.0_amd64.deb
 Checksums-Sha256:
- c38a18167a4507e31e5a621defecca42d55da733b3caaa58ab40a2b08574ba2e 81140 cds-enclave_1.0_amd64.deb
+ 2d25936556a4ed84b49bb18256a1ae2b36df1ab4e24ad459c42f8a40e2671c45 84844 cds-enclave_1.0_amd64.deb
 Build-Origin: Debian
 Build-Architecture: amd64
-Build-Date: Wed, 15 Jul 2020 00:15:23 +0000
+Build-Date: Fri, 31 Jul 2020 21:57:56 +0000
 Installed-Build-Depends:
  autoconf (= 2.69-11),
  automake (= 1:1.16.1-4),
@@ -47,6 +47,7 @@ Installed-Build-Depends:
  findutils (= 4.6.0+git+20190209-2),
  g++ (= 4:8.3.0-1),
  g++-8 (= 8.3.0-6),
+ gawk (= 1:4.2.1+dfsg-1),
  gcc (= 4:8.3.0-1),
  gcc-8 (= 8.3.0-6),
  gcc-8-base (= 8.3.0-6),
@@ -152,6 +153,7 @@ Installed-Build-Depends:
  libprotobuf17 (= 3.6.1.3-2),
  libpsl5 (= 0.20.2-2),
  libquadmath0 (= 8.3.0-6),
+ libreadline7 (= 7.0-5),
  librtmp1 (= 2.4+20151223.gitfa8646d.1-2),
  libsasl2-2 (= 2.1.27+dfsg-1),
  libsasl2-modules-db (= 2.1.27+dfsg-1),
@@ -193,6 +195,7 @@ Installed-Build-Depends:
  perl-modules-5.28 (= 5.28.1-6),
  pkg-config (= 0.29-6),
  po-debconf (= 1.0.21),
+ readline-common (= 7.0-5),
  sed (= 4.7-1),
  sensible-utils (= 0.0.12),
  sysvinit-utils (= 2.93-8),

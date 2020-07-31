@@ -562,6 +562,7 @@ pub const SGX_ERROR_OUT_OF_MEMORY: _status_t = 3;
 pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
 pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
 pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
+pub const SGX_PTHREAD_EXIT: _status_t = 9;
 pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
 pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
 pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
@@ -632,13 +633,7 @@ extern "C" {
     pub fn sgx_ocalloc(size: usize) -> *mut libc::c_void;
 }
 extern "C" {
-    pub fn sgx_ocalloc_switchless(size: usize) -> *mut libc::c_void;
-}
-extern "C" {
     pub fn sgx_ocfree();
-}
-extern "C" {
-    pub fn sgx_ocfree_switchless();
 }
 extern "C" {
     pub fn sgx_ecall(
@@ -1967,6 +1962,219 @@ impl Default for _att_key_id_t {
     }
 }
 pub type sgx_att_key_id_t = _att_key_id_t;
+#[doc = " Describes a single attestation key.  Contains both QE identity and the attestation algorithm ID."]
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
+pub struct _sgx_ql_att_key_id_t {
+    #[doc = "< Structure ID"]
+    pub id: u16,
+    #[doc = "< Structure version"]
+    pub version: u16,
+    #[doc = "< Number of valid bytes in MRSIGNER."]
+    pub mrsigner_length: u16,
+    #[doc = "< SHA256 or SHA384 hash of the Public key that signed the QE."]
+    #[doc = "< The lower bytes contain MRSIGNER.  Bytes beyond mrsigner_length '0'"]
+    pub mrsigner: [u8; 48usize],
+    #[doc = "< Legacy Product ID of the QE"]
+    pub prod_id: u32,
+    #[doc = "< Extended Product ID or the QE. All 0's for legacy format enclaves."]
+    pub extended_prod_id: [u8; 16usize],
+    #[doc = "< Config ID of the QE."]
+    pub config_id: [u8; 64usize],
+    #[doc = "< Family ID of the QE."]
+    pub family_id: [u8; 16usize],
+    #[doc = "< Identity of the attestation key algorithm."]
+    pub algorithm_id: u32,
+}
+#[test]
+fn bindgen_test_layout__sgx_ql_att_key_id_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_sgx_ql_att_key_id_t>(),
+        158usize,
+        concat!("Size of: ", stringify!(_sgx_ql_att_key_id_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_sgx_ql_att_key_id_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_sgx_ql_att_key_id_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).id as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(id)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).version as *const _ as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(version)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).mrsigner_length as *const _ as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(mrsigner_length)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).mrsigner as *const _ as usize },
+        6usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(mrsigner)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).prod_id as *const _ as usize },
+        54usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(prod_id)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).extended_prod_id as *const _ as usize
+        },
+        58usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(extended_prod_id)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).config_id as *const _ as usize },
+        74usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(config_id)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).family_id as *const _ as usize },
+        138usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(family_id)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_ql_att_key_id_t>())).algorithm_id as *const _ as usize
+        },
+        154usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_ql_att_key_id_t),
+            "::",
+            stringify!(algorithm_id)
+        )
+    );
+}
+impl Default for _sgx_ql_att_key_id_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type sgx_ql_att_key_id_t = _sgx_ql_att_key_id_t;
+#[doc = " Describes an extended attestation key.  Contains sgx_ql_att_key_id_t, spid and quote_type"]
+#[repr(C, packed)]
+#[derive(Copy, Clone)]
+pub struct _sgx_att_key_id_ext_t {
+    pub base: sgx_ql_att_key_id_t,
+    #[doc = "< Service Provider ID, should be 0s for ECDSA quote"]
+    pub spid: [u8; 16usize],
+    #[doc = "< For non-EPID quote, it should be 0"]
+    #[doc = "< For EPID quote, it equals to sgx_quote_sign_type_t"]
+    pub att_key_type: u16,
+    #[doc = "< It should have the same size of sgx_att_key_id_t"]
+    pub reserved: [u8; 80usize],
+}
+#[test]
+fn bindgen_test_layout__sgx_att_key_id_ext_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_sgx_att_key_id_ext_t>(),
+        256usize,
+        concat!("Size of: ", stringify!(_sgx_att_key_id_ext_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_sgx_att_key_id_ext_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_sgx_att_key_id_ext_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_att_key_id_ext_t>())).base as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_att_key_id_ext_t),
+            "::",
+            stringify!(base)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_att_key_id_ext_t>())).spid as *const _ as usize },
+        158usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_att_key_id_ext_t),
+            "::",
+            stringify!(spid)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_att_key_id_ext_t>())).att_key_type as *const _ as usize
+        },
+        174usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_att_key_id_ext_t),
+            "::",
+            stringify!(att_key_type)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_att_key_id_ext_t>())).reserved as *const _ as usize },
+        176usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_att_key_id_ext_t),
+            "::",
+            stringify!(reserved)
+        )
+    );
+}
+impl Default for _sgx_att_key_id_ext_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type sgx_att_key_id_ext_t = _sgx_att_key_id_ext_t;
 #[repr(C, packed)]
 #[derive(Copy, Clone)]
 pub struct _qe_report_info_t {

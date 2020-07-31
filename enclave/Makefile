@@ -5,6 +5,13 @@ builddir = build
 targetdir = $(builddir)/target
 resourcedir = ../service/src/main/resources
 
+# see https://github.com/intel/linux-sgx/releases
+SGX_SDK_VERSION = 2.9.1
+SGX_SDK_SOURCE_GIT_REV = sgx_$(SGX_SDK_VERSION)
+# see https://github.com/intel/SGXDataCenterAttestationPrimitives/releases
+SGX_DCAP_VERSION = 1.6
+SGX_DCAP_SOURCE_GIT_REV = DCAP_$(SGX_DCAP_VERSION)
+
 RUSTC ?= rustc
 CARGO ?= cargo
 RUSTUP ?= rustup
@@ -260,6 +267,7 @@ MAKETARGET ?= bindgen debuild sign
 docker: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 docker:
 	$(DOCKER) build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) \
+	  --build-arg RUST_VERSION=$(RUST_VERSION) \
 	  -t cds-enclave-builder ./docker
 	$(DOCKER) run -it --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE \
 		-v `pwd`/:/home/rust/src $(DOCKER_EXTRA) \
