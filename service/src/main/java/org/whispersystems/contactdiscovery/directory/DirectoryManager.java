@@ -26,7 +26,9 @@ import io.dropwizard.lifecycle.Managed;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.directory.DirectoryHashSet.BorrowFunc;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
+import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.Util;
@@ -37,7 +39,6 @@ import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Tuple;
 import redis.clients.util.Pool;
 
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -76,7 +77,7 @@ public class DirectoryManager implements Managed {
 
   private final AtomicBoolean built = new AtomicBoolean(false);
 
-  private final AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet = new AtomicReference(Optional.empty());
+  private final AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet;
 
   private Pool<Jedis>      jedisPool;
   private DirectoryCache   directoryCache;
@@ -84,10 +85,11 @@ public class DirectoryManager implements Managed {
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSetFactory directoryHashSetFactory) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSetFactory directoryHashSetFactory, AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
     this.directoryHashSetFactory = directoryHashSetFactory;
+    this.currentDirectoryHashSet = currentDirectoryHashSet;
   }
 
   public boolean isConnected() {
@@ -158,12 +160,15 @@ public class DirectoryManager implements Managed {
     }
   }
 
-  public Pair<Pair<ByteBuffer, ByteBuffer>, Long> getAddressList() throws DirectoryUnavailableException {
+  /**
+   * borrowBuffers passes the currently readable buffers to the given BorrowFunc under a read lock.
+   */
+  public void borrowBuffers(BorrowFunc func) throws DirectoryUnavailableException, SgxException {
     if (!isBuilt()) {
       throw new DirectoryUnavailableException();
     }
     DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
-    return Pair.of(directoryHashSet.getDirectByteBuffers(), directoryHashSet.capacity());
+    directoryHashSet.borrowBuffers(func);
   }
 
   @Override
@@ -283,7 +288,7 @@ public class DirectoryManager implements Managed {
       }
 
       logger.info("finished directory cache rebuild");
-
+      directoryHashSet.commit();
       this.currentDirectoryHashSet.set(Optional.of(directoryHashSet));
     }
   }

@@ -18,14 +18,17 @@ package org.whispersystems.contactdiscovery.directory;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.whispersystems.contactdiscovery.enclave.SgxException;
 
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -77,44 +80,59 @@ public class DirectoryHashSetTest {
   }
 
   @Test
-  public void testFactory() {
+  public void testFactory() throws SgxException {
     long  initialCapacity = 1000;
     float minLoadFactor   = 0.75f;
     float maxLoadFactor   = 0.85f;
 
-    DirectoryHashSetFactory factory = new DirectoryHashSetFactory(initialCapacity, minLoadFactor, maxLoadFactor);
-    assertThat(factory.createDirectoryHashSet(0).capacity()).isEqualTo(initialCapacity);
-    assertThat(factory.createDirectoryHashSet(1000).capacity()).isEqualTo((long) (1000 / minLoadFactor));
+    var factory = new DirectoryHashSetFactory(initialCapacity, minLoadFactor, maxLoadFactor);
+    var set = factory.createDirectoryHashSet(0);
+    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(capacity).isEqualTo(initialCapacity);
+    });
+    set = factory.createDirectoryHashSet(1000);
+    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(capacity).isEqualTo((long) (1000 / minLoadFactor));
+    });
   }
 
   @Test
-  public void testLoadFactor() {
-    long  capacity      = 1000;
+  public void testLoadFactor() throws SgxException {
+    final AtomicLong capacity = new AtomicLong(1000);
     float minLoadFactor = 0.75f;
     float maxLoadFactor = 0.85f;
 
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(capacity, minLoadFactor, maxLoadFactor);
-    assertThat(directoryHashSet.capacity()).isEqualTo(capacity);
+    DirectoryHashSet directoryHashSet = new DirectoryHashSet(capacity.get(), minLoadFactor, maxLoadFactor);
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+      assertThat(bufCapacity).isEqualTo(capacity.get());
+    });
 
     long addedCount = 0;
     while (addedCount < 10000) {
-      long rehashThreshold = (long) (capacity * maxLoadFactor);
+      long rehashThreshold = (long) (capacity.get() * maxLoadFactor);
       while (addedCount < rehashThreshold - 1) {
         addedCount += 1;
         assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
         assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
       }
 
+      directoryHashSet.commit();
       assertThat(directoryHashSet.size()).isEqualTo(addedCount);
-      assertThat(directoryHashSet.capacity()).isEqualTo(capacity);
+      directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+        assertThat(bufCapacity).isEqualTo(capacity.get());
+      });
 
       addedCount += 1;
       assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
       assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
 
+      directoryHashSet.commit();
       assertThat(directoryHashSet.size()).isEqualTo(addedCount);
-      assertThat(directoryHashSet.capacity()).isEqualTo((long) (addedCount / minLoadFactor));
-      capacity = directoryHashSet.capacity();
+      final var added = addedCount;
+      directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+        assertThat(bufCapacity).isEqualTo((long) (added / minLoadFactor));
+        capacity.set(bufCapacity);
+      });
     }
 
     LongStream.rangeClosed(1, addedCount)
@@ -123,8 +141,11 @@ public class DirectoryHashSetTest {
                 assertThat(directoryHashSet.remove(removeElement)).isFalse();
               });
 
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(0);
-    assertThat(directoryHashSet.capacity()).isEqualTo(capacity);
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+      assertThat(bufCapacity).isEqualTo(capacity.get());
+    });
 
     LongStream.rangeClosed(1, addedCount)
               .forEach(readdElement -> {
@@ -132,8 +153,11 @@ public class DirectoryHashSetTest {
                 assertThat(directoryHashSet.insert(readdElement, null)).isFalse();
               });
 
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(addedCount);
-    assertThat(directoryHashSet.capacity()).isEqualTo(capacity);
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+      assertThat(bufCapacity).isEqualTo(capacity.get());
+    });
   }
 
   @Test
@@ -146,7 +170,11 @@ public class DirectoryHashSetTest {
       assertThat(directoryHashSet.insert(addElement, null)).isTrue();
       assertThat(directoryHashSet.insert(addElement, null)).isFalse();
     });
+    directoryHashSet.commit();
+    assertThat(directoryHashSet.size()).isEqualTo(1000);
     randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
+    directoryHashSet.commit();
+    assertThat(directoryHashSet.size()).isEqualTo(1000);
   }
 
   @Test
@@ -162,18 +190,23 @@ public class DirectoryHashSetTest {
       assertThat(directoryHashSet.insert(addElement, null)).isTrue();
       assertThat(directoryHashSet.insert(addElement, null)).isFalse();
     });
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(0);
 
     randomElements.stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isFalse());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(0);
 
     shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     Set<Long> moreRandomElements = randomElements(1000);
@@ -181,12 +214,15 @@ public class DirectoryHashSetTest {
     allRandomElements.addAll(moreRandomElements);
 
     shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(allRandomElements.size());
 
     shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(moreRandomElements.size());
 
     shuffle(moreRandomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
+    directoryHashSet.commit();
     assertThat(directoryHashSet.size()).isEqualTo(0);
 
     allRandomElements.stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isFalse());
@@ -194,9 +230,12 @@ public class DirectoryHashSetTest {
 
   @Test
   public void testRandomParallelAddRemove() {
+    var start = System.currentTimeMillis();
     DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
 
     Set<Long> randomElements = randomElements(100000);
+    assertThat(directoryHashSet.size()).isEqualTo(0);
+    assertThat(directoryHashSet.commit()).isFalse();
 
     List<List<Long>> shuffledRandomElementLists =
         IntStream.range(0, 10)
@@ -207,10 +246,12 @@ public class DirectoryHashSetTest {
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
                   shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.insert(addElement, null));
-            }))
+            }, "SetInsertThread"))
             .collect(Collectors.toList())
     );
 
+    assertThat(directoryHashSet.size()).isEqualTo(0);
+    assertThat(directoryHashSet.commit()).isTrue();
     assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
 
     shuffledRandomElementLists =
@@ -223,11 +264,92 @@ public class DirectoryHashSetTest {
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
               shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.remove(addElement));
-            }))
+            }, "SetRemoveThread"))
             .collect(Collectors.toList())
     );
 
+    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
+    assertThat(directoryHashSet.commit()).isTrue();
     assertThat(directoryHashSet.size()).isEqualTo(0);
   }
 
+  @Test
+  public void testBuffers() throws SgxException {
+    DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
+
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      assertThat(capacity).isEqualTo(1000);
+    });
+
+    directoryHashSet.insert(5, new UUID(6,1));
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      assertThat(capacity).isEqualTo(1000);
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(0);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(0);
+      assertThat(uuidsLongs[11]).isEqualTo(0);
+    });
+
+    directoryHashSet.commit();
+
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(5);
+
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(6);
+      assertThat(uuidsLongs[11]).isEqualTo(1);
+      assertThat(capacity).isEqualTo(1000);
+    });
+
+    directoryHashSet.insert(7, new UUID(8,2));
+    directoryHashSet.commit();
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(5);
+      assertThat(phoneLongs[7]).isEqualTo(7);
+
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(6);
+      assertThat(uuidsLongs[11]).isEqualTo(1);
+      assertThat(uuidsLongs[14]).isEqualTo(8);
+      assertThat(uuidsLongs[15]).isEqualTo(2);
+      assertThat(capacity).isEqualTo(1000);
+    });
+
+    directoryHashSet.remove(5);
+
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(5);
+    });
+
+    directoryHashSet.commit();
+    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(-1);
+      assertThat(phoneLongs[7]).isEqualTo(7);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(0);
+      assertThat(uuidsLongs[11]).isEqualTo(0);
+      assertThat(uuidsLongs[14]).isEqualTo(8);
+      assertThat(uuidsLongs[15]).isEqualTo(2);
+    });
+  }
+
+  private long[] getLongsFromByteBuffer(ByteBuffer buffer) {
+    var longBuf = buffer.asLongBuffer();
+    var longs = new long[longBuf.capacity()];
+    longBuf.get(longs);
+    return longs;
+  }
 }

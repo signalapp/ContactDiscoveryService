@@ -31,6 +31,7 @@ import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.directory.DirectoryCache;
+import org.whispersystems.contactdiscovery.directory.DirectoryHashSet;
 import org.whispersystems.contactdiscovery.directory.DirectoryHashSetFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
@@ -76,7 +77,9 @@ import java.security.Security;
 import java.security.cert.CertificateException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -123,13 +126,15 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
+    AtomicReference<Optional<DirectoryHashSet>> optDirectorySet = new AtomicReference<>(Optional.empty());
+
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryCache           directoryCache           = new DirectoryCache();
     DirectoryHashSetFactory  directoryHashSetFactory  = new DirectoryHashSetFactory(configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
-    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryHashSetFactory);
+    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryHashSetFactory, optDirectorySet);
     RequestManager           requestManager           = new RequestManager(directoryManager, sgxEnclaveManager, configuration.getEnclaveConfiguration().getTargetBatchSize());
     DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());
     DirectoryQueueManager    directoryQueueManager    = new DirectoryQueueManager(directoryQueue, directoryManager);
@@ -140,7 +145,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     Set<String>                       enclaves                          = configuration.getEnclaveConfiguration()
                                                                                        .getInstances().stream()
                                                                                        .map((it) -> it.getMrenclave())
-                                                                                       .collect(Collectors.toSet());
+                                                                                        .collect(Collectors.toSet());
 
     RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter);
     ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, enclaves);
@@ -158,6 +163,13 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.lifecycle().manage(requestManager);
     environment.lifecycle().manage(directoryManager);
     environment.lifecycle().manage(directoryQueueManager);
+    var updaterExec = environment.lifecycle().scheduledExecutorService("DirectoryHashMapUpdater").threads(1).build();
+    updaterExec.scheduleAtFixedRate((Runnable)()->{
+        var optSet = optDirectorySet.get();
+        if (optSet.isPresent()) {
+          optSet.get().commit();
+        }
+    }, 30, 30, TimeUnit.SECONDS);
 
     environment.jersey().register(new AuthDynamicFeature(new BasicCredentialAuthFilter.Builder<User>()
                                                              .setAuthenticator(userAuthenticator)

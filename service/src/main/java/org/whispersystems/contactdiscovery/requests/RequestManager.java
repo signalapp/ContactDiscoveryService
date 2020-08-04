@@ -39,7 +39,6 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequestEnvelope;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -148,8 +147,6 @@ public class RequestManager implements Managed {
 
     private void processBatch(SgxEnclave enclave, List<PendingRequest> requests) {
       try {
-        Pair<Pair<ByteBuffer, ByteBuffer>, Long> registeredUsers = directoryManager.getAddressList();
-
         int batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
         try (SgxEnclave.SgxsdBatch batch = enclave.newBatch(threadId, batchSize)) {
 
@@ -178,7 +175,7 @@ public class RequestManager implements Managed {
           batchSizeHistogram.update(batchSize);
 
           try (Timer.Context timer = processBatchTimer.time()) {
-            batch.process(registeredUsers.getLeft().getLeft(), registeredUsers.getLeft().getRight(), registeredUsers.getRight());
+            directoryManager.borrowBuffers(batch::process);
           }
         }
       } catch (Throwable t) {

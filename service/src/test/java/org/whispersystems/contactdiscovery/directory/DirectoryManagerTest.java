@@ -1,7 +1,6 @@
 package org.whispersystems.contactdiscovery.directory;
 
 import com.google.protobuf.ByteString;
-
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
 import org.junit.Test;
@@ -18,12 +17,11 @@ import redis.clients.jedis.Tuple;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -93,16 +91,11 @@ public class DirectoryManagerTest {
   public void testGetAddressListDirectoryUnavailable() throws Exception {
     when(directoryCache.isAddressSetBuilt(any())).thenReturn(false);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
-    directoryManager.getAddressList();
-  }
-
-  @Test
-  public void testGetAddressList() throws Exception {
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
-    directoryManager.start();
-    directoryManager.getAddressList();
+    directoryManager.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      // Never called.
+    });
   }
 
   @Test
@@ -110,11 +103,12 @@ public class DirectoryManagerTest {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
 
     verify(directoryHashSet).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
     verify(directoryHashSet).insert(eq(Long.parseLong("14151111111")), eq(validUserOne.getLeft()));
+    verify(directoryHashSet).commit();
 
     verifyNoMoreInteractions(directoryHashSet);
 
@@ -162,7 +156,7 @@ public class DirectoryManagerTest {
     List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
     boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList(validUserOne));
 
@@ -188,7 +182,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
     when(directoryCache.getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()))).thenReturn(Arrays.asList(validUserTwo));
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
     boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of(validUserOne.getLeft()), Arrays.asList(validUserOne));
 
