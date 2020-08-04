@@ -16,6 +16,9 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import com.codahale.metrics.annotation.Timed;
 import io.dropwizard.auth.Auth;
 import org.whispersystems.contactdiscovery.auth.User;
@@ -26,6 +29,7 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
+import org.whispersystems.contactdiscovery.util.Constants;
 
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
@@ -36,12 +40,15 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.CompletionCallback;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.Set;
 import java.util.function.Function;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * API endpoint for submitting encrypted contact discovery requests
@@ -51,6 +58,8 @@ import java.util.function.Function;
 @Path("/v1/discovery")
 public class ContactDiscoveryResource {
 
+  private static final MetricRegistry REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Timer GET_CONTACTS_TIMER = REGISTRY.timer(name(ContactDiscoveryResource.class, "getRegisteredContacts"));
   private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
   private final Set<String> enclaves;
@@ -61,7 +70,6 @@ public class ContactDiscoveryResource {
     this.enclaves = enclaves;
   }
 
-  @Timed
   @PUT
   @Path("/{enclaveId}")
   @Produces(MediaType.APPLICATION_JSON)
@@ -73,6 +81,8 @@ public class ContactDiscoveryResource {
                                     @Suspended AsyncResponse asyncResponse)
       throws NoSuchEnclaveException, RateLimitExceededException
   {
+    final var ctx = GET_CONTACTS_TIMER.time();
+    asyncResponse.register((CompletionCallback) throwable -> ctx.close());
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
     if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
       asyncResponse.resume(Response.status(400).build());
