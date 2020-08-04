@@ -625,7 +625,7 @@ fn server_stop(
     let mut in_uuids_bytes_undrop = ManuallyDrop::new(in_uuids_bytes);
 
     // We are abusing the memory layout here because this code is about to be promptly deleted when
-    // the DirectoryHashSet code is pushed from Java into Rust. Delete these unsafe calls when that
+    // the DirectoryMap code is pushed from Java into Rust. Delete these unsafe calls when that
     // occurs.
     let in_phones = unsafe {
         slice::from_raw_parts_mut(

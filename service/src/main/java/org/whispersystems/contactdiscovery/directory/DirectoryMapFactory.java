@@ -16,21 +16,21 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
-public class DirectoryHashSetFactory {
+public class DirectoryMapFactory {
 
   private final long  initialCapacity;
   private final float minLoadFactor;
   private final float maxLoadFactor;
 
-  public DirectoryHashSetFactory(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
+  public DirectoryMapFactory(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
     this.initialCapacity = initialCapacity;
     this.minLoadFactor   = minLoadFactor;
     this.maxLoadFactor   = maxLoadFactor;
   }
 
-  public DirectoryHashSet createDirectoryHashSet(long minimumCapacity) {
+  public DirectoryMap create(long minimumCapacity) {
     long capacity = Math.max(initialCapacity, (long) (minimumCapacity / minLoadFactor));
-    return new DirectoryHashSet(capacity, minLoadFactor, maxLoadFactor);
+    return new DirectoryMap(capacity, minLoadFactor, maxLoadFactor);
   }
 
 }

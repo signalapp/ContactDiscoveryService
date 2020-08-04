@@ -31,8 +31,8 @@ import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.directory.DirectoryCache;
-import org.whispersystems.contactdiscovery.directory.DirectoryHashSet;
-import org.whispersystems.contactdiscovery.directory.DirectoryHashSetFactory;
+import org.whispersystems.contactdiscovery.directory.DirectoryMap;
+import org.whispersystems.contactdiscovery.directory.DirectoryMapFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueueManager;
@@ -126,15 +126,15 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
-    AtomicReference<Optional<DirectoryHashSet>> optDirectorySet = new AtomicReference<>(Optional.empty());
+    AtomicReference<Optional<DirectoryMap>> optDirectorySet = new AtomicReference<>(Optional.empty());
 
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryCache           directoryCache           = new DirectoryCache();
-    DirectoryHashSetFactory  directoryHashSetFactory  = new DirectoryHashSetFactory(configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
-    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryHashSetFactory, optDirectorySet);
+    DirectoryMapFactory directoryMapFactory           = new DirectoryMapFactory(configuration.getDirectoryConfiguration().getInitialSize(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
+    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryMapFactory, optDirectorySet);
     RequestManager           requestManager           = new RequestManager(directoryManager, sgxEnclaveManager, configuration.getEnclaveConfiguration().getTargetBatchSize());
     DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());
     DirectoryQueueManager    directoryQueueManager    = new DirectoryQueueManager(directoryQueue, directoryManager);

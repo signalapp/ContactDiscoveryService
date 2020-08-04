@@ -35,7 +35,7 @@ import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class DirectoryHashSetTest {
+public class DirectoryMapTest {
 
   private final SecureRandom random = new SecureRandom();
 
@@ -85,12 +85,12 @@ public class DirectoryHashSetTest {
     float minLoadFactor   = 0.75f;
     float maxLoadFactor   = 0.85f;
 
-    var factory = new DirectoryHashSetFactory(initialCapacity, minLoadFactor, maxLoadFactor);
-    var set = factory.createDirectoryHashSet(0);
+    var factory = new DirectoryMapFactory(initialCapacity, minLoadFactor, maxLoadFactor);
+    var set = factory.create(0);
     set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(capacity).isEqualTo(initialCapacity);
     });
-    set = factory.createDirectoryHashSet(1000);
+    set = factory.create(1000);
     set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(capacity).isEqualTo((long) (1000 / minLoadFactor));
     });
@@ -102,8 +102,8 @@ public class DirectoryHashSetTest {
     float minLoadFactor = 0.75f;
     float maxLoadFactor = 0.85f;
 
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(capacity.get(), minLoadFactor, maxLoadFactor);
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+    DirectoryMap directoryMap = new DirectoryMap(capacity.get(), minLoadFactor, maxLoadFactor);
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
       assertThat(bufCapacity).isEqualTo(capacity.get());
     });
 
@@ -112,24 +112,24 @@ public class DirectoryHashSetTest {
       long rehashThreshold = (long) (capacity.get() * maxLoadFactor);
       while (addedCount < rehashThreshold - 1) {
         addedCount += 1;
-        assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
-        assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
+        assertThat(directoryMap.insert(addedCount, null)).isTrue();
+        assertThat(directoryMap.insert(addedCount, null)).isFalse();
       }
 
-      directoryHashSet.commit();
-      assertThat(directoryHashSet.size()).isEqualTo(addedCount);
-      directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+      directoryMap.commit();
+      assertThat(directoryMap.size()).isEqualTo(addedCount);
+      directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
         assertThat(bufCapacity).isEqualTo(capacity.get());
       });
 
       addedCount += 1;
-      assertThat(directoryHashSet.insert(addedCount, null)).isTrue();
-      assertThat(directoryHashSet.insert(addedCount, null)).isFalse();
+      assertThat(directoryMap.insert(addedCount, null)).isTrue();
+      assertThat(directoryMap.insert(addedCount, null)).isFalse();
 
-      directoryHashSet.commit();
-      assertThat(directoryHashSet.size()).isEqualTo(addedCount);
+      directoryMap.commit();
+      assertThat(directoryMap.size()).isEqualTo(addedCount);
       final var added = addedCount;
-      directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+      directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
         assertThat(bufCapacity).isEqualTo((long) (added / minLoadFactor));
         capacity.set(bufCapacity);
       });
@@ -137,105 +137,105 @@ public class DirectoryHashSetTest {
 
     LongStream.rangeClosed(1, addedCount)
               .forEach(removeElement -> {
-                assertThat(directoryHashSet.remove(removeElement)).isTrue();
-                assertThat(directoryHashSet.remove(removeElement)).isFalse();
+                assertThat(directoryMap.remove(removeElement)).isTrue();
+                assertThat(directoryMap.remove(removeElement)).isFalse();
               });
 
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(0);
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(0);
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
       assertThat(bufCapacity).isEqualTo(capacity.get());
     });
 
     LongStream.rangeClosed(1, addedCount)
               .forEach(readdElement -> {
-                assertThat(directoryHashSet.insert(readdElement, null)).isTrue();
-                assertThat(directoryHashSet.insert(readdElement, null)).isFalse();
+                assertThat(directoryMap.insert(readdElement, null)).isTrue();
+                assertThat(directoryMap.insert(readdElement, null)).isFalse();
               });
 
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(addedCount);
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(addedCount);
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
       assertThat(bufCapacity).isEqualTo(capacity.get());
     });
   }
 
   @Test
   public void testDuplicateAdds() {
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
 
     Set<Long> randomElements = randomElements(1000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
-      assertThat(directoryHashSet.insert(addElement, null)).isFalse();
+      assertThat(directoryMap.insert(addElement, null)).isTrue();
+      assertThat(directoryMap.insert(addElement, null)).isFalse();
     });
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(1000);
-    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(1000);
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(1000);
+    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isFalse());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(1000);
   }
 
   @Test
   public void testRandomAddRemove() {
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
 
     Set<Long> randomElements = randomElements(10000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
-      assertThat(directoryHashSet.remove(addElement)).isTrue();
-      assertThat(directoryHashSet.remove(addElement)).isFalse();
-      assertThat(directoryHashSet.insert(addElement, null)).isTrue();
-      assertThat(directoryHashSet.insert(addElement, null)).isFalse();
+      assertThat(directoryMap.insert(addElement, null)).isTrue();
+      assertThat(directoryMap.remove(addElement)).isTrue();
+      assertThat(directoryMap.remove(addElement)).isFalse();
+      assertThat(directoryMap.insert(addElement, null)).isTrue();
+      assertThat(directoryMap.insert(addElement, null)).isFalse();
     });
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
-    randomElements.stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isFalse());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
+    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isFalse());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
-    shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(0);
+    shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryMap.remove(removeElement)).isTrue());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(0);
 
-    randomElements.stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isFalse());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(0);
+    randomElements.stream().forEach(removeElement -> assertThat(directoryMap.remove(removeElement)).isFalse());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(0);
 
-    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
+    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isTrue());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
     Set<Long> moreRandomElements = randomElements(1000);
     Set<Long> allRandomElements  = new HashSet<>(randomElements);
     allRandomElements.addAll(moreRandomElements);
 
-    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryHashSet.insert(addElement, null)).isTrue());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(allRandomElements.size());
+    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isTrue());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(allRandomElements.size());
 
-    shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(moreRandomElements.size());
+    shuffle(randomElements).stream().forEach(removeElement -> assertThat(directoryMap.remove(removeElement)).isTrue());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(moreRandomElements.size());
 
-    shuffle(moreRandomElements).stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isTrue());
-    directoryHashSet.commit();
-    assertThat(directoryHashSet.size()).isEqualTo(0);
+    shuffle(moreRandomElements).stream().forEach(removeElement -> assertThat(directoryMap.remove(removeElement)).isTrue());
+    directoryMap.commit();
+    assertThat(directoryMap.size()).isEqualTo(0);
 
-    allRandomElements.stream().forEach(removeElement -> assertThat(directoryHashSet.remove(removeElement)).isFalse());
+    allRandomElements.stream().forEach(removeElement -> assertThat(directoryMap.remove(removeElement)).isFalse());
   }
 
   @Test
   public void testRandomParallelAddRemove() {
     var start = System.currentTimeMillis();
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
 
     Set<Long> randomElements = randomElements(100000);
-    assertThat(directoryHashSet.size()).isEqualTo(0);
-    assertThat(directoryHashSet.commit()).isFalse();
+    assertThat(directoryMap.size()).isEqualTo(0);
+    assertThat(directoryMap.commit()).isFalse();
 
     List<List<Long>> shuffledRandomElementLists =
         IntStream.range(0, 10)
@@ -245,14 +245,14 @@ public class DirectoryHashSetTest {
         shuffledRandomElementLists
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
-                  shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.insert(addElement, null));
+                  shuffledRandomElements.stream().forEach(addElement -> directoryMap.insert(addElement, null));
             }, "SetInsertThread"))
             .collect(Collectors.toList())
     );
 
-    assertThat(directoryHashSet.size()).isEqualTo(0);
-    assertThat(directoryHashSet.commit()).isTrue();
-    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
+    assertThat(directoryMap.size()).isEqualTo(0);
+    assertThat(directoryMap.commit()).isTrue();
+    assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
     shuffledRandomElementLists =
         IntStream.range(0, 10)
@@ -263,28 +263,28 @@ public class DirectoryHashSetTest {
         shuffledRandomElementLists
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
-              shuffledRandomElements.stream().forEach(addElement -> directoryHashSet.remove(addElement));
+              shuffledRandomElements.stream().forEach(addElement -> directoryMap.remove(addElement));
             }, "SetRemoveThread"))
             .collect(Collectors.toList())
     );
 
-    assertThat(directoryHashSet.size()).isEqualTo(randomElements.size());
-    assertThat(directoryHashSet.commit()).isTrue();
-    assertThat(directoryHashSet.size()).isEqualTo(0);
+    assertThat(directoryMap.size()).isEqualTo(randomElements.size());
+    assertThat(directoryMap.commit()).isTrue();
+    assertThat(directoryMap.size()).isEqualTo(0);
   }
 
   @Test
   public void testBuffers() throws SgxException {
-    DirectoryHashSet directoryHashSet = new DirectoryHashSet(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
 
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(phonesBuffer.capacity()).isEqualTo(8000);
       assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
       assertThat(capacity).isEqualTo(1000);
     });
 
-    directoryHashSet.insert(5, new UUID(6,1));
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.insert(5, new UUID(6, 1));
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(phonesBuffer.capacity()).isEqualTo(8000);
       assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
       assertThat(capacity).isEqualTo(1000);
@@ -295,9 +295,9 @@ public class DirectoryHashSetTest {
       assertThat(uuidsLongs[11]).isEqualTo(0);
     });
 
-    directoryHashSet.commit();
+    directoryMap.commit();
 
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(phonesBuffer.capacity()).isEqualTo(8000);
       long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
       assertThat(phoneLongs[5]).isEqualTo(5);
@@ -309,9 +309,9 @@ public class DirectoryHashSetTest {
       assertThat(capacity).isEqualTo(1000);
     });
 
-    directoryHashSet.insert(7, new UUID(8,2));
-    directoryHashSet.commit();
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.insert(7, new UUID(8, 2));
+    directoryMap.commit();
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(phonesBuffer.capacity()).isEqualTo(8000);
       long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
       assertThat(phoneLongs[5]).isEqualTo(5);
@@ -326,15 +326,15 @@ public class DirectoryHashSetTest {
       assertThat(capacity).isEqualTo(1000);
     });
 
-    directoryHashSet.remove(5);
+    directoryMap.remove(5);
 
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
       assertThat(phoneLongs[5]).isEqualTo(5);
     });
 
-    directoryHashSet.commit();
-    directoryHashSet.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryMap.commit();
+    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
       assertThat(phoneLongs[5]).isEqualTo(-1);
       assertThat(phoneLongs[7]).isEqualTo(7);

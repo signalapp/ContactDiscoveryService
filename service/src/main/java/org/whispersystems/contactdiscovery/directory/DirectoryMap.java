@@ -25,11 +25,11 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Hash table that contains the directory of all registered users
+ * A double buffered open hash table that contains the directory of all registered users' phone numbers and UUIDs.
  *
  * @author Jeff Griffin
  */
-public class DirectoryHashSet {
+public class DirectoryMap {
 
   private static final int VALUE_SIZE = 16;
   private static final int KEY_SIZE = 8;
@@ -40,7 +40,7 @@ public class DirectoryHashSet {
   private InternalBuffers workingBuffers;
   private InternalBuffers publishedBuffers;
 
-  public DirectoryHashSet(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
+  public DirectoryMap(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
     this.workingBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
     this.publishedBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
   }
@@ -133,7 +133,7 @@ public class DirectoryHashSet {
         slotIdx = 0;
       }
       if (slotIdx == startSlotIdx) {
-        throw new AssertionError("DirectoryHashSet full");
+        throw new AssertionError("DirectoryMap full");
       }
       slotValue = buffer.getLong(slotIdx * KEY_SIZE);
     }

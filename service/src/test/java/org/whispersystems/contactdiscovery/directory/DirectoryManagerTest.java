@@ -44,8 +44,8 @@ public class DirectoryManagerTest {
   private final JedisPool               jedisPool               = mock(JedisPool.class);
   private final Jedis                   jedis                   = mock(Jedis.class);
   private final DirectoryCache          directoryCache          = mock(DirectoryCache.class);
-  private final DirectoryHashSet        directoryHashSet        = mock(DirectoryHashSet.class);
-  private final DirectoryHashSetFactory directoryHashSetFactory = mock(DirectoryHashSetFactory.class);
+  private final DirectoryMap directoryMap = mock(DirectoryMap.class);
+  private final DirectoryMapFactory directoryMapFactory = mock(DirectoryMapFactory.class);
 
   private final Pair<UUID, String> validUserOne   = Pair.of(UUID.fromString("1447ea61-f636-42b2-b6d2-97aa73760a60"), "+14151111111");
   private final Pair<UUID, String> validUserTwo   = Pair.of(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc"), "+14152222222");
@@ -66,7 +66,7 @@ public class DirectoryManagerTest {
     when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
 
-    when(directoryHashSetFactory.createDirectoryHashSet(anyLong())).thenReturn(directoryHashSet);
+    when(directoryMapFactory.create(anyLong())).thenReturn(directoryMap);
 
     when(directoryCache.isAddressSetBuilt(any())).thenReturn(true);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(true);
@@ -91,7 +91,7 @@ public class DirectoryManagerTest {
   public void testGetAddressListDirectoryUnavailable() throws Exception {
     when(directoryCache.isAddressSetBuilt(any())).thenReturn(false);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
     directoryManager.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       // Never called.
@@ -103,14 +103,14 @@ public class DirectoryManagerTest {
     when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
 
-    verify(directoryHashSet).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
-    verify(directoryHashSet).insert(eq(Long.parseLong("14151111111")), eq(validUserOne.getLeft()));
-    verify(directoryHashSet).commit();
+    verify(directoryMap).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
+    verify(directoryMap).insert(eq(Long.parseLong("14151111111")), eq(validUserOne.getLeft()));
+    verify(directoryMap).commit();
 
-    verifyNoMoreInteractions(directoryHashSet);
+    verifyNoMoreInteractions(directoryMap);
 
     verify(pubSubConnection).subscribe(eq("signal_address_update"));
 
@@ -134,13 +134,13 @@ public class DirectoryManagerTest {
 
     Thread.sleep(200);
 
-    verify(directoryHashSet).insert(eq(Long.parseLong("14153333333")), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")));
-    verify(directoryHashSet).insert(eq(Long.parseLong("14154444444")), isNull());
+    verify(directoryMap).insert(eq(Long.parseLong("14153333333")), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")));
+    verify(directoryMap).insert(eq(Long.parseLong("14154444444")), isNull());
 
     directoryManager.addUser(Optional.empty(), "+14155555555");
     directoryManager.addUser(Optional.of(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), "+14155555555");
 
-    verify(directoryHashSet).insert(eq(Long.parseLong("14155555555")), isNull());
+    verify(directoryMap).insert(eq(Long.parseLong("14155555555")), isNull());
     verify(directoryCache).addAddress(any(), eq("+14155555555"));
     verify(directoryCache).addUser(any(), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), eq("+14155555555"));
 //    verify(jedis).publish(eq("signal_address_update".getBytes()), any());
@@ -156,7 +156,7 @@ public class DirectoryManagerTest {
     List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
     boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList(validUserOne));
 
@@ -182,7 +182,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
     when(directoryCache.getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()))).thenReturn(Arrays.asList(validUserTwo));
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryHashSetFactory, new AtomicReference<>(Optional.empty()));
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()));
     directoryManager.start();
     boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of(validUserOne.getLeft()), Arrays.asList(validUserOne));
 

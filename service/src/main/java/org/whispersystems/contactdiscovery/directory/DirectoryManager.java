@@ -26,7 +26,7 @@ import io.dropwizard.lifecycle.Managed;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.contactdiscovery.directory.DirectoryHashSet.BorrowFunc;
+import org.whispersystems.contactdiscovery.directory.DirectoryMap.BorrowFunc;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
@@ -73,11 +73,11 @@ public class DirectoryManager implements Managed {
   private static final int SCAN_CHUNK_SIZE = 5_000;
 
   private final RedisClientFactory      redisFactory;
-  private final DirectoryHashSetFactory directoryHashSetFactory;
+  private final DirectoryMapFactory directoryMapFactory;
 
   private final AtomicBoolean built = new AtomicBoolean(false);
 
-  private final AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet;
+  private final AtomicReference<Optional<DirectoryMap>> currentDirectoryMap;
 
   private Pool<Jedis>      jedisPool;
   private DirectoryCache   directoryCache;
@@ -85,15 +85,15 @@ public class DirectoryManager implements Managed {
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryHashSetFactory directoryHashSetFactory, AtomicReference<Optional<DirectoryHashSet>> currentDirectoryHashSet) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
-    this.directoryHashSetFactory = directoryHashSetFactory;
-    this.currentDirectoryHashSet = currentDirectoryHashSet;
+    this.directoryMapFactory     = directoryMapFactory;
+    this.currentDirectoryMap     = currentDirectoryMap;
   }
 
   public boolean isConnected() {
-    return currentDirectoryHashSet.get().isPresent();
+    return currentDirectoryMap.get().isPresent();
   }
 
   public void addUser(Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
@@ -167,8 +167,8 @@ public class DirectoryManager implements Managed {
     if (!isBuilt()) {
       throw new DirectoryUnavailableException();
     }
-    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
-    directoryHashSet.borrowBuffers(func);
+    DirectoryMap directoryMap = getCurrentDirectoryMap();
+    directoryMap.borrowBuffers(func);
   }
 
   @Override
@@ -193,8 +193,8 @@ public class DirectoryManager implements Managed {
     pubSubConnection.close();
   }
 
-  private DirectoryHashSet getCurrentDirectoryHashSet() throws DirectoryUnavailableException {
-    return currentDirectoryHashSet.get().orElseThrow(DirectoryUnavailableException::new);
+  private DirectoryMap getCurrentDirectoryMap() throws DirectoryUnavailableException {
+    return currentDirectoryMap.get().orElseThrow(DirectoryUnavailableException::new);
   }
 
   private boolean isBuilt() {
@@ -213,7 +213,7 @@ public class DirectoryManager implements Managed {
   private void addUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
-    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
+    DirectoryMap directoryMap = getCurrentDirectoryMap();
 
     if (uuid.isPresent()) {
       if (directoryCache.addUser(jedis, uuid.get(), address)) {
@@ -235,13 +235,13 @@ public class DirectoryManager implements Managed {
       }
     }
 
-    directoryHashSet.insert(directoryAddress, uuid.orElse(null));
+    directoryMap.insert(directoryAddress, uuid.orElse(null));
   }
 
   private void removeUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
-    DirectoryHashSet directoryHashSet = getCurrentDirectoryHashSet();
+    DirectoryMap directoryMap = getCurrentDirectoryMap();
 
     boolean removedUser;
     if (uuid.isPresent()) {
@@ -259,7 +259,7 @@ public class DirectoryManager implements Managed {
                                  .toByteArray());
     }
 
-    directoryHashSet.remove(directoryAddress);
+    directoryMap.remove(directoryAddress);
   }
 
   private void rebuildLocalData() {
@@ -270,30 +270,30 @@ public class DirectoryManager implements Managed {
       built.set(userSetBuilt || addressSetBuilt);
 
       final long             directorySize;
-      final DirectoryHashSet directoryHashSet;
+      final DirectoryMap directoryMap;
       if (!userSetBuilt && addressSetBuilt) {
         directorySize    = directoryCache.getAddressCount(jedis);
-        directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
+        directoryMap = directoryMapFactory.create(directorySize);
 
         logger.warn("starting directory cache rebuild of " + directorySize + " addresses, built=" + addressSetBuilt);
 
-        rebuildLocalAddresses(jedis, directoryHashSet);
+        rebuildLocalAddresses(jedis, directoryMap);
       } else {
         directorySize    = directoryCache.getUserCount(jedis);
-        directoryHashSet = directoryHashSetFactory.createDirectoryHashSet(directorySize);
+        directoryMap = directoryMapFactory.create(directorySize);
 
         logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
 
-        rebuildLocalUsers(jedis, directoryHashSet);
+        rebuildLocalUsers(jedis, directoryMap);
       }
 
       logger.info("finished directory cache rebuild");
-      directoryHashSet.commit();
-      this.currentDirectoryHashSet.set(Optional.of(directoryHashSet));
+      directoryMap.commit();
+      this.currentDirectoryMap.set(Optional.of(directoryMap));
     }
   }
 
-  private void rebuildLocalAddresses(Jedis jedis, DirectoryHashSet directoryHashSet) {
+  private void rebuildLocalAddresses(Jedis jedis, DirectoryMap directoryMap) {
     String cursor = "0";
     do {
       ScanResult<Tuple> result;
@@ -306,7 +306,7 @@ public class DirectoryManager implements Managed {
         String address = tuple.getElement();
         try {
           long directoryAddress = parseAddress(address);
-          directoryHashSet.insert(directoryAddress, null);
+          directoryMap.insert(directoryAddress, null);
         } catch (InvalidAddressException e) {
           logger.warn("Invalid address: " + address, e);
         }
@@ -314,7 +314,7 @@ public class DirectoryManager implements Managed {
     } while (!cursor.equals("0"));
   }
 
-  private void rebuildLocalUsers(Jedis jedis, DirectoryHashSet directoryHashSet) {
+  private void rebuildLocalUsers(Jedis jedis, DirectoryMap directoryMap) {
     String cursor = "0";
     do {
       ScanResult<Pair<UUID, String>> result;
@@ -326,7 +326,7 @@ public class DirectoryManager implements Managed {
       for (Pair<UUID, String> user : result.getResult()) {
         try {
           long directoryAddress = parseAddress(user.getRight());
-          directoryHashSet.insert(directoryAddress, user.getLeft());
+          directoryMap.insert(directoryAddress, user.getLeft());
         } catch (InvalidAddressException e) {
           logger.warn("Invalid address for user: " + user, e);
         }
@@ -358,7 +358,7 @@ public class DirectoryManager implements Managed {
             case MESSAGE:     processMessage(reply);
           }
         } catch (Throwable t) {
-          currentDirectoryHashSet.set(Optional.empty());
+          currentDirectoryMap.set(Optional.empty());
 
           logger.warn("PubSub error", t);
           pubSubConnection.close();
@@ -394,7 +394,7 @@ public class DirectoryManager implements Managed {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            getCurrentDirectoryHashSet().insert(parseAddress(new String(update.getContent().toByteArray())), null);
+            getCurrentDirectoryMap().insert(parseAddress(new String(update.getContent().toByteArray())), null);
           } else if (update.getType() == PubSubMessage.Type.ADDED_USER) {
             Pair<UUID, String> addedUser;
             try {
@@ -403,9 +403,9 @@ public class DirectoryManager implements Managed {
               logger.warn("Badly formatted user", ex);
               return;
             }
-            getCurrentDirectoryHashSet().insert(parseAddress(addedUser.getRight()), addedUser.getLeft());
+            getCurrentDirectoryMap().insert(parseAddress(addedUser.getRight()), addedUser.getLeft());
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
-            getCurrentDirectoryHashSet().remove(parseAddress(new String(update.getContent().toByteArray())));
+            getCurrentDirectoryMap().remove(parseAddress(new String(update.getContent().toByteArray())));
           }
         }
       } catch (InvalidProtocolBufferException e) {
