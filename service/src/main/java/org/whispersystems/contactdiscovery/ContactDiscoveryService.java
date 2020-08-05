@@ -17,6 +17,9 @@
 package org.whispersystems.contactdiscovery;
 
 import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.jvm.CachedThreadStatesGaugeSet;
+import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
+import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
@@ -31,9 +34,9 @@ import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.directory.DirectoryCache;
+import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryMap;
 import org.whispersystems.contactdiscovery.directory.DirectoryMapFactory;
-import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueueManager;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
@@ -198,6 +201,9 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new DirectoryUnavailableExceptionMapper());
     environment.jersey().register(new CompletionExceptionMapper());
 
+    environment.metrics().register("gc", new GarbageCollectorMetricSet());
+    environment.metrics().register("threads", new CachedThreadStatesGaugeSet(10, TimeUnit.SECONDS));
+    environment.metrics().register("memory", new MemoryUsageGaugeSet());
     environment.metrics().register(name(CpuUsageGauge.class, "cpu"), new CpuUsageGauge());
     environment.metrics().register(name(FreeMemoryGauge.class, "free_memory"), new FreeMemoryGauge());
     environment.metrics().register(name(NetworkSentGauge.class, "bytes_sent"), new NetworkSentGauge());
