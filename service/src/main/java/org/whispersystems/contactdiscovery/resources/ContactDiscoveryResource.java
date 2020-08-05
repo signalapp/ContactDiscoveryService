@@ -19,6 +19,7 @@ package org.whispersystems.contactdiscovery.resources;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
+import com.codahale.metrics.annotation.ResponseMetered;
 import com.codahale.metrics.annotation.Timed;
 import io.dropwizard.auth.Auth;
 import org.whispersystems.contactdiscovery.auth.User;
@@ -56,6 +57,7 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @author Moxie Marlinspike
  */
 @Path("/v1/discovery")
+@ResponseMetered
 public class ContactDiscoveryResource {
 
   private static final MetricRegistry REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);

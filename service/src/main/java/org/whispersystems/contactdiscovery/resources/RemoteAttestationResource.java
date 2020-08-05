@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.annotation.ResponseMetered;
 import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.CharStreams;
@@ -70,6 +71,7 @@ import java.util.function.Function;
  */
 
 @Path("/v1/attestation/")
+@ResponseMetered
 public class RemoteAttestationResource {
 
   private final Logger logger = LoggerFactory.getLogger(RemoteAttestationResource.class);

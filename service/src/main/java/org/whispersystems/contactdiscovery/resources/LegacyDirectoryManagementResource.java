@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.annotation.ResponseMetered;
 import com.codahale.metrics.annotation.Timed;
 import io.dropwizard.auth.Auth;
 import org.whispersystems.contactdiscovery.auth.SignalService;
@@ -30,6 +31,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 @Path("/v1/directory")
+@ResponseMetered
 public class LegacyDirectoryManagementResource {
 
   @Timed

@@ -16,8 +16,9 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.annotation.ResponseMetered;
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Streams;
+import io.dropwizard.auth.Auth;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,8 @@ import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
+import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
+import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
 
 import javax.validation.Valid;
 import javax.ws.rs.Consumes;
@@ -32,11 +35,6 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-
-import io.dropwizard.auth.Auth;
-import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
-import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +48,7 @@ import java.util.stream.Collectors;
  * @author Moxie Marlinspike
  */
 @Path("/v2/directory")
+@ResponseMetered
 public class DirectoryManagementResource {
 
   private final Logger logger = LoggerFactory.getLogger(RemoteAttestationResource.class);

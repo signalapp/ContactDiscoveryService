@@ -16,6 +16,8 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.annotation.ResponseMetered;
+
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -25,6 +27,7 @@ import javax.ws.rs.core.Response.Status;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Path("/v1/ping")
+@ResponseMetered
 public class PingResource {
 
   private final AtomicBoolean healthOverride;
