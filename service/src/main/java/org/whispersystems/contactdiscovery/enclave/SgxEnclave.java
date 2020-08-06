@@ -17,8 +17,13 @@
 
 package org.whispersystems.contactdiscovery.enclave;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.util.Constants;
 
 import javax.crypto.AEADBadTagException;
 import java.nio.ByteBuffer;
@@ -26,13 +31,17 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Java interface for interacting with an SGX enclave
  *
  * @author Jeff Griffin
  */
 public class SgxEnclave implements Runnable {
-
+  private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Timer NATIVE_LOOKUP_TIMER = METRIC_REGISTRY.timer(name(SgxEnclave.class, "nativeLookup"));
+  private static final Meter NATIVE_LOOKUP_ERROR_METER = METRIC_REGISTRY.meter(name(SgxEnclave.class, "nativeLookup", "errors"));
   private static final byte PENDING_REQUESTS_TABLE_ORDER = 16; // 2^16 = 65536 pending requests buffer size
 
   private final Logger logger = LoggerFactory.getLogger(SgxEnclave.class);
@@ -308,12 +317,15 @@ public class SgxEnclave implements Runnable {
 
       processed = true;
 
-      try {
-        nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inUuidsBuf, inPhoneCount);
-      } catch (SgxException ex) {
-        batchFuture.completeExceptionally(convertSgxException(ex));
-        handleSgxException(ex);
-        throw ex;
+      try (Timer.Context timer = NATIVE_LOOKUP_TIMER.time()) {
+        try {
+          nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inUuidsBuf, inPhoneCount);
+        } catch (SgxException ex) {
+          batchFuture.completeExceptionally(convertSgxException(ex));
+          NATIVE_LOOKUP_ERROR_METER.mark();
+          handleSgxException(ex);
+          throw ex;
+        }
       }
 
       // trigger an exception for any messages that didn't get a reply (shouldn't happen unless enclave is buggy)
