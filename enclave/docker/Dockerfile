@@ -32,6 +32,7 @@ RUN    apt-get update \
                python \
                python3-distutils \
                python3-dev \
+               sudo \
                wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -40,7 +41,8 @@ ARG GID=0
 
 #Create a user to map the host user to.
 RUN    groupadd -o -g "${GID}" rust \
-    && useradd -m -o -u "${UID}" -g "${GID}" -s /bin/bash rust \
+    && useradd -m -o -u "${UID}" -g "${GID}" -G "adm,sudo" -s /bin/bash rust \
+    && echo "rust:rust" | chpasswd \
     && mkdir -p /tmp/docker \
     && chown -R rust.rust /tmp/docker
 
