@@ -1,5 +1,5 @@
 [workspace]
-members = ["cds_enclave", "sgx_ffi", "sgxsd_ffi", "test_ffi"]
+members = ["cds_benchmark", "cds_enclave", "sgx_ffi", "sgxsd_ffi", "test_ffi"]
 exclude = ["build"]
 
 [profile.release]

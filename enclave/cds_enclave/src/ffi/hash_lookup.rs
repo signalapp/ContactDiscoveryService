@@ -25,6 +25,26 @@ pub use super::bindgen_wrapper::{phone_t as Phone, uuid_t as Uuid};
 pub const MAX_HASH_TABLE_ORDER: u32 = CDS_MAX_HASH_TABLE_ORDER;
 pub const MAX_HASH_TABLE_SIZE: usize = 1 << MAX_HASH_TABLE_ORDER;
 
+#[no_mangle]
+pub extern "C" fn cds_c_hash_lookup(
+    in_phones: *const u8,
+    in_uuids: *const u8,
+    phone_count: usize,
+    p_query_phones: *const phone_t,
+    p_query_phone_results: *mut u8,
+    query_phone_count: usize,
+) -> u32
+{
+    unsafe {
+        let query_phones = core::slice::from_raw_parts(p_query_phones, query_phone_count);
+        let query_phone_results = core::slice::from_raw_parts_mut(p_query_phone_results, query_phone_count);
+        match hash_lookup(in_phones, in_uuids, phone_count, query_phones, query_phone_results) {
+            Ok(()) => 0,
+            Err(err) => err,
+        }
+    }
+}
+
 pub unsafe fn hash_lookup(
     in_phones: *const u8,
     in_uuids: *const u8,

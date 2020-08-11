@@ -97,6 +97,13 @@ version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "cds_benchmark"
+version = "0.1.0"
+dependencies = [
+ "criterion 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "cds_enclave"
 version = "0.1.0"
 dependencies = [

@@ -87,6 +87,15 @@ CDS_ENCLAVE_TARGET		:= $(builddir)/libcds_enclave.unstripped.so
 CDS_ENCLAVE_RUST_STATICLIB	:= $(targetdir)/release/libcds_enclave.a
 
 ##
+## cds_benchmark
+##
+
+CDS_BENCHMARK_NAME		:= libcds_benchmark
+CDS_BENCHMARK_UNSTRIPPED	:= $(builddir)/$(CDS_BENCHMARK_NAME).unstripped.so
+CDS_BENCHMARK_HARDENED		:= $(builddir)/$(CDS_BENCHMARK_NAME).hardened.unstripped.so
+CDS_BENCHMARK_LIB		:= $(builddir)/$(CDS_BENCHMARK_NAME).so
+
+##
 ## targets
 ##
 
@@ -138,9 +147,9 @@ test-asan: $(TEST_SGXSD_TARGET)
 clippy:
 	$(CARGO) clippy --manifest-path=cds_enclave/Cargo.toml --features=test
 
-benchmark:
-	env CFLAGS="-mno-red-zone" LDFLAGS="--emit-relocs" RUSTFLAGS="-C link-arg=-Wl,--emit-relocs" \
-	$(CARGO) bench --manifest-path=cds_enclave/Cargo.toml --all --features=test
+benchmark: $(CDS_BENCHMARK_LIB)
+	env RUSTFLAGS="-C link-arg=-Wl,-rpath,$(CURDIR)/build" \
+	$(CARGO) bench --target-dir=$(CARGO_TARGET_DIR) --manifest-path=cds_benchmark/Cargo.toml --benches
 
 bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)
 	$(BINDGEN) --no-include-path-detection -o sgx_ffi/src/bindgen_wrapper.rs \
@@ -190,6 +199,7 @@ distclean: clean
 
 clean:
 	rm -f	$(builddir)/$(CDS_ENCLAVE_NAME).debug.signdata \
+		$(builddir)/$(CDS_ENCLAVE_NAME).debug.mrenclave \
 		$(builddir)/$(CDS_ENCLAVE_NAME).debug.key \
 		$(builddir)/$(CDS_ENCLAVE_NAME).debug.pub \
 		$(builddir)/$(CDS_ENCLAVE_NAME).debug.sig \
@@ -201,6 +211,7 @@ clean:
 		$(builddir)/*.o \
 		$(builddir)/*.a \
 		$(builddir)/*.so \
+		$(builddir)/funcs_with_memindjmp \
 		$(C_OBJECTS) $(TEST_SGXSD_TARGET) $(TEST_SGXSD_OBJECTS) \
 		debian/debhelper-build-stamp \
 		debian/cds-enclave.substvars \
@@ -259,6 +270,17 @@ $(CDS_ENCLAVE_TARGET): $(C_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
 $(CDS_ENCLAVE_TARGET): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))
 $(CDS_ENCLAVE_TARGET): LDLIBS := -lcds_enclave
 
+## cds_benchmark
+
+$(builddir)/cds_benchmark_t.o: $(includedir)/cds_enclave_t.c
+	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
+
+$(CDS_BENCHMARK_UNSTRIPPED): $(C_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
+$(CDS_BENCHMARK_UNSTRIPPED): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))
+$(CDS_BENCHMARK_UNSTRIPPED): LDLIBS := -lcds_enclave
+
+$(CDS_BENCHMARK_LIB): $(CDS_BENCHMARK_HARDENED)
+	ln -sf $(notdir $^) $@
 
 ## Reproducible enclave build via debian package
 

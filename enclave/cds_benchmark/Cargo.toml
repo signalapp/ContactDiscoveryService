@@ -1,0 +1,18 @@
+[package]
+authors = ["Open Whisper Systems"]
+name    = "cds_benchmark"
+version = "0.1.0"
+license = "AGPL-3.0-or-later"
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+criterion = { version = "0.3" }
+
+[[bench]]
+name    = "hash_lookup"
+harness = false
+
+[[bench]]
+name    = "ratelimit_set"
+harness = false

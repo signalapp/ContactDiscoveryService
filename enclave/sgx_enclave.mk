@@ -151,13 +151,13 @@ ENCLAVE_LDFLAGS = \
 	-Wl,--defsym,__ImageBase=0 -Wl,--emit-relocs
 
 $(builddir)/lib%.unstripped.so: CFLAGS += $(ENCLAVE_CFLAGS)
-$(builddir)/lib%.unstripped.so: $(builddir)/%_t.o $(builddir)/libsgx_trts.a $(builddir)/libselib.a $(builddir)/libsgx_tstdc.a
+$(builddir)/lib%.unstripped.so: $(builddir)/%_t.o $(builddir)/libsgx_trts.a $(builddir)/libselib.a $(builddir)/libsgx_tstdc.a lib%.lds
 	$(CC) $(LDFLAGS) -o $@ $(filter %.o,$^) $(LDLIBS) \
 		$(ENCLAVE_LDFLAGS) -Wl,--version-script=lib$*.lds -Wl,-soname,lib$*.so
 
 $(builddir)/%.hardened.unstripped.so: $(builddir)/%.unstripped.so | $(LLVM_BOLT)
 	$(LLVM_BOLT) -trap-old-code -use-gnu-stack -update-debug-sections -update-end -v=2 \
-		-skip-funcs=$(shell cat bolt_skip_funcs.txt) \
+		-skip-funcs="$(shell cat bolt_skip_funcs.txt)" \
 		-eliminate-unreachable=0 -strip-rep-ret=0 -simplify-conditional-tail-calls=0 \
 		-align-macro-fusion=none \
 		-insert-lfences \
