@@ -3,7 +3,8 @@ FROM debian:buster-20191014
 COPY apt.conf sources.list /etc/apt/
 
 RUN    apt-get update \
-    && apt-get install -V -y --no-install-recommends --allow-downgrades \
+    && while true; do \
+           apt-get install -V -y --no-install-recommends --allow-downgrades \
                autoconf \
                automake \
                build-essential \
@@ -34,6 +35,9 @@ RUN    apt-get update \
                python3-dev \
                sudo \
                wget \
+           && break \
+           || echo "Retrying..."; \
+       done \
     && rm -rf /var/lib/apt/lists/*
 
 ARG UID=0
