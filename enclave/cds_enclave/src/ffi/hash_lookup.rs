@@ -37,7 +37,7 @@ pub extern "C" fn cds_c_hash_lookup(
 {
     unsafe {
         let query_phones = core::slice::from_raw_parts(p_query_phones, query_phone_count);
-        let query_phone_results = core::slice::from_raw_parts_mut(p_query_phone_results, query_phone_count);
+        let query_phone_results = core::slice::from_raw_parts_mut(p_query_phone_results, query_phone_count * size_of::<uuid_t>());
         match hash_lookup(in_phones, in_uuids, phone_count, query_phones, query_phone_results) {
             Ok(()) => 0,
             Err(err) => err,

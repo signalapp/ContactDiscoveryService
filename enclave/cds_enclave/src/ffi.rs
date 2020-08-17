@@ -11,7 +11,7 @@
 mod bindgen_wrapper;
 pub mod cttk;
 pub mod hash_lookup;
-#[cfg(not(any(test, feature = "test")))]
+#[cfg(not(any(test, feature = "test", feature = "benchmark")))]
 mod panic;
 pub mod ratelimit_set;
 pub mod sgxsd;

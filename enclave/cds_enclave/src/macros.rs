@@ -6,14 +6,14 @@
 //
 macro_rules! static_unreachable {
     () => {{
-        #[cfg(not(any(feature = "test", debug_assertions)))]
+        #[cfg(not(any(feature = "test", debug_assertions, feature = "benchmark")))]
         {
             extern "C" {
                 pub fn __static_unreachable() -> !;
             }
             unsafe { __static_unreachable() };
         }
-        #[cfg(any(feature = "test", debug_assertions))]
+        #[cfg(any(feature = "test", debug_assertions, feature = "benchmark"))]
         unreachable!()
     }};
 }

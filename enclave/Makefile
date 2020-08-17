@@ -91,6 +91,8 @@ CDS_ENCLAVE_RUST_STATICLIB	:= $(targetdir)/release/libcds_enclave.a
 ##
 
 CDS_BENCHMARK_NAME		:= libcds_benchmark
+CDS_BENCHMARK_TARGET_DIR	:= $(CARGO_TARGET_DIR)/benchmark
+CDS_BENCHMARK_STATICLIB		:= $(CDS_BENCHMARK_TARGET_DIR)/release/libcds_enclave.a
 CDS_BENCHMARK_UNSTRIPPED	:= $(builddir)/$(CDS_BENCHMARK_NAME).unstripped.so
 CDS_BENCHMARK_HARDENED		:= $(builddir)/$(CDS_BENCHMARK_NAME).hardened.unstripped.so
 CDS_BENCHMARK_LIB		:= $(builddir)/$(CDS_BENCHMARK_NAME).so
@@ -147,9 +149,10 @@ test-asan: $(TEST_SGXSD_TARGET)
 clippy:
 	$(CARGO) clippy --manifest-path=cds_enclave/Cargo.toml --features=test
 
+BENCHMARK_ARGS ?=
 benchmark: $(CDS_BENCHMARK_LIB)
-	env RUSTFLAGS="-C link-arg=-Wl,-rpath,$(CURDIR)/build" \
-	$(CARGO) bench --target-dir=$(CARGO_TARGET_DIR) --manifest-path=cds_benchmark/Cargo.toml --benches
+	env RUSTFLAGS="-C link-arg=-Wl,-rpath,$(CURDIR)/build" CARGO_TARGET_DIR=$(CDS_BENCHMARK_TARGET_DIR) \
+	$(CARGO) bench --target-dir=$(CDS_BENCHMARK_TARGET_DIR) --manifest-path=cds_benchmark/Cargo.toml $(BENCHMARK_ARGS)
 
 bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)
 	$(BINDGEN) --no-include-path-detection -o sgx_ffi/src/bindgen_wrapper.rs \
@@ -235,6 +238,10 @@ $(targetdir)/release/lib%.a: FORCE
 	env CFLAGS="-mno-red-zone" \
 		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
+$(CDS_BENCHMARK_STATICLIB): FORCE
+	env CFLAGS="-mno-red-zone" CARGO_TARGET_DIR=$(CDS_BENCHMARK_TARGET_DIR) \
+		$(CARGO) build -vv --release --manifest-path=cds_enclave/Cargo.toml --features benchmark
+
 ## sgxsd
 
 $(BEARSSL_OBJECTS): $(wildcard $(includedir)/bearssl/%.h) $(c_srcdir)/bearssl/inner.h $(c_srcdir)/bearssl/config.h
@@ -275,8 +282,20 @@ $(CDS_ENCLAVE_TARGET): LDLIBS := -lcds_enclave
 $(builddir)/cds_benchmark_t.o: $(includedir)/cds_enclave_t.c
 	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
 
-$(CDS_BENCHMARK_UNSTRIPPED): $(C_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
-$(CDS_BENCHMARK_UNSTRIPPED): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))
+BENCHMARK_LDFLAGS = \
+	-shared \
+	-L$(dir $(CDS_BENCHMARK_STATICLIB)) \
+	-lc -lpthread -ldl \
+	-Wl,-z,relro,-z,now,-z,noexecstack \
+	-Wl,--no-undefined -L$(builddir) \
+	-Wl,--whole-archive -lsgx_trts -Wl,--no-whole-archive \
+	-Wl,--start-group -lsgx_tstdc -lselib -Wl,--end-group \
+	-Wl,-Bsymbolic -Wl,--no-allow-shlib-undefined \
+	-Wl,--export-dynamic -Wl,--build-id=none \
+	-Wl,--defsym,__ImageBase=0 -Wl,--emit-relocs
+
+$(CDS_BENCHMARK_UNSTRIPPED): $(C_OBJECTS) $(CDS_BENCHMARK_STATICLIB)
+$(CDS_BENCHMARK_UNSTRIPPED): ENCLAVE_LDFLAGS := $(BENCHMARK_LDFLAGS)
 $(CDS_BENCHMARK_UNSTRIPPED): LDLIBS := -lcds_enclave
 
 $(CDS_BENCHMARK_LIB): $(CDS_BENCHMARK_HARDENED)

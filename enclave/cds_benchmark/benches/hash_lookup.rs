@@ -10,71 +10,38 @@ use cds_benchmark::*;
 use criterion::measurement::WallTime;
 use criterion::{black_box, criterion_group, criterion_main, Bencher, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 
-fn bench_hash_lookup_varying_map_per_map_elem_throughput(criterion: &mut Criterion) {
-    let mut bench_group = criterion.benchmark_group("hash_lookup_varying_map_per_map_elem_throughput");
+const PHONE_DB_ELEMENTS: [usize; 7] = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
+const QUERY_PHONE_ELEMENTS: [usize; 7] = [1, 256, 512, 1024, 2048, 4096, 8192];
+
+fn bench_hash_lookup_one_query_phone_varying_phone_db(criterion: &mut Criterion) {
+    let mut bench_group = criterion.benchmark_group("hash_lookup_one_query_phone_varying_phone_db");
 
     // Bench querying one phone against various database sizes.
     let static_query_size = 1;
-    let ten: usize = 10;
-    let map_sizes: Vec<usize> = vec![40000, 25 * ten.pow(6), 60 * ten.pow(6)];
-    for phone_count in map_sizes {
-        bench_group.throughput(Throughput::Elements(phone_count as u64));
+    for phone_count in &PHONE_DB_ELEMENTS {
+        bench_group.throughput(Throughput::Elements(*phone_count as u64));
         bench_with_inputs(
             &mut bench_group,
             BenchmarkId::from_parameter(phone_count),
             static_query_size,
-            phone_count,
+            *phone_count,
         );
     }
 }
 
-fn bench_hash_lookup_varying_map_per_query_elem_throughput(criterion: &mut Criterion) {
-    let mut bench_group = criterion.benchmark_group("hash_lookup_varying_map_per_query_elem_throughput");
+fn bench_hash_lookup_large_db_varying_query_phone(criterion: &mut Criterion) {
+    let mut bench_group = criterion.benchmark_group("hash_lookup_large_db_varying_query_phone");
 
-    // Bench querying one phone against various database sizes.
-    let static_query_size = 1;
-    let ten: usize = 10;
-    let map_sizes: Vec<usize> = vec![40000, 25 * ten.pow(6), 60 * ten.pow(6)];
-    for phone_count in map_sizes {
-        bench_group.throughput(Throughput::Elements(static_query_size as u64));
-        bench_with_inputs(
-            &mut bench_group,
-            BenchmarkId::from_parameter(phone_count),
-            static_query_size,
-            phone_count,
-        );
-    }
-}
-
-fn bench_hash_lookup_varying_query_per_query_elem_throughput(criterion: &mut Criterion) {
-    let mut bench_group = criterion.benchmark_group("hash_lookup_varying_query_per_query_elem");
-    // Bench querying against a large dataset with various query sizes. These should all be the
-    // same
-    let ten: usize = 10;
-    let static_map_size = 60 * ten.pow(6);
-    for query_size in vec![1, 100, 2048, 4096, 8096, 21000] {
-        bench_group.throughput(Throughput::Elements(query_size as u64));
+    // Bench querying against a large phone data base with various
+    // query sizes. These should all be the same for a constant time
+    // lookup algorightm.
+    let static_map_size = PHONE_DB_ELEMENTS[PHONE_DB_ELEMENTS.len() - 1];
+    for query_size in &QUERY_PHONE_ELEMENTS {
+        bench_group.throughput(Throughput::Elements(*query_size as u64));
         bench_with_inputs(
             &mut bench_group,
             BenchmarkId::from_parameter(query_size),
-            query_size,
-            static_map_size,
-        );
-    }
-}
-
-fn bench_hash_lookup_varying_query_per_map_elem_throughput(criterion: &mut Criterion) {
-    let mut bench_group = criterion.benchmark_group("hash_lookup_varying_query_per_map_elem");
-    // Bench querying against a large dataset with various query sizes. These should all be the
-    // same
-    let ten: usize = 10;
-    let static_map_size = 60 * ten.pow(6);
-    for query_size in vec![1, 100, 2048, 4096, 8096, 21000] {
-        bench_group.throughput(Throughput::Elements(static_map_size as u64));
-        bench_with_inputs(
-            &mut bench_group,
-            BenchmarkId::from_parameter(query_size),
-            query_size,
+            *query_size,
             static_map_size,
         );
     }
@@ -88,21 +55,25 @@ fn bench_with_inputs(benchmark_group: &mut BenchmarkGroup<WallTime>, bench_id: B
 
     benchmark_group.bench_function(bench_id, |bencher: &mut Bencher| {
         bencher.iter(|| {
-            let _ = hash_lookup(
+            match hash_lookup(
                 &in_phones,
                 in_uuids.as_slice(),
                 &query_phones,
                 query_phone_results_data.as_mut_slice(),
-            );
+            ) {
+                0 => {}
+                error => panic!(
+                    "hash_lookup() failed with code: {}, query_size: {}, phone_count: {}",
+                    error, query_size, phone_count
+                ),
+            }
         })
     });
 }
 
 criterion_group!(
     benches,
-    bench_hash_lookup_varying_map_per_map_elem_throughput,
-    bench_hash_lookup_varying_map_per_query_elem_throughput,
-    bench_hash_lookup_varying_query_per_map_elem_throughput,
-    bench_hash_lookup_varying_query_per_query_elem_throughput
+    bench_hash_lookup_one_query_phone_varying_phone_db,
+    bench_hash_lookup_large_db_varying_query_phone,
 );
 criterion_main!(benches);

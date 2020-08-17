@@ -6,8 +6,8 @@
 //
 
 #![crate_type = "staticlib"]
-#![cfg_attr(not(any(test, feature = "test")), no_std)]
-#![cfg_attr(not(any(test, feature = "test")), feature(alloc_error_handler))]
+#![cfg_attr(not(any(test, feature = "test", feature = "benchmark")), no_std)]
+#![cfg_attr(not(any(test, feature = "test", feature = "benchmark")), feature(alloc_error_handler))]
 #![allow(unused_parens, clippy::style, clippy::large_enum_variant)]
 #![warn(
     bare_trait_objects,
@@ -48,14 +48,14 @@
 
 extern crate alloc;
 
-#[cfg(not(any(test, feature = "test")))]
+#[cfg(not(any(test, feature = "test", feature = "benchmark")))]
 #[global_allocator]
 static ALLOCATOR: allocator::System = allocator::System;
 
 #[macro_use]
 mod macros;
 
-#[cfg(not(any(test, feature = "test")))]
+#[cfg(not(any(test, feature = "test", feature = "benchmark")))]
 mod allocator;
 pub mod ffi;
 mod hasher;

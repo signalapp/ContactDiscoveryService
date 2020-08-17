@@ -6,8 +6,9 @@ license = "AGPL-3.0-or-later"
 edition = "2018"
 
 [features]
-default = []
-test    = ["criterion", "sgx_ffi/test", "sgxsd_ffi/test"]
+default   = []
+test      = ["sgx_ffi/test", "sgxsd_ffi/test"]
+benchmark = []
 
 [dependencies]
 hashbrown  = { version = "0.6", default-features = false, features = [] }
@@ -18,10 +19,6 @@ sgx_ffi    = { path = "../sgx_ffi" }
 sgxsd_ffi  = { path = "../sgxsd_ffi" }
 spin       = "0.5"
 subtle     = { version = "2.2", default-features = false, features = [] }
-
-# optional dev-dependencies
-# criterion is optional because it will pull in libstd due to a cargo bug
-criterion = { version = "0.3", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.4"
