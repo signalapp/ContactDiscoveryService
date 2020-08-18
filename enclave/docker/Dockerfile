@@ -18,6 +18,7 @@ RUN    apt-get update \
                git \
                gawk \
                gnupg \
+               gnuplot \
                libclang-dev \
                libcurl4-openssl-dev \
                libprotobuf-dev \
