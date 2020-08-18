@@ -47,6 +47,8 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -62,6 +64,7 @@ public class ContactDiscoveryResource {
 
   private static final MetricRegistry REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Timer GET_CONTACTS_TIMER = REGISTRY.timer(name(ContactDiscoveryResource.class, "getRegisteredContacts"));
+  private static final ConcurrentMap<String, Timer> PER_ENCLAVE_TIMERS = new ConcurrentHashMap<>();
   private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
   private final Set<String> enclaves;
@@ -84,14 +87,20 @@ public class ContactDiscoveryResource {
       throws NoSuchEnclaveException, RateLimitExceededException
   {
     final var ctx = GET_CONTACTS_TIMER.time();
-    asyncResponse.register((CompletionCallback) throwable -> ctx.close());
+    asyncResponse.register((CompletionCallback) throwable -> { ctx.close(); });
+
+    if (!enclaves.contains(enclaveId)) {
+      asyncResponse.resume(new NoSuchEnclaveException(enclaveId));
+      return;
+    }
+
+    var perEnclaveTimer = PER_ENCLAVE_TIMERS.computeIfAbsent(enclaveId, key -> REGISTRY.timer(name(ContactDiscoveryResource.class, "perEnclave", key)));
+    final var perEnclaveCtx = perEnclaveTimer.time();
+    asyncResponse.register((CompletionCallback) throwable -> { perEnclaveCtx.close(); });
+
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
     if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
       asyncResponse.resume(Response.status(400).build());
-      return;
-    }
-    if (!enclaves.contains(enclaveId)) {
-      asyncResponse.resume(new NoSuchEnclaveException(enclaveId));
       return;
     }
 
