@@ -94,7 +94,7 @@ public class ContactDiscoveryResource {
       return;
     }
 
-    var perEnclaveTimer = PER_ENCLAVE_TIMERS.computeIfAbsent(enclaveId, key -> REGISTRY.timer(name(ContactDiscoveryResource.class, "perEnclave", key)));
+    var perEnclaveTimer = PER_ENCLAVE_TIMERS.computeIfAbsent(enclaveId, key -> REGISTRY.timer(name(ContactDiscoveryResource.class, "getRegisteredContacts", "perEnclave", key)));
     final var perEnclaveCtx = perEnclaveTimer.time();
     asyncResponse.register((CompletionCallback) throwable -> { perEnclaveCtx.close(); });
 
