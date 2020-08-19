@@ -47,6 +47,20 @@ fn bench_hash_lookup_large_db_varying_query_phone(criterion: &mut Criterion) {
     }
 }
 
+fn perf_hash_lookup(criterion: &mut Criterion) {
+    let mut bench_group = criterion.benchmark_group("perf_hash_lookup");
+
+    let static_map_size = 1_000_000;
+    let query_size = 1024;
+    bench_group.throughput(Throughput::Elements(query_size as u64));
+    bench_with_inputs(
+        &mut bench_group,
+        BenchmarkId::from_parameter(query_size),
+        query_size,
+        static_map_size,
+    );
+}
+
 fn bench_with_inputs(benchmark_group: &mut BenchmarkGroup<WallTime>, bench_id: BenchmarkId, query_size: usize, phone_count: usize) {
     let in_phones: Vec<Phone> = black_box(vec![0; phone_count]);
     let in_uuids: Vec<Uuid> = black_box(vec![Uuid { data64: [0, 0] }; phone_count]);
@@ -75,5 +89,6 @@ criterion_group!(
     benches,
     bench_hash_lookup_one_query_phone_varying_phone_db,
     bench_hash_lookup_large_db_varying_query_phone,
+    perf_hash_lookup,
 );
 criterion_main!(benches);

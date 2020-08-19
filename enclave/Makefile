@@ -97,6 +97,8 @@ CDS_BENCHMARK_STATICLIB		:= $(CDS_BENCHMARK_ENCLAVE_TARGET_DIR)/release/libcds_e
 CDS_BENCHMARK_UNSTRIPPED	:= $(builddir)/$(CDS_BENCHMARK_NAME).unstripped.so
 CDS_BENCHMARK_HARDENED		:= $(builddir)/$(CDS_BENCHMARK_NAME).hardened.unstripped.so
 CDS_BENCHMARK_LIB		:= $(builddir)/$(CDS_BENCHMARK_NAME).so
+CDS_BENCHMARK_FLAMEGRAPH_DIR	:= $(builddir)/FlameGraph
+CDS_BENCHMARK_FLAMEGRAPH_REPO	:= https://github.com/brendangregg/FlameGraph.git
 
 ##
 ## targets
@@ -151,9 +153,36 @@ clippy:
 	$(CARGO) clippy --manifest-path=cds_enclave/Cargo.toml --features=test
 
 BENCHMARK_ARGS ?=
-benchmark: $(CDS_BENCHMARK_LIB)
-	env RUSTFLAGS="-C link-arg=-Wl,-rpath,$(CURDIR)/build" CARGO_TARGET_DIR=$(CDS_BENCHMARK_TARGET_DIR) \
-	$(CARGO) bench --target-dir=$(CDS_BENCHMARK_TARGET_DIR) --manifest-path=cds_benchmark/Cargo.toml $(BENCHMARK_ARGS)
+BENCHMARK_ENV  = env \
+	RUSTFLAGS="-C link-arg=-Wl,-rpath,$(CURDIR)/build" \
+	CARGO_TARGET_DIR=$(CDS_BENCHMARK_TARGET_DIR)
+benchmark:
+	make docker MAKETARGET=$(CDS_BENCHMARK_LIB)
+	$(BENCHMARK_ENV) $(CARGO) bench \
+		--target-dir=$(CDS_BENCHMARK_TARGET_DIR) \
+		--manifest-path=cds_benchmark/Cargo.toml \
+		$(BENCHMARK_ARGS)
+
+$(CDS_BENCHMARK_FLAMEGRAPH_DIR):
+	git clone $(CDS_BENCHMARK_FLAMEGRAPH_REPO) $(CDS_BENCHMARK_FLAMEGRAPH_DIR)
+
+BENCHMARK_PERF_DATA		:= $(CDS_BENCHMARK_TARGET_DIR)/perf.data
+BENCHMARK_PERF_ARGS		:= --call-graph dwarf --output $(BENCHMARK_PERF_DATA)
+BENCHMARK_PERF_FLAME_GRAPH	:= $(CDS_BENCHMARK_TARGET_DIR)/perf-flame.svg
+
+benchmark-perf: PATH := $(PATH):$(CURDIR)/$(CDS_BENCHMARK_FLAMEGRAPH_DIR)
+benchmark-perf: | $(CDS_BENCHMARK_FLAMEGRAPH_DIR)
+	make docker MAKETARGET=$(CDS_BENCHMARK_LIB)
+	$(BENCHMARK_ENV) $(CARGO) bench \
+		--target-dir=$(CDS_BENCHMARK_TARGET_DIR) \
+		--manifest-path=cds_benchmark/Cargo.toml \
+		--bench hash_lookup --no-run
+	$(BENCHMARK_ENV) perf record $(BENCHMARK_PERF_ARGS) \
+		$(CARGO) bench \
+			--target-dir=$(CDS_BENCHMARK_TARGET_DIR) \
+			--manifest-path=cds_benchmark/Cargo.toml \
+			--bench hash_lookup -- --profile-time 10 perf_hash_lookup $(BENCHMARK_ARGS)
+	perf script --input $(BENCHMARK_PERF_DATA) | stackcollapse-perf.pl | rustfilt | flamegraph.pl > $(BENCHMARK_PERF_FLAME_GRAPH)
 
 bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)
 	$(BINDGEN) --no-include-path-detection -o sgx_ffi/src/bindgen_wrapper.rs \
@@ -309,9 +338,8 @@ MAKETARGET ?= bindgen debuild sign
 docker: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 docker:
 	$(DOCKER) build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) \
-	  --build-arg RUST_VERSION=$(RUST_VERSION) \
 	  -t cds-enclave-builder ./docker
-	$(DOCKER) run -it --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE \
+	$(DOCKER) run -it --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE --cap-add CAP_SYS_ADMIN \
 		-v `pwd`/:/home/rust/src $(DOCKER_EXTRA) \
 		--env MAKEFLAGS="$(MAKEFLAGS)" \
 		cds-enclave-builder \

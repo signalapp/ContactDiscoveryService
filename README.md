@@ -165,3 +165,45 @@ cached BOLT binary takes roughly 11 minutes.)
 
 Manually triggering these can happen in the Azure UI or by pushing branches. See
 the "Local testing" section for the format of the branches.
+
+# Benchmarks
+
+## Enclave benchmarks
+
+To run benchmarks for the enclave run this:
+
+    $ make -C ./enclave benchmark
+
+Optionally configure more benchmark parameters by setting the Makefile
+variable `BENCHMARK_ARGS`.  See `enclave/Makefile` for details.
+
+## Enclave benchmark perf tests
+
+Running perf on the benchmark executable requires a few additional
+programs.
+
+First install the perf tools:
+
+    $ sudo apt install linux-tools-common linux-tools-generic
+
+Next install a cargo rust symbol demangler called `rustfilt`:
+
+    $ cargo install rustfilt
+
+To run perf on the benchmarks:
+
+    $ make -C ./enclave benchmark-perf
+
+This generates two useful files.
+
+First, a perf data file:
+
+    enclave/build/target/benchmark/perf.data
+
+The perf.data file can be fed into additional perf tools for analysis.
+
+Second, a flamegraph:
+
+    enclave/build/target/benchmark/perf-flame.svg
+
+Try opening this file with `xdg-open enclave/build/target/benchmark/perf-flame.svg` or other browser.
