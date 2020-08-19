@@ -311,10 +311,10 @@ struct CliArgs {
     insecure_ssl: bool,
 
     /// Number of requests per second
-    #[structopt(short, long, default_value = "100.0")]
+    #[structopt(long, default_value = "100.0")]
     requests_per_second: f32,
 
     /// Timeout for requests in seconds
-    #[structopt(short, long, default_value = "5")]
+    #[structopt(long, default_value = "5")]
     request_timeout: u64,
 }
