@@ -91,8 +91,9 @@ CDS_ENCLAVE_RUST_STATICLIB	:= $(targetdir)/release/libcds_enclave.a
 ##
 
 CDS_BENCHMARK_NAME		:= libcds_benchmark
+CDS_BENCHMARK_ENCLAVE_TARGET_DIR:= $(CARGO_TARGET_DIR)/benchmark-enclave
 CDS_BENCHMARK_TARGET_DIR	:= $(CARGO_TARGET_DIR)/benchmark
-CDS_BENCHMARK_STATICLIB		:= $(CDS_BENCHMARK_TARGET_DIR)/release/libcds_enclave.a
+CDS_BENCHMARK_STATICLIB		:= $(CDS_BENCHMARK_ENCLAVE_TARGET_DIR)/release/libcds_enclave.a
 CDS_BENCHMARK_UNSTRIPPED	:= $(builddir)/$(CDS_BENCHMARK_NAME).unstripped.so
 CDS_BENCHMARK_HARDENED		:= $(builddir)/$(CDS_BENCHMARK_NAME).hardened.unstripped.so
 CDS_BENCHMARK_LIB		:= $(builddir)/$(CDS_BENCHMARK_NAME).so
@@ -239,7 +240,7 @@ $(targetdir)/release/lib%.a: FORCE
 		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
 $(CDS_BENCHMARK_STATICLIB): FORCE
-	env CFLAGS="-mno-red-zone" CARGO_TARGET_DIR=$(CDS_BENCHMARK_TARGET_DIR) \
+	env CFLAGS="-mno-red-zone" CARGO_TARGET_DIR=$(CDS_BENCHMARK_ENCLAVE_TARGET_DIR) \
 		$(CARGO) build -vv --release --manifest-path=cds_enclave/Cargo.toml --features benchmark
 
 ## sgxsd
