@@ -11,29 +11,156 @@ use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use std::time::{Instant, SystemTime};
+use std::time::SystemTime;
 
 use anyhow::Context;
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt};
 use http::Uri;
-use log::{debug, error};
+use log::{debug, warn};
 use rand::{Rng, RngCore};
-use rand_distr::Distribution;
 use structopt::StructOpt;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio::time::{timeout, Duration, Elapsed};
-use uuid::Uuid;
+use tokio::task::{JoinError, JoinHandle};
+use tokio::time::{timeout, Duration, Elapsed, Instant};
 
-struct RequestParams {
-    pub client:       CdsApiClient,
-    pub credentials:  CdsApiCredentials,
-    pub enclave_name: String,
-    pub query_phones: Vec<u64>,
+type RequestItem = JoinHandle<Result<Result<CdsApiDiscoveryResponse, CdsApiClientError>, Elapsed>>;
+type RequestBatch = Vec<RequestItem>;
+
+async fn send_requests(arguments: &CliArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let client = CdsApiClient::new(&arguments.connect, arguments.insecure_ssl).context("error creating api client")?;
+
+    let phone_list = match arguments.phone_list_file.as_ref() {
+        Some(file) => Some(read_phone_list(file)?),
+        None => None,
+    };
+
+    let (mut tx_request, mut rx_request) = mpsc::channel::<RequestBatch>(4096);
+
+    // spawn response processing thread
+    let show_uuids = arguments.show_uuids;
+    let response_handle = tokio::spawn(async move {
+        let mut count: usize = 0;
+        let mut pending_response_set = FuturesUnordered::<RequestItem>::new();
+        let mut channel_open = true;
+
+        loop {
+            tokio::select! {
+                response = pending_response_set.select_next_some(), if !pending_response_set.is_empty() => {
+                    match handle_response(response, show_uuids) {
+                        Ok(request_id) => debug!("Handled request: {}", request_id),
+                        Err(error) => return Err((count, error)),
+                    }
+                    count += 1;
+                },
+                slot_batch = rx_request.recv(), if channel_open => match slot_batch {
+                    Some(batch) => for request in batch {
+                        pending_response_set.push(request);
+                    }
+                    None => channel_open = false,
+                },
+                else => break,
+            };
+        }
+        Ok(count)
+    });
+
+    let generate_start = Instant::now();
+    let generate_target_finish = generate_start
+        .checked_add(Duration::from_secs(arguments.send_duration))
+        .ok_or(CdsApiClientError::CreateDurationError)
+        .context("Error calculating duration")?;
+
+    let timeout_seconds = arguments.request_timeout;
+
+    let slot_interval = 1;
+    let slot_duration = Duration::from_millis(slot_interval * 1000);
+    let requests_per_slot = arguments.requests_per_second / slot_interval;
+    debug!("slot_duration: {:?}:", slot_duration);
+    debug!("requests_per_slot: {}:", requests_per_slot);
+
+    println!(
+        "\nGenerating {} req/sec for {} seconds...",
+        arguments.requests_per_second, arguments.send_duration,
+    );
+    let mut request_id: usize = 0;
+    let mut previous_slot_time = Instant::now();
+    while Instant::now() < generate_target_finish {
+        debug!("Slot time start:");
+
+        // Delay for the remainder of this time slot if possible.
+        // Subtract off time we've already spent to get to this point
+        // since the last time we sent a batch of requests.
+        let delay_duration = slot_duration.checked_sub(Instant::now().duration_since(previous_slot_time));
+        if let Some(delay_time) = delay_duration {
+            tokio::time::delay_for(delay_time).await;
+        }
+        previous_slot_time = Instant::now();
+
+        let mut slot_batch = Vec::new();
+        for _ in 0..requests_per_slot {
+            let client = client.clone();
+            let credentials = get_credentials(&arguments.username, &arguments.password, &arguments.token_secret);
+            let enclave_name = arguments.enclave_name.clone();
+            let query_phones = get_phones(&phone_list, arguments.num_phones);
+            let work_handle = tokio::spawn(async move {
+                timeout(
+                    Duration::from_secs(timeout_seconds),
+                    client.discovery_request(&credentials, &enclave_name, &query_phones, request_id),
+                )
+                .await
+            });
+            slot_batch.push(work_handle);
+            request_id += 1;
+        }
+
+        // send slot_set to the response processing thread
+        if tx_request.send(slot_batch).await.is_err() {
+            warn!("Response handler exited early.");
+            break;
+        }
+    }
+
+    let generate_duration = generate_start.elapsed();
+    println!(
+        "Generated {} requests in {:.3} seconds.",
+        request_id,
+        generate_duration.as_secs_f32()
+    );
+    println!("Waiting for outstanding responses to finish...\n");
+
+    // explicitly drop tx_request -- signals the rx_request side we
+    // are done.
+    std::mem::drop(tx_request);
+
+    let (num_responses, result) = match response_handle.await? {
+        Ok(num_responses) => (num_responses, Ok(())),
+        Err((num_responses, error)) => (num_responses, Err(error.into())),
+    };
+    let response_duration = generate_start.elapsed();
+
+    println!("Total requests      : {}", request_id);
+    println!("Total responses     : {}", num_responses);
+    println!("Total send time     : {:.3} seconds", generate_duration.as_secs_f32());
+    println!(
+        "Request rate        : {:.3} requests / second",
+        request_id as f32 / generate_duration.as_secs_f32()
+    );
+    println!("Desired Request rate: {:.3} requests / second", arguments.requests_per_second);
+    println!("Total response time : {:.3} seconds", response_duration.as_secs_f32());
+    println!(
+        "Response rate       : {:.3} responses / second",
+        num_responses as f32 / response_duration.as_secs_f32()
+    );
+
+    result
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let arguments = CliArgs::from_args();
+
+    if arguments.requests_per_second == 0 {
+        return Err(CdsApiClientError::InvalidArgument).context("--requests_per_second must be greater than 0")?;
+    }
 
     let log_level = if arguments.debug {
         log::LevelFilter::Debug
@@ -45,159 +172,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     logger.format_timestamp_nanos();
     logger.init();
 
-    let client = CdsApiClient::new(arguments.connect, arguments.insecure_ssl).context("error creating api client")?;
-
-    let phone_list = match arguments.phone_list_file {
-        Some(file) => Some(read_phone_list(file)?),
-        None => None,
-    };
-
-    let (mut tx_request, mut rx_request): (mpsc::Sender<RequestParams>, mpsc::Receiver<_>) = mpsc::channel(4096);
-    let (mut tx_response, mut rx_response) = mpsc::channel(4096);
-    let (mut tx_control, mut rx_control) = mpsc::channel(5);
-
-    // Convert requests/sec to a period with millisecond units.
-    let request_period_ms = 1000.0 / arguments.requests_per_second;
-    let request_distribution = rand_distr::Poisson::new(request_period_ms).map_err(|_| CdsApiClientError::CreateRandDistributionError)?;
-
-    // spawn request processing thread
-    let tx_control_clone = tx_control.clone();
-    let timeout_seconds = arguments.request_timeout;
-    tokio::spawn(async move {
-        let mut tx_control = tx_control_clone;
-        let mut count: usize = 0;
-        let mut previous_request_time = Instant::now();
-        while let Some(request_params) = rx_request.recv().await {
-            let delay_duration = calculate_wait_duration(&request_distribution, &previous_request_time);
-            if let Some(delay_time) = delay_duration {
-                tokio::time::delay_for(delay_time).await;
-            }
-            previous_request_time = Instant::now();
-            debug!("request-RX: enter: {}", count);
-            let query_phones = request_params.query_phones.clone();
-            let work_handle = tokio::spawn(async move {
-                timeout(
-                    Duration::from_secs(timeout_seconds),
-                    request_params.client.discovery_request(
-                        &request_params.credentials,
-                        &request_params.enclave_name,
-                        &request_params.query_phones,
-                    ),
-                )
-                .await
-            });
-
-            // send work_handle to the response processing thread
-            if let Err(error) = tx_response
-                .send((work_handle, query_phones))
-                .await
-                .map_err(|_| CdsApiClientError::TokioChannelSendError)
-            {
-                let _ = tx_control.send(error).await;
-                break;
-            }
-            count += 1;
-        }
-        debug!("request-RX: all done: {}", count);
-        // tx_response going out of scope here signals the rx_response
-        // side we are done.
-    });
-
-    // spawn response processing thread
-    let show_uuids = arguments.show_uuids;
-    let response_handle = tokio::spawn(async move {
-        let mut count: usize = 0;
-        while let Some((response, query_phones)) = rx_response.recv().await {
-            debug!("response-RX: enter: {}", count);
-            if let Err(error) = handle_response(response, &query_phones, show_uuids).await {
-                error!("Error handling response {}: {:?}", count, error);
-                let _ = tx_control.send(error).await;
-                break;
-            }
-            debug!("response-RX: exit");
-            count += 1;
-        }
-        debug!("response-RX: all done: {}", count);
-    });
-
-    let run_start = Instant::now();
-    // generate requests
-    for i in 0..arguments.num_requests {
-        debug!("main: generating request: {}", i);
-
-        // check if the processing threads are reporting any errors
-        if let Ok(error) = rx_control.try_recv() {
-            return Err(error.into());
-        }
-
-        let request_params = RequestParams {
-            client:       client.clone(),
-            credentials:  get_credentials(&arguments.username, &arguments.password, &arguments.token_secret),
-            enclave_name: arguments.enclave_name.clone(),
-            query_phones: get_phones(&phone_list, arguments.num_phones),
-        };
-        let _ = tx_request
-            .send(request_params)
-            .await
-            .map_err(|_| CdsApiClientError::TokioChannelSendError)
-            .context("Error sending request")?;
-    }
-
-    // explicitly drop tx_request -- signals the rx_request side we
-    // are done.
-    std::mem::drop(tx_request);
-
-    // wait for all the response processing to complete
-    let _ = response_handle.await;
-
-    // check if anything errored out
-    if let Ok(error) = rx_control.try_recv() {
-        return Err(error.into());
-    }
-
-    let run_duration = run_start.elapsed();
-
-    println!("Total requests      : {}", arguments.num_requests);
-    println!("Total time          : {:.3} seconds", run_duration.as_secs_f32());
-    println!(
-        "Request rate        : {:.3} requests / second",
-        arguments.num_requests as f32 / run_duration.as_secs_f32()
-    );
-    println!("Desired Request rate: {:.3} requests / second", arguments.requests_per_second);
-
-    Ok(())
+    let mut runtime = tokio::runtime::Runtime::new().context("Problems creating runtime")?;
+    let result = runtime.block_on(async move { send_requests(&arguments).await });
+    runtime.shutdown_timeout(Duration::from_nanos(0));
+    result
 }
 
-fn calculate_wait_duration(distribution: &rand_distr::Poisson<f32>, previous_time: &Instant) -> Option<Duration> {
-    // Calculate how long to wait to send the next request.
-    // First get the next desired value from the distrubtion.
-    let sample_ms: u64 = std::cmp::max(2, distribution.sample(&mut rand::thread_rng()));
-    let next_duration = Duration::from_millis(sample_ms - 1);
-    // Then subtract off time we've already spent to get to
-    // this point since the last time we sent a request.
-    next_duration.checked_sub(Instant::now().duration_since(*previous_time))
-}
-
-async fn handle_response(
-    response_handle: JoinHandle<Result<Result<Vec<Uuid>, CdsApiClientError>, Elapsed>>,
-    query_phones: &[u64],
+fn handle_response(
+    work_handle: Result<Result<Result<CdsApiDiscoveryResponse, CdsApiClientError>, Elapsed>, JoinError>,
     show_uuids: bool,
-) -> Result<(), CdsApiClientError>
+) -> Result<usize, CdsApiClientError>
 {
-    let uuids = response_handle.await?.map_err(|_| CdsApiClientError::RequestTimeoutError)??;
-    if uuids.len() != query_phones.len() {
+    let response = work_handle?.map_err(|_| CdsApiClientError::RequestTimeoutError)??;
+    if response.uuids.len() != response.query_phones.len() {
         return Err(CdsApiClientError::UuidListLengthMismatchError {
-            phone_len: query_phones.len(),
-            uuid_len:  uuids.len(),
+            phone_len: response.query_phones.len(),
+            uuid_len:  response.uuids.len(),
         });
     }
     if show_uuids {
         println!("Discovery Response:");
-        for (i, (phone, uuid)) in query_phones.iter().zip(uuids.iter()).enumerate() {
+        for (i, (phone, uuid)) in response.query_phones.iter().zip(response.uuids.iter()).enumerate() {
             println!("{:4} : {:15} : {}", i, phone, uuid);
         }
     }
-    Ok(())
+    Ok(response.request_id)
 }
 
 fn get_credentials(username: &Option<String>, password: &Option<String>, token_secret: &[u8]) -> CdsApiCredentials {
@@ -238,7 +237,7 @@ fn get_phones(phones_from_file: &Option<Vec<u64>>, num_phones: usize) -> Vec<u64
     })
 }
 
-fn read_phone_list(path: PathBuf) -> Result<Vec<u64>, anyhow::Error> {
+fn read_phone_list(path: &PathBuf) -> Result<Vec<u64>, anyhow::Error> {
     let file = File::open(&path).context(format!("Error opening file: {:?}", path.as_path().as_os_str().to_string_lossy()))?;
     let mut phone_list = Vec::new();
     for (i, line) in io::BufReader::new(file).lines().enumerate() {
@@ -261,7 +260,35 @@ fn parse_hex_arg(hex: &str) -> Result<TokenSecret, hex::FromHexError> {
 }
 
 #[derive(Debug, structopt::StructOpt)]
-#[structopt(name = "cds_api_client", author, about = "CDS API Client")]
+#[structopt(name = "cds_api_client", author)]
+/// CLI utility for generating CDS client requests.
+///
+/// Understanding the output.  For example, consider using these arguments:
+///
+///     ... --num-phones 1 --send-duration 5 --requests-per-second 200
+///
+/// This says to send 200 requests per second for 5 seconds, where each request
+/// contains a query for 1 phone number.
+///
+/// The output looks something like:
+///
+///     Total requests      : 1000
+///     Total send time     : 5.005 seconds
+///     Request rate        : 199.793 requests / second
+///     Desired Request rate: 200 requests / second
+///     Total response time : 7.947 seconds
+///     Response rate       : 125.832 responses / second
+///
+/// This tells us the following:
+///
+/// - it took 5.005 seconds to generate (or initiate) 1000 requests,
+/// giving a request rate of 199.793 requests / second.
+///
+/// - the desired request rate was 200 requests / second.
+///
+/// - it took 7.947 seconds (from the begining of the run) for all the
+/// requests to come back, for a response rate of 125.832 respones /
+/// second.
 struct CliArgs {
     /// Emit debug logging
     #[structopt(short, long)]
@@ -298,9 +325,9 @@ struct CliArgs {
     #[structopt(short, long)]
     show_uuids: bool,
 
-    /// Number of requests to make
-    #[structopt(short, long, default_value = "1")]
-    num_requests: usize,
+    /// Duration of sending requests in seconds
+    #[structopt(long, default_value = "1")]
+    send_duration: u64,
 
     /// Secret used to generate auth tokens, as a hexadecimal byte string
     #[structopt(short, long, default_value = "00", parse(try_from_str = parse_hex_arg))]
@@ -310,9 +337,9 @@ struct CliArgs {
     #[structopt(short, long)]
     insecure_ssl: bool,
 
-    /// Number of requests per second
-    #[structopt(long, default_value = "100.0")]
-    requests_per_second: f32,
+    /// Number of requests per second.
+    #[structopt(short, long, default_value = "1")]
+    requests_per_second: u64,
 
     /// Timeout for requests in seconds
     #[structopt(long, default_value = "5")]
