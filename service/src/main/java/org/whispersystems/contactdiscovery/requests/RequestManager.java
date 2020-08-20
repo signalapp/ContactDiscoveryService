@@ -17,6 +17,7 @@
 
 package org.whispersystems.contactdiscovery.requests;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -46,6 +47,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -69,6 +72,11 @@ public class RequestManager implements Managed {
   private static final Meter          processedNumbersMeter = metricRegistry.meter(name(RequestManager.class, "processedNumbers"));
   private static final Timer          processBatchTimer     = metricRegistry.timer(name(RequestManager.class, "processBatch"));
   private static final Histogram      batchSizeHistogram    = metricRegistry.histogram(name(RequestManager.class, "batchSize"));
+  private static final Counter        pendingRequests       = metricRegistry.counter(name(RequestManager.class, "pendingRequests"));
+  private static final Counter        pendingPhoneNumbers   = metricRegistry.counter(name(RequestManager.class, "pendingPhoneNumbers"));
+
+  private static final ConcurrentMap<String, Counter> perEncalvePendingRequests     = new ConcurrentHashMap<>();
+  private static final ConcurrentMap<String, Counter> perEncalvePendingPhoneNumbers = new ConcurrentHashMap<>();
 
   private final DirectoryManager       directoryManager;
   private final PendingRequestQueueSet pending;
@@ -100,7 +108,21 @@ public class RequestManager implements Managed {
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
       throws NoSuchEnclaveException
   {
-    return pending.put(enclaveId, request);
+    pendingRequests.inc();
+    var addressCount = request.getAddressCount();
+    pendingPhoneNumbers.inc(addressCount);
+    var perEnclaveRequests = perEncalvePendingRequests.computeIfAbsent(enclaveId,
+                                              key -> metricRegistry.counter(name(RequestManager.class, "pendingRequests", "perEnclave", key)));
+    var perEnclaveNumbers = perEncalvePendingPhoneNumbers.computeIfAbsent(enclaveId,
+                                                  key -> metricRegistry.counter(name(RequestManager.class, "pendingPhoneNumbers", "perEnclave", key)));
+    perEnclaveRequests.inc();
+    perEnclaveNumbers.inc(addressCount);
+    return pending.put(enclaveId, request).whenComplete((resp, t) -> {
+      pendingRequests.dec();
+      perEnclaveRequests.dec();
+      pendingPhoneNumbers.dec(addressCount);
+      perEnclaveNumbers.dec(addressCount);
+    });
   }
 
   @Override
