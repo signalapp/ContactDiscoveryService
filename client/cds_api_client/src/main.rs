@@ -52,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         None => None,
     };
 
-    let (mut tx_request, mut rx_request): (mpsc::Sender<RequestParams>, mpsc::Receiver<_>) = mpsc::channel(128);
-    let (mut tx_response, mut rx_response) = mpsc::channel(128);
+    let (mut tx_request, mut rx_request): (mpsc::Sender<RequestParams>, mpsc::Receiver<_>) = mpsc::channel(4096);
+    let (mut tx_response, mut rx_response) = mpsc::channel(4096);
     let (mut tx_control, mut rx_control) = mpsc::channel(5);
 
     // Convert requests/sec to a period with millisecond units.
