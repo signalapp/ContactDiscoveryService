@@ -69,11 +69,8 @@ pub enum CdsApiClientError {
     #[error("Uuid list length mismatch")]
     UuidListLengthMismatchError { phone_len: usize, uuid_len: usize },
 
-    #[error("Error creating duration parameter")]
-    CreateDurationError,
-
-    #[error("Invalid Argument")]
-    InvalidArgument,
+    #[error("Error creating random distribution")]
+    CreateRandDistributionError,
 }
 
 #[derive(Clone)]
@@ -89,14 +86,8 @@ pub struct CdsApiCredentials {
     pub password: String,
 }
 
-pub struct CdsApiDiscoveryResponse {
-    pub uuids:        Vec<Uuid>,
-    pub query_phones: Vec<u64>,
-    pub request_id:   usize,
-}
-
 impl CdsApiClient {
-    pub fn new(base_uri: &Uri, insecure_ssl: bool) -> Result<Self, CdsApiClientError> {
+    pub fn new(base_uri: Uri, insecure_ssl: bool) -> Result<Self, CdsApiClientError> {
         let tls_connector = TlsConnector::builder()
             .min_protocol_version(Some(Protocol::Tlsv12))
             .danger_accept_invalid_certs(insecure_ssl)
@@ -111,7 +102,7 @@ impl CdsApiClient {
         let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         Ok(Self {
             client,
-            base_uri: base_uri.clone(),
+            base_uri,
             user_agent,
         })
     }
@@ -121,8 +112,7 @@ impl CdsApiClient {
         credentials: &CdsApiCredentials,
         enclave_name: &str,
         phone_list: &[u64],
-        request_id: usize,
-    ) -> Result<CdsApiDiscoveryResponse, CdsApiClientError>
+    ) -> Result<Vec<Uuid>, CdsApiClientError>
     {
         let client = cds_client::Client::new(&mut rand::thread_rng());
 
@@ -158,13 +148,7 @@ impl CdsApiClient {
             .await?;
         debug!("discovery_response: {:#?}", discovery_response);
 
-        cds_client::Client::decode_discovery_response(server_key, discovery_response)
-            .map_err(CdsApiClientError::from)
-            .map(|uuids| CdsApiDiscoveryResponse {
-                uuids,
-                query_phones: phone_list.to_vec(),
-                request_id,
-            })
+        cds_client::Client::decode_discovery_response(server_key, discovery_response).map_err(CdsApiClientError::from)
     }
 
     pub async fn get_attestation(
