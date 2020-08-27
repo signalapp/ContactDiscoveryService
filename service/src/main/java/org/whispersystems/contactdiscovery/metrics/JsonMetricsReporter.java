@@ -183,10 +183,6 @@ public class JsonMetricsReporter extends ScheduledReporter {
 
   private void writeMetered(JsonGenerator json, Metered meter) throws IOException {
     json.writeNumberField("count", convertRate(meter.getCount()));
-    json.writeNumberField("mean", convertRate(meter.getMeanRate()));
-    json.writeNumberField("m1", convertRate(meter.getOneMinuteRate()));
-    json.writeNumberField("m5", convertRate(meter.getFiveMinuteRate()));
-    json.writeNumberField("m15", convertRate(meter.getFifteenMinuteRate()));
   }
 
   private String sanitize(String metricName) {
