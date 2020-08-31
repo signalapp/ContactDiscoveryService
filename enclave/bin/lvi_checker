@@ -20,6 +20,9 @@ conditional_jmp = re.compile(r'j[^m][a-z]*')
 redzone_arg = re.compile(r'[-]0x[0-9a-f]+[(]%rsp')
 redundant_rex = re.compile(r'rex[.][A-Z]+$')
 
+# If you adjust this, also adjust bolt_skip_funcx.txt
+skip_funcs = ["cds_construct_hash"]
+
 retcode = 0
 func = None
 next_must_be_lfence = None
@@ -90,6 +93,8 @@ for line in sys.stdin:
             continue
 
     if not func:
+        continue
+    if func in skip_funcs:
         continue
 
     #Parse instruction

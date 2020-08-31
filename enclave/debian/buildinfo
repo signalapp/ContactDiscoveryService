@@ -4,14 +4,14 @@ Binary: cds-enclave
 Architecture: amd64
 Version: 1.0
 Checksums-Md5:
- 3310706de47021ddafbeb1053ade269f 85392 cds-enclave_1.0_amd64.deb
+ 55e1dfd9422f0d5bcccec9c4226d30e6 85380 cds-enclave_1.0_amd64.deb
 Checksums-Sha1:
- b13fdab0188317f52396bc29e20e9e0f717c69f2 85392 cds-enclave_1.0_amd64.deb
+ 952714a82cb5036f1eca7e3a44c5bc72bbf80d46 85380 cds-enclave_1.0_amd64.deb
 Checksums-Sha256:
- 6e966eeac8efe41d843599e9a9a6535a0cbab4d962b3d5341c2461beae58dab3 85392 cds-enclave_1.0_amd64.deb
+ ee5df83e94e12705f54b61c02bbf1994e4ee6f397c1c47cbb48fcd6af7f2d47c 85380 cds-enclave_1.0_amd64.deb
 Build-Origin: Debian
 Build-Architecture: amd64
-Build-Date: Mon, 31 Aug 2020 20:48:28 +0000
+Build-Date: Mon, 31 Aug 2020 20:56:21 +0000
 Installed-Build-Depends:
  autoconf (= 2.69-11),
  automake (= 1:1.16.1-4),

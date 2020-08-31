@@ -1,0 +1,24 @@
+#!/bin/sh
+
+IN=$1
+OUT="${IN}.nightly.S"
+
+FLAGS="
+--edition=2018
+--crate-type staticlib
+--emit=asm
+-C opt-level=3
+-C target-cpu=skylake
+-C debuginfo=0
+-C codegen-units=1
+-C panic=abort
+-C llvm-args=-max-jump-table-size=1
+-C llvm-args=-disable-tail-duplicate
+-C no-redzone
+-C link-dead-code
+-C llvm-args=--x86-experimental-lvi-inline-asm-hardening
+-C target-feature=+lvi-cfi,+lvi-load-hardening
+-o $OUT
+"
+
+rustup run nightly-2020-08-27 rustc $FLAGS $IN

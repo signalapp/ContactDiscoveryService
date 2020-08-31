@@ -18,7 +18,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-env-changed=RUSTC");
     println!("cargo:rerun-if-env-changed=RUSTFLAGS");
 
-    run_rustc("c_src/cds-enclave-hash.rs", "c_src/cds-enclave-hash.rs.s").unwrap();
+    // We have to hand-hack the assembly output of c_src/cds-enclave-hash.rs in order to get the
+    // LVI mitigations to not do too much damage to our latencies. See the
+    // output enclave/bin/nightly-rustc-lvi bash script for what we used to guide the initial lfence
+    // additions which we then pruned back.
     run_rustc("c_src/cds-enclave-ratelimit-set.rs", "c_src/cds-enclave-ratelimit-set.rs.s").unwrap();
 
     #[cfg(feature = "cbindgen")]
@@ -86,5 +89,9 @@ fn run_rustc(in_file: impl AsRef<Path>, out_file: impl AsRef<Path>) -> Result<()
         .stdin(Stdio::null())
         .status()
         .expect("error spawning rustc");
-    if result.success() { Ok(()) } else { Err(result) }
+    if result.success() {
+        Ok(())
+    } else {
+        Err(result)
+    }
 }

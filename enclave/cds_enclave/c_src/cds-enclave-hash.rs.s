@@ -577,11 +577,14 @@ cds_contruct_hash:
 	.cfi_offset %rbx, -32
 	.cfi_offset %r14, -24
 	.cfi_offset %r15, -16
+	lfence
 	leaq	208(%rsp), %r9
 	movq	224(%rsp), %r10
+	lfence
 	cmpq	$13, %r10
 	jb	.LBB1_1
 	movl	$-1, %eax
+	lfence
 	shlxl	%esi, %eax, %r11d
 	notl	%r11d
 	vmovaps	(%rdi), %xmm0
@@ -860,13 +863,21 @@ cds_contruct_hash:
 	vmovaps	32(%rdi), %xmm0
 	vmovaps	%xmm0, (%rsp)
 	vmovdqa	48(%rdi), %xmm13
+	lfence
 	vmovdqa	64(%rdi), %xmm4
+	lfence
 	vmovdqa	80(%rdi), %xmm5
+	lfence
 	vmovdqa	96(%rdi), %xmm6
+	lfence
 	vmovdqa	112(%rdi), %xmm7
+	lfence
 	vmovdqa	128(%rdi), %xmm0
+	lfence
 	vmovdqa	144(%rdi), %xmm1
+	lfence
 	vmovdqa	160(%rdi), %xmm2
+	lfence
 	movq	$-1, %rcx
 	vmovq	%rcx, %xmm11
 	.p2align	4, 0x90
@@ -934,7 +945,10 @@ cds_contruct_hash:
 	popq	%r15
 	.cfi_def_cfa_offset 8
 	vzeroupper
-	retq
+	popq	%rcx
+	lfence
+	jmpq	*%rcx
+
 .Lfunc_end1:
 	.size	cds_contruct_hash, .Lfunc_end1-cds_contruct_hash
 	.cfi_endproc
