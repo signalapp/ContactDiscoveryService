@@ -66,8 +66,8 @@ pub struct HashSlotResult {
 
 #[repr(u32)]
 enum CdsHashLookupError {
-    InvalidParameter  = CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER,
-    RdRand            = CDS_HASH_LOOKUP_ERROR_RDRAND,
+    InvalidParameter = CDS_HASH_LOOKUP_ERROR_INVALID_PARAMETER,
+    RdRand = CDS_HASH_LOOKUP_ERROR_RDRAND,
     HashTableOverflow = CDS_HASH_LOOKUP_ERROR_HASH_TABLE_OVERFLOW,
 }
 
@@ -82,8 +82,7 @@ pub extern "C" fn cds_hash_lookup(
     p_hash_slots: *mut HashSlot,
     p_hash_slot_results: *mut HashSlotResult,
     hash_slots_count: usize,
-) -> u32
-{
+) -> u32 {
     unsafe {
         let in_phones_uuids = InPhonesUuids::new(p_in_phones, p_in_uuids, in_phone_count);
         let ab_phones = core::slice::from_raw_parts(p_ab_phones, ab_phone_count);
@@ -123,8 +122,7 @@ unsafe fn hash_phone_chain_block(
     in_uuid_blocks: &mut [__m256i; 2],
     chain_eq: &[__m256i; CHAIN_BLOCK_COUNT],
     chain_block_idx: usize,
-)
-{
+) {
     for (chain_result, in_uuid_block) in chain_results.blocks[chain_block_idx].iter_mut().zip(in_uuid_blocks.iter()) {
         let dummy_write_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
         *chain_result = _mm256_blendv_epi8(
@@ -142,8 +140,7 @@ unsafe fn hash_phone(
     hash_table_order: u32,
     hash_slots: &[HashSlot],
     hash_slot_results: &mut [HashSlotResult],
-)
-{
+) {
     // never allow comparing equal to our per-chain-block dummy value of zero
     let chain_block_dummy_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
     let in_phone_block = _mm256_or_si256(_mm256_set1_epi64x(*in_phone as i64), chain_block_dummy_mask);
@@ -178,8 +175,7 @@ unsafe fn hash_slot_collect_result(
     chain_results: &mut HashSlotResult,
     chain_eq: &[__m256i; CHAIN_BLOCK_COUNT],
     uuid_data64_idx: usize,
-) -> u64
-{
+) -> u64 {
     let mut chain_result;
     chain_result = _mm256_setzero_si256();
     chain_result = _mm256_blendv_epi8(chain_result, chain_results.blocks[0][uuid_data64_idx], chain_eq[0]);
@@ -187,10 +183,34 @@ unsafe fn hash_slot_collect_result(
     chain_result = _mm256_blendv_epi8(chain_result, chain_results.blocks[2][uuid_data64_idx], chain_eq[2]);
     chain_result = _mm256_blendv_epi8(chain_result, chain_results.blocks[3][uuid_data64_idx], chain_eq[3]);
 
-    (_mm256_extract_epi64(chain_result, 0) |
-        _mm256_extract_epi64(chain_result, 1) |
-        _mm256_extract_epi64(chain_result, 2) |
-        _mm256_extract_epi64(chain_result, 3)) as u64
+    (_mm256_extract_epi64(chain_result, 0)
+        | _mm256_extract_epi64(chain_result, 1)
+        | _mm256_extract_epi64(chain_result, 2)
+        | _mm256_extract_epi64(chain_result, 3)) as u64
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cds_contruct_hash(
+    in_phones_uuids: InPhonesUuids,
+    hash_key: &HashKey,
+    hash_table_order: u32,
+    hash_slots: &mut [HashSlot],
+    hash_slot_results: &mut [HashSlotResult],
+) {
+    const CACHE_LINE_PHONES: usize = CACHE_LINE_SIZE / size_of::<Phone>();
+    const PREFETCH_PHONES_DIST: usize = CACHE_LINE_PHONES * 2;
+
+    let mut in_phone_idx: usize = 0;
+    while in_phone_idx + PREFETCH_PHONES_DIST + CACHE_LINE_PHONES < in_phones_uuids.len() {
+        in_phones_uuids.prefetch_unchecked(in_phone_idx + PREFETCH_PHONES_DIST);
+        for (in_phone, in_uuid) in in_phones_uuids.range_unchecked(in_phone_idx..in_phone_idx + CACHE_LINE_PHONES) {
+            hash_phone(&in_phone, &in_uuid, &hash_key, hash_table_order, hash_slots, hash_slot_results);
+        }
+        in_phone_idx += CACHE_LINE_PHONES;
+    }
+    for (in_phone, in_uuid) in in_phones_uuids.range_unchecked(in_phone_idx..) {
+        hash_phone(&in_phone, &in_uuid, &hash_key, hash_table_order, &hash_slots, hash_slot_results);
+    }
 }
 
 unsafe fn hash_lookup(
@@ -199,8 +219,7 @@ unsafe fn hash_lookup(
     ab_phone_results: &mut [u8],
     hash_slots: &mut [HashSlot],
     hash_slot_results: &mut [HashSlotResult],
-) -> Result<(), CdsHashLookupError>
-{
+) -> Result<(), CdsHashLookupError> {
     const CHAIN_LENGTH: HashSlotIdx = CHAIN_PHONE_COUNT;
 
     let chain_block_dummy_mask = _mm256_set_epi64x(0, 0, 0, UINT64_MAX);
@@ -309,20 +328,7 @@ unsafe fn hash_lookup(
         return Err(CdsHashLookupError::HashTableOverflow);
     }
 
-    const CACHE_LINE_PHONES: usize = CACHE_LINE_SIZE / size_of::<Phone>();
-    const PREFETCH_PHONES_DIST: usize = CACHE_LINE_PHONES * 2;
-
-    let mut in_phone_idx: usize = 0;
-    while in_phone_idx + PREFETCH_PHONES_DIST + CACHE_LINE_PHONES < in_phones_uuids.len() {
-        in_phones_uuids.prefetch_unchecked(in_phone_idx + PREFETCH_PHONES_DIST);
-        for (in_phone, in_uuid) in in_phones_uuids.range_unchecked(in_phone_idx..in_phone_idx + CACHE_LINE_PHONES) {
-            hash_phone(&in_phone, &in_uuid, &hash_key, hash_table_order, hash_slots, hash_slot_results);
-        }
-        in_phone_idx += CACHE_LINE_PHONES;
-    }
-    for (in_phone, in_uuid) in in_phones_uuids.range_unchecked(in_phone_idx..) {
-        hash_phone(&in_phone, &in_uuid, &hash_key, hash_table_order, &hash_slots, hash_slot_results);
-    }
+    cds_contruct_hash(in_phones_uuids, &hash_key, hash_table_order, hash_slots, hash_slot_results);
 
     // iterate through request phones, collecting results
     for (ab_phone, in_ab_phone_result) in ab_phones.iter().zip(ab_phone_results.chunks_mut(size_of::<Uuid>())) {
@@ -373,14 +379,14 @@ mod in_phones_uuids {
 
     pub struct InPhonesUuids {
         phones: *const phone_t,
-        uuids:  *const uuid_t,
-        len:    usize,
+        uuids: *const uuid_t,
+        len: usize,
     }
 
     pub struct Iter {
         phones: *const phone_t,
-        uuids:  *const uuid_t,
-        len:    usize,
+        uuids: *const uuid_t,
+        len: usize,
     }
 
     impl InPhonesUuids {
