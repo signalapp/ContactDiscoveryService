@@ -1,19 +1,9 @@
-/*
- * Copyright (C) 2020 Signal Messenger, LLC.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+//
+// Copyright (C) 2020 Signal Messenger, LLC.
+// All rights reserved.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
 
 use std::mem::{size_of, ManuallyDrop};
 use std::panic::{catch_unwind, UnwindSafe};
@@ -21,7 +11,7 @@ use std::slice;
 use std::sync::Arc;
 
 use cds_enclave_ffi::sgxsd;
-use cds_enclave_ffi::sgxsd::{SgxsdError, MessageReply};
+use cds_enclave_ffi::sgxsd::{MessageReply, SgxsdError};
 use jni::objects::*;
 use jni::sys::*;
 use jni::{sys, Executor, JNIEnv};
@@ -53,26 +43,20 @@ impl From<sgxsd::SgxsdError> for PossibleError {
             SgxStatus::Error(err) => err as i64,
             SgxStatus::Unknown(code) => code as i64,
         };
-        return Self::SgxError {
-            name: name,
-            code: code,
-        };
+        return Self::SgxError { name, code };
     }
 }
 
-const SGX_EXCEPTION_CLASS: &'static str =
-    "org/whispersystems/contactdiscovery/enclave/SgxException";
+const SGX_EXCEPTION_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxException";
 const SGX_EXCEPTION_CSTOR: &'static str = "(Ljava/lang/String;J)V";
 
-const SGX_NEGOTIATION_RESPONSE_CLASS: &'static str =
-    "org/whispersystems/contactdiscovery/enclave/SgxRequestNegotiationResponse";
+const SGX_NEGOTIATION_RESPONSE_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxRequestNegotiationResponse";
 const SGX_NEGOTIATION_RESPONSE_CSTOR: &'static str = "([B[B[B[B[B)V";
 
 const RUNTIME_EXCEPTION_CLASS: &'static str = "java/lang/RuntimeException";
 const NULL_POINTER_EXCEPTION_CLASS: &'static str = "java/lang/NullPointerException";
 
-const NATIVE_CALL_ARGS_CLASS: &'static str =
-    "org/whispersystems/contactdiscovery/enclave/SgxEnclave$NativeServerCallArgs";
+const NATIVE_CALL_ARGS_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxEnclave$NativeServerCallArgs";
 
 const SGXSD_MESSAGE_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxsdMessage";
 const SGXSD_MESSAGE_CLASS_CSTOR: &'static str = "([B[B[B)V";
@@ -84,25 +68,19 @@ const COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD: &'static str = "complete
 const COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD_SIG: &'static str = "(Ljava/lang/Throwable;)Z";
 
 fn throw_sgx_name_code_to_exception(env: JNIEnv, name: &'static str, code: i64) -> Result<(), jni::errors::Error> {
-    sgx_name_code_to_exception(&env, name, code).map(|exc| env.throw(JThrowable::from(exc))).map(|_| ())
+    sgx_name_code_to_exception(&env, name, code)
+        .map(|exc| env.throw(JThrowable::from(exc)))
+        .map(|_| ())
 }
 
 fn sgx_name_code_to_exception<'a>(env: &JNIEnv<'a>, name: &str, code: i64) -> Result<JObject<'a>, jni::errors::Error> {
     env.new_string(name).and_then(|jstr| {
         let args = &[JValue::Object(jstr.into()), JValue::Long(code)];
-        env.new_object(
-            SGX_EXCEPTION_CLASS.to_string(),
-            SGX_EXCEPTION_CSTOR.to_string(),
-            args,
-        )
+        env.new_object(SGX_EXCEPTION_CLASS.to_string(), SGX_EXCEPTION_CSTOR.to_string(), args)
     })
 }
 
-fn jni_catch<'a, T>(
-    env: JNIEnv,
-    default: T,
-    fun: impl FnOnce() -> Result<T, PossibleError> + UnwindSafe,
-) -> T {
+fn jni_catch<'a, T>(env: JNIEnv, default: T, fun: impl FnOnce() -> Result<T, PossibleError> + UnwindSafe) -> T {
     match catch_unwind(fun) {
         Ok(Ok(value)) => value,
         Ok(Err(error)) => {
@@ -118,7 +96,10 @@ fn jni_catch<'a, T>(
                     throw_sgx_name_code_to_exception(env, name, code).map_err(|e| {
                         // This JNI error occurred while trying to tell the JNI an error occurred,
                         // so we can't do more than this
-                        panic!("SEVERE: JNI error occurred while trying to throw the SGX exception ({}, {}): {}", name, code, e)
+                        panic!(
+                            "SEVERE: JNI error occurred while trying to throw the SGX exception ({}, {}): {}",
+                            name, code, e
+                        )
                     });
                 }
                 PossibleError::AlreadyThrown(_err) => {
@@ -142,7 +123,7 @@ fn jni_catch<'a, T>(
 fn generic_exception(class: &str, msg: &str) -> PossibleError {
     PossibleError::Generic {
         class: class.to_string(),
-        msg: msg.to_string(),
+        msg:   msg.to_string(),
     }
 }
 
@@ -154,15 +135,10 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeEnclave
     debug: jboolean,
     pending_requests_table_order: jbyte,
     callback: JObject<'a>,
-) {
+)
+{
     jni_catch(env.clone(), 0, || {
-        enclave_start(
-            env,
-            enclave_path,
-            debug == 1,
-            pending_requests_table_order,
-            callback,
-        )
+        enclave_start(env, enclave_path, debug == 1, pending_requests_table_order, callback)
     });
 }
 
@@ -170,16 +146,10 @@ fn sgxstatus_to_possibleerror(name: &'static str, status: SgxStatus) -> Possible
     return match status {
         SgxStatus::Success => PossibleError::Generic {
             class: RUNTIME_EXCEPTION_CLASS.to_string(),
-            msg: "SgxStatus was a Success but returned as an error in".to_string() + name,
+            msg:   "SgxStatus was a Success but returned as an error in".to_string() + name,
         },
-        SgxStatus::Error(err) => PossibleError::SgxError {
-            name: name,
-            code: err as i64,
-        },
-        SgxStatus::Unknown(code) => PossibleError::SgxError {
-            name: name,
-            code: code as i64,
-        },
+        SgxStatus::Error(err) => PossibleError::SgxError { name, code: err as i64 },
+        SgxStatus::Unknown(code) => PossibleError::SgxError { name, code: code as i64 },
     };
 }
 
@@ -189,7 +159,8 @@ fn enclave_start<'a>(
     debug: bool,
     pending_requests_table_order: i8,
     callback: JObject<'a>,
-) -> Result<i64, PossibleError> {
+) -> Result<i64, PossibleError>
+{
     if callback.is_null() {
         return Err(generic_exception(
             NULL_POINTER_EXCEPTION_CLASS,
@@ -197,24 +168,19 @@ fn enclave_start<'a>(
         ));
     }
     let enclave_path = env.get_string(enclave_path)?;
-    let enclave_path_c = enclave_path.to_str().or(Err(generic_exception(
-        RUNTIME_EXCEPTION_CLASS,
-        "non-UTF8 bytes in enclave path",
-    )))?;
+    let enclave_path_c = enclave_path
+        .to_str()
+        .or(Err(generic_exception(RUNTIME_EXCEPTION_CLASS, "non-UTF8 bytes in enclave path")))?;
 
-    let (gid, _) = sgx_sdk_ffi::init_quote()
-        .map_err(|status| sgxstatus_to_possibleerror("init_quote_before_create", status))?;
+    let (gid, _) = sgx_sdk_ffi::init_quote().map_err(|status| sgxstatus_to_possibleerror("init_quote_before_create", status))?;
 
-    let enclave_id =
-        sgxsd::sgxsd_create_enclave(enclave_path_c, debug).map_err(PossibleError::from)?;
+    let enclave_id = sgxsd::sgxsd_create_enclave(enclave_path_c, debug).map_err(PossibleError::from)?;
     let enclave_id_j = enclave_id as i64;
     sgxsd::sgxsd_node_init(enclave_id, pending_requests_table_order as u8)?;
-    env.call_method(
-        callback,
-        "runEnclave",
-        "(JJ)V",
-        &[JValue::Long(enclave_id_j), JValue::Long(gid as i64)],
-    )?;
+    env.call_method(callback, "runEnclave", "(JJ)V", &[
+        JValue::Long(enclave_id_j),
+        JValue::Long(gid as i64),
+    ])?;
     return sgxsd::sgxsd_destroy_enclave(enclave_id)
         .map(|_| enclave_id_j)
         .map_err(PossibleError::from);
@@ -227,19 +193,14 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeGetNext
     enclave_id: jlong,
     spid: jbyteArray,
     sig_rl: jbyteArray,
-) -> jbyteArray {
+) -> jbyteArray
+{
     return jni_catch(env.clone(), env.new_byte_array(0).unwrap(), || {
         get_next_quote(env, class, enclave_id, spid, sig_rl)
     });
 }
 
-fn get_next_quote(
-    env: JNIEnv,
-    _class: JClass,
-    enclave_id: i64,
-    spid: jbyteArray,
-    sig_rl: jbyteArray,
-) -> Result<jbyteArray, PossibleError> {
+fn get_next_quote(env: JNIEnv, _class: JClass, enclave_id: i64, spid: jbyteArray, sig_rl: jbyteArray) -> Result<jbyteArray, PossibleError> {
     let spid_dyn = jni_array_to_vec(&env, spid)?;
     if spid_dyn.len() != 16 {
         let err = PossibleError::SgxError {
@@ -253,8 +214,7 @@ fn get_next_quote(
 
     let sig_rl_c = jni_array_to_vec(&env, sig_rl)?;
 
-    let quote =
-        sgxsd::sgxsd_get_next_quote(enclave_id as SgxEnclaveId, spid_c, sig_rl_c.as_slice())?;
+    let quote = sgxsd::sgxsd_get_next_quote(enclave_id as SgxEnclaveId, spid_c, sig_rl_c.as_slice())?;
     return slice_to_jni_array(&env, quote.data.as_slice()).map_err(PossibleError::from);
 }
 
@@ -265,20 +225,12 @@ fn slice_to_jni_array(env: &JNIEnv, data: &[u8]) -> Result<jbyteArray, jni::erro
     Ok(out)
 }
 
-fn jni_array_to_fixed_buffer(
-    env: &JNIEnv,
-    jni_array: jbyteArray,
-    out: &mut [u8],
-) -> Result<(), PossibleError> {
+fn jni_array_to_fixed_buffer(env: &JNIEnv, jni_array: jbyteArray, out: &mut [u8]) -> Result<(), PossibleError> {
     let length = env.get_array_length(jni_array)?;
     if length as usize != out.len() {
         return Err(PossibleError::Generic {
             class: RUNTIME_EXCEPTION_CLASS.to_string(),
-            msg: format!(
-                "expected {0} length, got {1} length array",
-                out.len(),
-                length
-            ),
+            msg:   format!("expected {0} length, got {1} length array", out.len(), length),
         });
     }
     let outi8 = &mut vec![0 as i8; out.len()];
@@ -298,11 +250,7 @@ fn jni_array_to_vec(env: &JNIEnv, jni_array: jbyteArray) -> Result<Vec<u8>, Poss
 }
 
 #[allow(non_snake_case)]
-pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeSetCurrentQuote(
-    env: JNIEnv,
-    _class: JClass,
-    enclave_id: jlong,
-) {
+pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeSetCurrentQuote(env: JNIEnv, _class: JClass, enclave_id: jlong) {
     jni_catch(env.clone(), (), || set_current_quote(enclave_id))
 }
 
@@ -316,17 +264,14 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeNegotia
     _class: JClass,
     enclave_id: jlong,
     client_pubkey: jbyteArray,
-) -> jni::sys::jobject {
+) -> jni::sys::jobject
+{
     return jni_catch(env.clone(), JObject::null().into_inner(), || {
         negotiate_request(&env, enclave_id, client_pubkey)
     });
 }
 
-fn negotiate_request(
-    env: &JNIEnv,
-    enclave_id: i64,
-    client_pubkey: jbyteArray,
-) -> Result<sys::jobject, PossibleError> {
+fn negotiate_request(env: &JNIEnv, enclave_id: i64, client_pubkey: jbyteArray) -> Result<sys::jobject, PossibleError> {
     let pubkey = jni_array_to_vec(&env, client_pubkey)?;
     if pubkey.len() as u32 != sgxsd::SGXSD_CURVE25519_KEY_SIZE {
         return Err(PossibleError::SgxError {
@@ -353,11 +298,7 @@ fn negotiate_request(
         JValue::from(mac),
     ];
     return env
-        .new_object(
-            SGX_NEGOTIATION_RESPONSE_CLASS,
-            SGX_NEGOTIATION_RESPONSE_CSTOR,
-            args,
-        )
+        .new_object(SGX_NEGOTIATION_RESPONSE_CLASS, SGX_NEGOTIATION_RESPONSE_CSTOR, args)
         .map(|o| o.into_inner())
         .map_err(PossibleError::from);
 }
@@ -369,24 +310,17 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerS
     enclave_id: jlong,
     state_handle: jlong,
     max_query_phones: jint,
-) {
-    return jni_catch(env.clone(), (), || {
-        server_start(env, enclave_id, state_handle, max_query_phones)
-    });
+)
+{
+    return jni_catch(env.clone(), (), || server_start(env, enclave_id, state_handle, max_query_phones));
 }
 
-fn server_start(
-    _env: JNIEnv,
-    enclave_id: i64,
-    state_handle: i64,
-    max_query_phones: i32,
-) -> Result<(), PossibleError> {
+fn server_start(_env: JNIEnv, enclave_id: i64, state_handle: i64, max_query_phones: i32) -> Result<(), PossibleError> {
     let args = sgxsd::SgxsdServerInitArgs {
-        max_query_phones: max_query_phones as u32,
+        max_query_phones:     max_query_phones as u32,
         max_ratelimit_states: 0,
     };
-    return sgxsd::sgxsd_server_start(enclave_id as u64, &args, state_handle as u64)
-        .map_err(PossibleError::from);
+    return sgxsd::sgxsd_server_start(enclave_id as u64, &args, state_handle as u64).map_err(PossibleError::from);
 }
 
 #[allow(non_snake_case)]
@@ -397,19 +331,12 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerC
     state_handle: jlong,
     args: JObject,
     future: JObject,
-) {
-    return jni_catch(env.clone(), (), || {
-        server_call(env, enclave_id, state_handle, args, future)
-    });
+)
+{
+    return jni_catch(env.clone(), (), || server_call(env, enclave_id, state_handle, args, future));
 }
 
-fn server_call(
-    env: JNIEnv,
-    enclave_id: i64,
-    state_handle: i64,
-    args: JObject,
-    future: JObject,
-) -> Result<(), PossibleError> {
+fn server_call(env: JNIEnv, enclave_id: i64, state_handle: i64, args: JObject, future: JObject) -> Result<(), PossibleError> {
     let is_instance = env.is_instance_of(args, NATIVE_CALL_ARGS_CLASS)?;
     if !is_instance {
         return Err(generic_exception(
@@ -430,10 +357,7 @@ fn server_call(
             code: 0,
         });
     }
-    let mut query_data = jni_array_to_vec(
-        &env,
-        get_nonnull_byte_array_field(&env, args, "query_data")?,
-    )?;
+    let mut query_data = jni_array_to_vec(&env, get_nonnull_byte_array_field(&env, args, "query_data")?)?;
     if query_data.len() == 0 {
         return Err(PossibleError::SgxError {
             name: "bad_query_data",
@@ -458,12 +382,7 @@ fn server_call(
     // We'd like to undo the choice to serialize pending_request_id_t to this byte array, but have left
     // to avoid making a change to SgxEnclave$NativeServerCallbackArgs.
     let pending_request_id_bytes = &mut [0 as u8; size_of::<sgxsd::SgxsdPendingRequestId>()];
-    get_nonnull_fixed_size_array_field(
-        &env,
-        args,
-        "pending_request_id",
-        &mut pending_request_id_bytes[..],
-    )?;
+    get_nonnull_fixed_size_array_field(&env, args, "pending_request_id", &mut pending_request_id_bytes[..])?;
 
     let pending_request_id_data = &mut [0 as u8; size_of::<u64>()];
     pending_request_id_data.clone_from_slice(&pending_request_id_bytes[0..size_of::<u64>()]);
@@ -477,27 +396,27 @@ fn server_call(
     pending_request_id_mac.clone_from_slice(&pending_request_id_bytes[u64_and_iv..u64_iv_and_mac]);
 
     let sgxcallargs = sgxsd::SgxsdServerCallArgs {
-        query_phone_count: query_phone_count as u32,
+        query_phone_count:    query_phone_count as u32,
         ratelimit_state_size: Default::default(),
         ratelimit_state_uuid: Default::default(),
         ratelimit_state_data: std::ptr::null_mut(),
-        query: sgxsd::CDSEncryptedMsg {
-            iv: sgxsd::SgxsdAesGcmIv { data: *query_iv },
-            mac: sgxsd::SgxsdAesGcmMac { data: *query_mac },
+        query:                sgxsd::CDSEncryptedMsg {
+            iv:   sgxsd::SgxsdAesGcmIv { data: *query_iv },
+            mac:  sgxsd::SgxsdAesGcmMac { data: *query_mac },
             size: query_data.len() as u32,
             data: query_data.as_mut_ptr(),
         },
-        query_commitment: *query_commitment,
+        query_commitment:     *query_commitment,
     };
     let msg_header = sgxsd::SgxsdMessageHeader {
-        iv: sgxsd::SgxsdAesGcmIv { data: *msg_iv },
-        mac: sgxsd::SgxsdAesGcmMac { data: *msg_mac },
+        iv:                 sgxsd::SgxsdAesGcmIv { data: *msg_iv },
+        mac:                sgxsd::SgxsdAesGcmMac { data: *msg_mac },
         pending_request_id: sgxsd::SgxsdPendingRequestId {
             data: *pending_request_id_data,
-            iv: sgxsd::SgxsdAesGcmIv {
+            iv:   sgxsd::SgxsdAesGcmIv {
                 data: *pending_request_id_iv,
             },
-            mac: sgxsd::SgxsdAesGcmMac {
+            mac:  sgxsd::SgxsdAesGcmMac {
                 data: *pending_request_id_mac,
             },
         },
@@ -511,15 +430,17 @@ fn server_call(
     let reply_fun = move |res: sgxsd::SgxsdResult<sgxsd::MessageReply>| -> () {
         let _ignored = match res {
             Ok(reply) => {
-                exec.with_attached(|local_env| {
-                    complete_future_successfully(local_env, reply, future_ref)
-                }).map_err(|e| {
-                    // Because this is a full-on JNI error inside of a callback that's run in a
-                    // different thread inside the enclave that happens when we're already trying to
-                    // signal a status back to the original JVM caller, all we can do is print
-                    // here.
-                    eprintln!("SEVERE: got a JNI error when trying to complete the SGX future successfully in server_stop: {:?}", e);
-                })
+                exec.with_attached(|local_env| complete_future_successfully(local_env, reply, future_ref))
+                    .map_err(|e| {
+                        // Because this is a full-on JNI error inside of a callback that's run in a
+                        // different thread inside the enclave that happens when we're already trying to
+                        // signal a status back to the original JVM caller, all we can do is print
+                        // here.
+                        eprintln!(
+                            "SEVERE: got a JNI error when trying to complete the SGX future successfully in server_stop: {:?}",
+                            e
+                        );
+                    })
             }
             Err(sgxerr) => {
                 exec.with_attached(|local_env| {
@@ -542,14 +463,11 @@ fn server_call(
         msg_data.as_slice(),
         reply_fun,
         state_handle as u64,
-    ).map_err(PossibleError::from);
+    )
+    .map_err(PossibleError::from);
 }
 
-fn complete_future_successfully(
-    env: &JNIEnv,
-    reply: MessageReply,
-    future_ref: GlobalRef,
-) -> Result<(), jni::errors::Error> {
+fn complete_future_successfully(env: &JNIEnv, reply: MessageReply, future_ref: GlobalRef) -> Result<(), jni::errors::Error> {
     let data = slice_to_jni_array(&env, &reply.data)?;
     let iv = slice_to_jni_array(&env, &reply.iv.data)?;
     let mac = slice_to_jni_array(&env, &reply.mac.data)?;
@@ -571,51 +489,42 @@ fn complete_future_exceptionally_with_sgxerr(
     step_name: &'static str,
     future_ref: GlobalRef,
     sgxerr: SgxsdError,
-) -> Result<(), jni::errors::Error> {
+) -> Result<(), jni::errors::Error>
+{
     let posserr = sgxstatus_to_possibleerror(step_name, sgxerr.status);
     let exc = match posserr {
-        PossibleError::Generic { class, msg } => {
-            env.new_string(msg).and_then(|jmsg| {
-                return env.new_object(class, "(Ljava.lang.String)V", &[jmsg.into()])
-            })?
-        }
-        PossibleError::SgxError { name, code } => { sgx_name_code_to_exception(env, name, code)? }
-        PossibleError::AlreadyThrown(_) => {
-            env.new_string("SEVERE: An SGXStatus somehow became a jni::errors::Error in the JNI code")
-                .and_then(|jmsg| {
-                    return env.new_object(RUNTIME_EXCEPTION_CLASS, "(Ljava.lang.String)V", &[jmsg.into()])
-                })?
-        }
+        PossibleError::Generic { class, msg } => env.new_string(msg).and_then(|jmsg| {
+            return env.new_object(class, "(Ljava.lang.String)V", &[jmsg.into()]);
+        })?,
+        PossibleError::SgxError { name, code } => sgx_name_code_to_exception(env, name, code)?,
+        PossibleError::AlreadyThrown(_) => env
+            .new_string("SEVERE: An SGXStatus somehow became a jni::errors::Error in the JNI code")
+            .and_then(|jmsg| {
+                return env.new_object(RUNTIME_EXCEPTION_CLASS, "(Ljava.lang.String)V", &[jmsg.into()]);
+            })?,
     };
     let args: &[JValue] = &[exc.into()];
-    return env.call_method(
-        future_ref.as_obj(),
-        COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD,
-        COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD_SIG,
-        args,
-    ).map(|_| ());
+    return env
+        .call_method(
+            future_ref.as_obj(),
+            COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD,
+            COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD_SIG,
+            args,
+        )
+        .map(|_| ());
 }
 
-fn get_nonnull_fixed_size_array_field(
-    env: &JNIEnv,
-    obj: JObject,
-    field_name: &str,
-    buf: &mut [u8],
-) -> Result<(), PossibleError> {
+fn get_nonnull_fixed_size_array_field(env: &JNIEnv, obj: JObject, field_name: &str, buf: &mut [u8]) -> Result<(), PossibleError> {
     let array = get_nonnull_byte_array_field(&env, obj, field_name)?;
     return jni_array_to_fixed_buffer(&env, array, buf);
 }
 
-fn get_nonnull_byte_array_field(
-    env: &JNIEnv,
-    obj: JObject,
-    field_name: &str,
-) -> Result<jbyteArray, PossibleError> {
+fn get_nonnull_byte_array_field(env: &JNIEnv, obj: JObject, field_name: &str) -> Result<jbyteArray, PossibleError> {
     let field_obj = env.get_field(obj, field_name, "[B")?.l()?;
     if field_obj.is_null() {
         return Err(PossibleError::Generic {
             class: NULL_POINTER_EXCEPTION_CLASS.to_string(),
-            msg: field_name.to_string() + " was null",
+            msg:   field_name.to_string() + " was null",
         });
     }
 
@@ -631,16 +540,10 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerS
     in_phones_buf: JObject,
     in_uuids_buf: JObject,
     in_phone_count: jlong,
-) {
+)
+{
     return jni_catch(env.clone(), (), || {
-        server_stop(
-            env,
-            enclave_id,
-            state_handle,
-            in_phones_buf,
-            in_uuids_buf,
-            in_phone_count,
-        )
+        server_stop(env, enclave_id, state_handle, in_phones_buf, in_uuids_buf, in_phone_count)
     });
 }
 
@@ -651,11 +554,10 @@ fn server_stop(
     in_phones_buf: JObject,
     in_uuids_buf: JObject,
     in_phone_count: i64,
-) -> Result<(), PossibleError> {
-    let (in_phones_bytes, in_phones_capacity) =
-        get_direct_byte_buffer_info(&env, in_phones_buf.into())?;
-    let (in_uuids_bytes, in_uuids_capacity) =
-        get_direct_byte_buffer_info(&env, in_uuids_buf.into())?;
+) -> Result<(), PossibleError>
+{
+    let (in_phones_bytes, in_phones_capacity) = get_direct_byte_buffer_info(&env, in_phones_buf.into())?;
+    let (in_uuids_bytes, in_uuids_capacity) = get_direct_byte_buffer_info(&env, in_uuids_buf.into())?;
     if in_phone_count < in_phones_capacity / size_of::<sgxsd::Phone>() as i64 {
         let err = PossibleError::SgxError {
             name: "phone_number_buffer_too_small",
@@ -697,12 +599,11 @@ fn server_stop(
         )
     };
     let args = sgxsd::ServerStopArgs {
-        in_phones: &mut in_phones[0],
-        in_uuids: &mut in_uuids[0],
+        in_phones:      &mut in_phones[0],
+        in_uuids:       &mut in_uuids[0],
         in_phone_count: in_phone_count as u64,
     };
-    let res = sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)
-        .map_err(PossibleError::from);
+    let res = sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64).map_err(PossibleError::from);
     unsafe {
         ManuallyDrop::drop(&mut in_phones_bytes_undrop);
         ManuallyDrop::drop(&mut in_uuids_bytes_undrop);
@@ -710,17 +611,11 @@ fn server_stop(
     return res;
 }
 
-fn get_direct_byte_buffer_info<'a>(
-    env: &'a JNIEnv,
-    buf: JByteBuffer,
-) -> Result<(&'a mut [u8], i64), PossibleError> {
+fn get_direct_byte_buffer_info<'a>(env: &'a JNIEnv, buf: JByteBuffer) -> Result<(&'a mut [u8], i64), PossibleError> {
     if buf.is_null() {
         return Ok((&mut [], 0));
     }
-    return Ok((
-        env.get_direct_buffer_address(buf)?,
-        env.get_direct_buffer_capacity(buf)?,
-    ));
+    return Ok((env.get_direct_buffer_address(buf)?, env.get_direct_buffer_capacity(buf)?));
 }
 
 #[allow(non_snake_case)]
@@ -729,7 +624,8 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeReportP
     _class: JClass,
     platform_info: jbyteArray,
     attestation_successful: jboolean,
-) -> jint {
+) -> jint
+{
     return jni_catch(env.clone(), 0, || {
         report_platform_attestation_status(env, platform_info, attestation_successful != 0)
     });
@@ -739,7 +635,8 @@ fn report_platform_attestation_status(
     env: JNIEnv,
     platform_info_bytes: jbyteArray,
     attestation_successful: bool,
-) -> Result<i32, PossibleError> {
+) -> Result<i32, PossibleError>
+{
     if platform_info_bytes.is_null() {
         return Err(generic_exception(
             NULL_POINTER_EXCEPTION_CLASS,
@@ -748,9 +645,7 @@ fn report_platform_attestation_status(
     }
     let out = &mut [0 as u8; size_of::<sgxsd::SgxPlatformInfo>()];
     jni_array_to_fixed_buffer(&env, platform_info_bytes, out)?;
-    let info = sgxsd::SgxPlatformInfo {
-        platform_info: *out,
-    };
+    let info = sgxsd::SgxPlatformInfo { platform_info: *out };
     return sgxsd::sgxsd_report_attestation_status(&info, attestation_successful)
         .map(|attest_status| {
             match attest_status {
