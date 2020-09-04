@@ -18,6 +18,7 @@
 package org.whispersystems.contactdiscovery.requests;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -27,7 +28,6 @@ import io.dropwizard.lifecycle.Managed;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
 import org.apache.commons.lang3.tuple.Pair;
-import org.bouncycastle.util.encoders.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
@@ -40,12 +40,10 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequestEnvelope;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -64,7 +62,7 @@ public class RequestManager implements Managed {
    * LOCAL_ENCLAVE_HOST_ID is just faked out key for the attestations map that will only hold one enclave. This
    * will go away when we work out the routing code to the new rate limiter service.
    */
-  public static final String LOCAL_ENCLAVE_HOST_ID = generateFakeEnclaveKey();
+  public static final String LOCAL_ENCLAVE_HOST_ID = UUID.randomUUID().toString();
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
@@ -74,6 +72,8 @@ public class RequestManager implements Managed {
   private static final Histogram      batchSizeHistogram    = metricRegistry.histogram(name(RequestManager.class, "batchSize"));
   private static final Counter        pendingRequests       = metricRegistry.counter(name(RequestManager.class, "pendingRequests"));
   private static final Counter        pendingPhoneNumbers   = metricRegistry.counter(name(RequestManager.class, "pendingPhoneNumbers"));
+  @SuppressWarnings("unused")
+  private static final Gauge hostIdGauge = metricRegistry.register(name(RequestManager.class, "hostId"), (Gauge<String>) () -> LOCAL_ENCLAVE_HOST_ID);
 
   private static final ConcurrentMap<String, Counter> perEncalvePendingRequests     = new ConcurrentHashMap<>();
   private static final ConcurrentMap<String, Counter> perEncalvePendingPhoneNumbers = new ConcurrentHashMap<>();
@@ -83,6 +83,8 @@ public class RequestManager implements Managed {
   private final int                    targetBatchSize;
 
   public RequestManager(DirectoryManager directoryManager, SgxEnclaveManager enclaveManager, int targetBatchSize) {
+    logger.info("Using LOCAL_ENCLAVE_HOST_ID: " + LOCAL_ENCLAVE_HOST_ID);
+
     Map<String, PendingRequestQueue> queueMap = new HashMap<>();
 
     for (Map.Entry<String, SgxEnclave> entry : enclaveManager.getEnclaves().entrySet()) {
@@ -92,17 +94,6 @@ public class RequestManager implements Managed {
     this.directoryManager = directoryManager;
     this.pending          = new PendingRequestQueueSet(queueMap);
     this.targetBatchSize  = targetBatchSize;
-  }
-
-  private static String generateFakeEnclaveKey() {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      byte[] encodedhash = digest.digest(
-          "enclave".getBytes(StandardCharsets.UTF_8));
-      return Hex.toHexString(encodedhash);
-    } catch (NoSuchAlgorithmException e) {
-      return "welpenclave";
-    }
   }
 
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)

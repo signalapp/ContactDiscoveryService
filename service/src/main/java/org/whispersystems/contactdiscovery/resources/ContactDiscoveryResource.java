@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.resources;
 
+import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
@@ -66,6 +67,7 @@ public class ContactDiscoveryResource {
 
   private static final MetricRegistry REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Timer GET_CONTACTS_TIMER = REGISTRY.timer(name(ContactDiscoveryResource.class, "getRegisteredContacts"));
+  private static final Meter HOST_ID_MISMATCH_METER = REGISTRY.meter(name(ContactDiscoveryResource.class, "hostIdMismatch"));
   private static final ConcurrentMap<String, Timer> PER_ENCLAVE_TIMERS = new ConcurrentHashMap<>();
   private static final Logger LOGGER = LoggerFactory.getLogger(ContactDiscoveryResource.class);
 
@@ -105,6 +107,11 @@ public class ContactDiscoveryResource {
 
     rateLimiter.validate(user.getNumber(), request.getAddressCount());
     if (!request.getEnvelopes().containsKey(RequestManager.LOCAL_ENCLAVE_HOST_ID)) {
+      LOGGER.error("HostId not found in request envelopeMap. Found keys: {}, User-Agent {}",
+              request.getEnvelopes().keySet(),
+              userAgent
+      );
+      HOST_ID_MISMATCH_METER.mark();
       asyncResponse.resume(Response.status(400).build());
       return;
     }

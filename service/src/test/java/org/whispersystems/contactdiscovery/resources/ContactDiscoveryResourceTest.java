@@ -110,7 +110,7 @@ public class ContactDiscoveryResourceTest {
   }
 
   @Test(expected = BadRequestException.class)
-  public void testNoLocalEnclaveIdGiven() {
+  public void testNoLocalHostIdGiven() {
     String authHeader = AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN);
 
     var validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
