@@ -1,8 +1,19 @@
 package org.whispersystems.contactdiscovery.metrics;
 
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.util.LevelToSyslogSeverity;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.AppenderBase;
+import ch.qos.logback.core.Layout;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import io.dropwizard.logging.AbstractAppenderFactory;
+import io.dropwizard.logging.async.AsyncAppenderFactory;
+import io.dropwizard.logging.filter.LevelFilterFactory;
+import io.dropwizard.logging.layout.LayoutFactory;
+import io.dropwizard.validation.PortRange;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.productivity.java.syslog4j.SyslogConfigIF;
 import org.productivity.java.syslog4j.SyslogIF;
@@ -11,18 +22,8 @@ import org.productivity.java.syslog4j.impl.net.tcp.ssl.SSLTCPNetSyslogConfig;
 
 import javax.validation.constraints.NotNull;
 import java.util.TimeZone;
-
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.classic.util.LevelToSyslogSeverity;
-import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.AppenderBase;
-import ch.qos.logback.core.Layout;
-import io.dropwizard.logging.AbstractAppenderFactory;
-import io.dropwizard.logging.async.AsyncAppenderFactory;
-import io.dropwizard.logging.filter.LevelFilterFactory;
-import io.dropwizard.logging.layout.LayoutFactory;
-import io.dropwizard.validation.PortRange;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @JsonTypeName("papertrail")
 public class LoggingNetworkAppenderFactory extends AbstractAppenderFactory<ILoggingEvent> {
@@ -131,36 +132,49 @@ public class LoggingNetworkAppenderFactory extends AbstractAppenderFactory<ILogg
     SyslogConfigIF syslogConfig;
     Layout<E> layout;
 
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
     @Override
     protected void append(E loggingEvent) {
-      syslog.log(getSeverityForEvent(loggingEvent), layout.doLayout(loggingEvent));
+      lock.readLock().lock();
+      try {
+        if (syslog != null) {
+          syslog.log(getSeverityForEvent(loggingEvent), layout.doLayout(loggingEvent));
+        }
+      } finally {
+        lock.readLock().unlock();
+      }
     }
 
     @Override
     public void start() {
-      super.start();
+      lock.writeLock().lock();
+      try {
+        super.start();
 
-      synchronized (this) {
-        try {
-          Class syslogClass = syslogConfig.getSyslogClass();
-          syslog = (SyslogIF) syslogClass.newInstance();
+        var syslogClass = syslogConfig.getSyslogClass();
+        syslog = (SyslogIF) syslogClass.newInstance();
 
-          syslog.initialize(syslogClass.getSimpleName(), syslogConfig);
-        } catch (ClassCastException | IllegalAccessException | InstantiationException cse) {
-          throw new SyslogRuntimeException(cse);
-        }
+        syslog.initialize(syslogClass.getSimpleName(), syslogConfig);
+      } catch (ClassCastException | IllegalAccessException | InstantiationException cse) {
+        throw new SyslogRuntimeException(cse);
+      } finally {
+        lock.writeLock().unlock();
       }
     }
 
     @Override
     public void stop() {
-      super.stop();
+      lock.writeLock().lock();
+      try {
+        super.stop();
 
-      synchronized(this) {
         if (syslog != null) {
           syslog.shutdown();
           syslog = null;
         }
+      } finally {
+        lock.writeLock().unlock();
       }
     }
 
