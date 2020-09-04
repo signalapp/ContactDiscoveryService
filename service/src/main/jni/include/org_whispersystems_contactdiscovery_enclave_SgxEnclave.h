@@ -52,7 +52,7 @@ JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_enclave_SgxEncla
 /*
  * Class:     org_whispersystems_contactdiscovery_enclave_SgxEnclave
  * Method:    nativeServerCall
- * Signature: (JJLorg/whispersystems/contactdiscovery/enclave/SgxEnclave/NativeServerCallArgs;Lorg/whispersystems/contactdiscovery/enclave/SgxEnclave/NativeServerReplyCallback;)V
+ * Signature: (JJLorg/whispersystems/contactdiscovery/enclave/SgxEnclave/NativeServerCallArgs;Ljava/util/concurrent/CompletableFuture;)V
  */
 JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerCall
   (JNIEnv *, jclass, jlong, jlong, jobject, jobject);

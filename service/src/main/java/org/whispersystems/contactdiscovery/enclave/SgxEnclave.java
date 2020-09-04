@@ -286,14 +286,7 @@ public class SgxEnclave implements Runnable {
       callArgs.query_commitment   = queryCommitment;
 
       try {
-        nativeServerCall(getEnclaveState().id, stateHandle, callArgs,
-                         (replyData, replyIv, replyMac) -> {
-                           if (replyData != null) {
-                             future.complete(new SgxsdMessage(replyData, replyIv, replyMac));
-                           } else {
-                             future.completeExceptionally(new SgxException("request_cancelled"));
-                           }
-                         });
+        nativeServerCall(getEnclaveState().id, stateHandle, callArgs, future);
       } catch (SgxException ex) {
         future.completeExceptionally(convertSgxException(ex));
         handleSgxException(ex);
@@ -340,10 +333,6 @@ public class SgxEnclave implements Runnable {
     void runEnclave(long enclaveId, long gid) throws SgxException;
   }
 
-  private interface NativeServerReplyCallback {
-    void receiveServerReply(byte[] data, byte[] iv, byte[] mac);
-  }
-
   private static class NativeServerCallArgs {
     int    query_phone_count;
     byte[] query_data;
@@ -363,7 +352,7 @@ public class SgxEnclave implements Runnable {
   private static native SgxRequestNegotiationResponse nativeNegotiateRequest(long enclaveId, byte[] client_pubkey_le) throws SgxException;
 
   private static native void nativeServerStart(long enclaveId, long stateHandle, int maxQueryPhones) throws SgxException;
-  private static native void nativeServerCall(long enclaveId, long stateHandle, NativeServerCallArgs args, NativeServerReplyCallback callback) throws SgxException;
+  private static native void nativeServerCall(long enclaveId, long stateHandle, NativeServerCallArgs args, CompletableFuture<SgxsdMessage> callbackFut) throws SgxException;
   private static native void nativeServerStop(long enclaveId, long stateHandle, ByteBuffer inPhonesBuf, ByteBuffer inUuidsBuf, long inPhoneCount) throws SgxException;
   private static native int nativeReportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccessful);
 }

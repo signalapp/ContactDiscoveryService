@@ -21,6 +21,7 @@ use std::slice;
 use std::sync::Arc;
 
 use cds_enclave_ffi::sgxsd;
+use cds_enclave_ffi::sgxsd::{SgxsdError, MessageReply};
 use jni::objects::*;
 use jni::sys::*;
 use jni::{sys, Executor, JNIEnv};
@@ -73,18 +74,28 @@ const NULL_POINTER_EXCEPTION_CLASS: &'static str = "java/lang/NullPointerExcepti
 const NATIVE_CALL_ARGS_CLASS: &'static str =
     "org/whispersystems/contactdiscovery/enclave/SgxEnclave$NativeServerCallArgs";
 
-fn throw_sgx_name_code_to_exception(env: JNIEnv, name: &'static str, code: i64) {
-    let _ignore = env
-        .new_string(name)
-        .and_then(|jstr| {
-            let args = &[JValue::Object(jstr.into()), JValue::Long(code)];
-            env.new_object(
-                SGX_EXCEPTION_CLASS.to_string(),
-                SGX_EXCEPTION_CSTOR.to_string(),
-                args,
-            )
-        })
-        .map(|exc| env.throw(JThrowable::from(exc)));
+const SGXSD_MESSAGE_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxsdMessage";
+const SGXSD_MESSAGE_CLASS_CSTOR: &'static str = "([B[B[B)V";
+
+const COMPLETABLE_FUTURE_CLASS: &'static str = "java/util/concurrent/CompletableFuture";
+const COMPLETABLE_FUTURE_COMPLETE_METHOD: &'static str = "complete";
+const COMPLETABLE_FUTURE_COMPLETE_METHOD_SIG: &'static str = "(Ljava/lang/Object;)Z";
+const COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD: &'static str = "completeExceptionally";
+const COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD_SIG: &'static str = "(Ljava/lang/Throwable;)Z";
+
+fn throw_sgx_name_code_to_exception(env: JNIEnv, name: &'static str, code: i64) -> Result<(), jni::errors::Error> {
+    sgx_name_code_to_exception(&env, name, code).map(|exc| env.throw(JThrowable::from(exc))).map(|_| ())
+}
+
+fn sgx_name_code_to_exception<'a>(env: &JNIEnv<'a>, name: &str, code: i64) -> Result<JObject<'a>, jni::errors::Error> {
+    env.new_string(name).and_then(|jstr| {
+        let args = &[JValue::Object(jstr.into()), JValue::Long(code)];
+        env.new_object(
+            SGX_EXCEPTION_CLASS.to_string(),
+            SGX_EXCEPTION_CSTOR.to_string(),
+            args,
+        )
+    })
 }
 
 fn jni_catch<'a, T>(
@@ -97,10 +108,18 @@ fn jni_catch<'a, T>(
         Ok(Err(error)) => {
             match error {
                 PossibleError::Generic { class, msg } => {
-                    let _ignore = env.throw_new(class, msg);
+                    env.throw_new(class, msg).map_err(|e| {
+                        // This JNI error occurred while trying to tell the JNI an error occurred,
+                        // so we can't do more than this
+                        panic!("SEVERE: JNI error occurred while trying to throw a generic exception: {}", e)
+                    });
                 }
                 PossibleError::SgxError { name, code } => {
-                    throw_sgx_name_code_to_exception(env, name, code)
+                    throw_sgx_name_code_to_exception(env, name, code).map_err(|e| {
+                        // This JNI error occurred while trying to tell the JNI an error occurred,
+                        // so we can't do more than this
+                        panic!("SEVERE: JNI error occurred while trying to throw the SGX exception ({}, {}): {}", name, code, e)
+                    });
                 }
                 PossibleError::AlreadyThrown(_err) => {
                     // do nothing, it's already been thrown
@@ -236,10 +255,10 @@ fn get_next_quote(
 
     let quote =
         sgxsd::sgxsd_get_next_quote(enclave_id as SgxEnclaveId, spid_c, sig_rl_c.as_slice())?;
-    return slice_to_jni_array(&env, quote.data.as_slice());
+    return slice_to_jni_array(&env, quote.data.as_slice()).map_err(PossibleError::from);
 }
 
-fn slice_to_jni_array(env: &JNIEnv, data: &[u8]) -> Result<jbyteArray, PossibleError> {
+fn slice_to_jni_array(env: &JNIEnv, data: &[u8]) -> Result<jbyteArray, jni::errors::Error> {
     let out = env.new_byte_array(data.len() as i32)?;
     let buf: Vec<i8> = data.into_iter().map(|i| *i as i8).collect();
     env.set_byte_array_region(out, 0, buf.as_slice())?;
@@ -377,10 +396,10 @@ pub fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerC
     enclave_id: jlong,
     state_handle: jlong,
     args: JObject,
-    callback: JObject,
+    future: JObject,
 ) {
     return jni_catch(env.clone(), (), || {
-        server_call(env, enclave_id, state_handle, args, callback)
+        server_call(env, enclave_id, state_handle, args, future)
     });
 }
 
@@ -389,13 +408,19 @@ fn server_call(
     enclave_id: i64,
     state_handle: i64,
     args: JObject,
-    callback: JObject,
+    future: JObject,
 ) -> Result<(), PossibleError> {
     let is_instance = env.is_instance_of(args, NATIVE_CALL_ARGS_CLASS)?;
     if !is_instance {
         return Err(generic_exception(
             RUNTIME_EXCEPTION_CLASS,
             "server_call called with an incorrect callback arguments type",
+        ));
+    }
+    if !env.is_instance_of(future, COMPLETABLE_FUTURE_CLASS)? {
+        return Err(generic_exception(
+            RUNTIME_EXCEPTION_CLASS,
+            "server_call called with an incorrect future argument type",
         ));
     }
     let msg_data = jni_array_to_vec(&env, get_nonnull_byte_array_field(&env, args, "msg_data")?)?;
@@ -478,34 +503,36 @@ fn server_call(
         },
     };
 
-    let callback_ref = env.new_global_ref(callback)?;
+    let future_ref = env.new_global_ref(future)?;
     let jvm = env.get_java_vm()?;
     let exec = Executor::new(Arc::new(jvm));
     // This won't be run on the same thread necessarily, so we have to do the Executor work.
     // Plus, we can't use the return values it has.
     let reply_fun = move |res: sgxsd::SgxsdResult<sgxsd::MessageReply>| -> () {
-        let _ignore = res
-            .map(|reply| {
-                let _ignore = exec
-                    .with_attached(|local_env| {
-                        jni_catch(local_env.clone(), (), || {
-                            run_success_callback(&local_env, reply, callback_ref)
-                        });
-                        return Ok(());
-                    })
-                    .map_err(|e| {
-                        eprintln!(
-                            "unable to run server call callback because of a jni crate error: {:?}",
-                            e
-                        )
-                    });
-            })
-            .map_err(|e| {
-                eprintln!(
-                    "got a error from the cds enclave in the server call callback: {:?}",
-                    e
-                )
-            });
+        let _ignored = match res {
+            Ok(reply) => {
+                exec.with_attached(|local_env| {
+                    complete_future_successfully(local_env, reply, future_ref)
+                }).map_err(|e| {
+                    // Because this is a full-on JNI error inside of a callback that's run in a
+                    // different thread inside the enclave that happens when we're already trying to
+                    // signal a status back to the original JVM caller, all we can do is print
+                    // here.
+                    eprintln!("SEVERE: got a JNI error when trying to complete the SGX future successfully in server_stop: {:?}", e);
+                })
+            }
+            Err(sgxerr) => {
+                exec.with_attached(|local_env| {
+                    complete_future_exceptionally_with_sgxerr(local_env, "server_stop", future_ref, sgxerr)
+                }).map_err(|e| {
+                    // Because this is a full-on JNI error inside of a callback that's run in a
+                    // different thread inside the enclave that happens when we're already trying to
+                    // signal a failure back to the original JVM caller, all we can do is print
+                    // here.
+                    eprintln!("SEVERE: got a JNI error when trying to complete the SGX future exceptionally with SGX error {:?} in server_stop: {:?}", sgxerr, e);
+                })
+            }
+        };
     };
 
     return sgxsd::sgxsd_server_call(
@@ -515,28 +542,58 @@ fn server_call(
         msg_data.as_slice(),
         reply_fun,
         state_handle as u64,
-    )
-    .map_err(PossibleError::from);
+    ).map_err(PossibleError::from);
 }
 
-fn run_success_callback(
+fn complete_future_successfully(
     env: &JNIEnv,
-    reply: sgxsd::MessageReply,
-    callback_ref: GlobalRef,
-) -> Result<(), PossibleError> {
+    reply: MessageReply,
+    future_ref: GlobalRef,
+) -> Result<(), jni::errors::Error> {
     let data = slice_to_jni_array(&env, &reply.data)?;
     let iv = slice_to_jni_array(&env, &reply.iv.data)?;
     let mac = slice_to_jni_array(&env, &reply.mac.data)?;
     let args: Vec<JValue> = vec![data, iv, mac].into_iter().map(JValue::from).collect();
+    let msg = env.new_object(SGXSD_MESSAGE_CLASS, SGXSD_MESSAGE_CLASS_CSTOR, &args)?;
+    let complete_args: &[JValue] = &[msg.into()];
     return env
         .call_method(
-            callback_ref.as_obj(),
-            "receiveServerReply",
-            "([B[B[B)V",
-            &args,
+            future_ref.as_obj(),
+            COMPLETABLE_FUTURE_COMPLETE_METHOD,
+            COMPLETABLE_FUTURE_COMPLETE_METHOD_SIG,
+            complete_args,
         )
-        .map(|_| ())
-        .map_err(PossibleError::from);
+        .map(|_| ());
+}
+
+fn complete_future_exceptionally_with_sgxerr(
+    env: &JNIEnv,
+    step_name: &'static str,
+    future_ref: GlobalRef,
+    sgxerr: SgxsdError,
+) -> Result<(), jni::errors::Error> {
+    let posserr = sgxstatus_to_possibleerror(step_name, sgxerr.status);
+    let exc = match posserr {
+        PossibleError::Generic { class, msg } => {
+            env.new_string(msg).and_then(|jmsg| {
+                return env.new_object(class, "(Ljava.lang.String)V", &[jmsg.into()])
+            })?
+        }
+        PossibleError::SgxError { name, code } => { sgx_name_code_to_exception(env, name, code)? }
+        PossibleError::AlreadyThrown(_) => {
+            env.new_string("SEVERE: An SGXStatus somehow became a jni::errors::Error in the JNI code")
+                .and_then(|jmsg| {
+                    return env.new_object(RUNTIME_EXCEPTION_CLASS, "(Ljava.lang.String)V", &[jmsg.into()])
+                })?
+        }
+    };
+    let args: &[JValue] = &[exc.into()];
+    return env.call_method(
+        future_ref.as_obj(),
+        COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD,
+        COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY_METHOD_SIG,
+        args,
+    ).map(|_| ());
 }
 
 fn get_nonnull_fixed_size_array_field(
