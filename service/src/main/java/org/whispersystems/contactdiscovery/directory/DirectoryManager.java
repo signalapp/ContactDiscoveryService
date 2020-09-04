@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
@@ -36,7 +37,6 @@ import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.redis.PubSubReply;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanResult;
-import redis.clients.jedis.Tuple;
 import redis.clients.util.Pool;
 
 import java.util.HashSet;
@@ -63,10 +63,11 @@ public class DirectoryManager implements Managed {
   private static final Meter          reconcileRemovesMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileRemoves"));
   private static final Timer          addUserTimer          = metricRegistry.timer(name(DirectoryManager.class, "addUser"));
   private static final Timer          removeUserTimer       = metricRegistry.timer(name(DirectoryManager.class, "removeUser"));
-  private static final Timer          getAllAddressesTimer  = metricRegistry.timer(name(DirectoryManager.class, "getAllAddresses"));
   private static final Timer          getAllUsersTimer      = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
   private static final Timer          reconcileGetUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getUsersInRange"));
   private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
+  private static final Counter        rebuildLocalDataNullUUID = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "rebuildLocalData", "nullUUIDs"));
+  private static final Counter        obsoluteTypeAdded = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "sqsMessages", "obsoleteTypeAdded"));
 
   private static final String CHANNEL = "signal_address_update";
 
@@ -98,14 +99,21 @@ public class DirectoryManager implements Managed {
     return currentDirectoryMap.get().isPresent();
   }
 
-  public void addUser(Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  public void addUser(UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+    if (uuid == null) {
+      throw new IllegalArgumentException("addUser expects all users to have a non-null UUID associated");
+    }
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = addUserTimer.time()) {
       addUser(jedis, uuid, address);
     }
   }
 
-  public void removeUser(Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  public void removeUser(UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+    if (uuid == null) {
+      throw new IllegalArgumentException("removeUser expects all users to have a non-null UUID associated");
+    }
+
     try (Jedis jedis         = jedisPool.getResource();
          Timer.Context timer = removeUserTimer.time()) {
       removeUser(jedis, uuid, address);
@@ -148,7 +156,7 @@ public class DirectoryManager implements Managed {
 
       for (Pair<UUID, String> removeUser : removeUsers) {
         try {
-          removeUser(jedis, Optional.of(removeUser.getLeft()), removeUser.getRight());
+          removeUser(jedis, removeUser.getLeft(), removeUser.getRight());
           reconcileRemovesMeter.mark();
         } catch (InvalidAddressException ex) {
           logger.error("invalid user " + removeUser);
@@ -156,7 +164,7 @@ public class DirectoryManager implements Managed {
       }
 
       for (Pair<UUID, String> addUser : addUsers) {
-        addUser(jedis, Optional.of(addUser.getLeft()), addUser.getRight());
+        addUser(jedis, addUser.getLeft(), addUser.getRight());
         reconcileAddsMeter.mark();
       }
 
@@ -206,7 +214,7 @@ public class DirectoryManager implements Managed {
   private boolean isBuilt() {
     if (!built.get()) {
       try (Jedis jedis = jedisPool.getResource()) {
-        if (directoryCache.isAddressSetBuilt(jedis)) {
+        if (directoryCache.isUserSetBuilt(jedis)) {
           built.set(true);
           logger.info("directory cache is now built");
         }
@@ -216,45 +224,29 @@ public class DirectoryManager implements Managed {
     return built.get();
   }
 
-  private void addUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  private void addUser(Jedis jedis, UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
     DirectoryMap directoryMap = getCurrentDirectoryMap();
 
-    if (uuid.isPresent()) {
-      if (directoryCache.addUser(jedis, uuid.get(), address)) {
-        jedis.publish(CHANNEL.getBytes(),
-                      PubSubMessage.newBuilder()
-                                   .setContent(ByteString.copyFrom(DirectoryCache.encodeUser(uuid.get(), address).getBytes()))
-                                   .setType(PubSubMessage.Type.ADDED_USER)
-                                   .build()
-                                   .toByteArray());
-      }
-    } else {
-      if (directoryCache.addAddress(jedis, address)) {
-        jedis.publish(CHANNEL.getBytes(),
-                      PubSubMessage.newBuilder()
-                                   .setContent(ByteString.copyFrom(address.getBytes()))
-                                   .setType(PubSubMessage.Type.ADDED)
-                                   .build()
-                                   .toByteArray());
-      }
+    if (directoryCache.addUser(jedis, uuid, address)) {
+      jedis.publish(CHANNEL.getBytes(),
+                    PubSubMessage.newBuilder()
+                                 .setContent(ByteString.copyFrom(DirectoryCache.encodeUser(uuid, address).getBytes()))
+                                 .setType(PubSubMessage.Type.ADDED_USER)
+                                 .build()
+                                 .toByteArray());
     }
 
-    directoryMap.insert(directoryAddress, uuid.orElse(null));
+    directoryMap.insert(directoryAddress, uuid);
   }
 
-  private void removeUser(Jedis jedis, Optional<UUID> uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
+  private void removeUser(Jedis jedis, UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
     DirectoryMap directoryMap = getCurrentDirectoryMap();
 
-    boolean removedUser;
-    if (uuid.isPresent()) {
-      removedUser = directoryCache.removeUser(jedis, uuid.get(), address);
-    } else {
-      removedUser = directoryCache.removeAddress(jedis, address);
-    }
+    boolean removedUser = directoryCache.removeUser(jedis, uuid, address);
 
     if (removedUser) {
       jedis.publish(CHANNEL.getBytes(),
@@ -272,52 +264,23 @@ public class DirectoryManager implements Managed {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = rebuildLocalDataTimer.time()) {
       boolean userSetBuilt    = directoryCache.isUserSetBuilt(jedis);
-      boolean addressSetBuilt = directoryCache.isAddressSetBuilt(jedis);
-      built.set(userSetBuilt || addressSetBuilt);
+      built.set(userSetBuilt);
 
-      final long             directorySize;
-      final DirectoryMap directoryMap;
-      if (!userSetBuilt && addressSetBuilt) {
-        directorySize    = directoryCache.getAddressCount(jedis);
-        directoryMap = directoryMapFactory.create(directorySize);
-
-        logger.warn("starting directory cache rebuild of " + directorySize + " addresses, built=" + addressSetBuilt);
-
-        rebuildLocalAddresses(jedis, directoryMap);
-      } else {
-        directorySize    = directoryCache.getUserCount(jedis);
-        directoryMap = directoryMapFactory.create(directorySize);
+      final long directorySize;
+      if (userSetBuilt) {
+        directorySize = directoryCache.getUserCount(jedis);
+        var directoryMap = directoryMapFactory.create(directorySize);
 
         logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
 
         rebuildLocalUsers(jedis, directoryMap);
+        directoryMap.commit();
+        this.currentDirectoryMap.set(Optional.of(directoryMap));
+        logger.info("finished directory cache rebuild");
+      } else {
+        logger.info("finished directory cache rebuild (but the user zset wasn't built, yet)");
       }
-
-      logger.info("finished directory cache rebuild");
-      directoryMap.commit();
-      this.currentDirectoryMap.set(Optional.of(directoryMap));
     }
-  }
-
-  private void rebuildLocalAddresses(Jedis jedis, DirectoryMap directoryMap) {
-    String cursor = "0";
-    do {
-      ScanResult<Tuple> result;
-      try (Timer.Context timer = getAllAddressesTimer.time()) {
-        result = directoryCache.getAllAddresses(jedis, cursor, SCAN_CHUNK_SIZE);
-      }
-      cursor = result.getStringCursor();
-
-      for (Tuple tuple : result.getResult()) {
-        String address = tuple.getElement();
-        try {
-          long directoryAddress = parseAddress(address);
-          directoryMap.insert(directoryAddress, null);
-        } catch (InvalidAddressException e) {
-          logger.warn("Invalid address: " + address, e);
-        }
-      }
-    } while (!cursor.equals("0"));
   }
 
   private void rebuildLocalUsers(Jedis jedis, DirectoryMap directoryMap) {
@@ -330,6 +293,12 @@ public class DirectoryManager implements Managed {
       cursor = result.getStringCursor();
 
       for (Pair<UUID, String> user : result.getResult()) {
+        if (user.getRight() == null) {
+          // Somehow a user without a UUID got this far. Dropping it;
+          rebuildLocalDataNullUUID.inc();
+          logger.error("rebuildLocalUsers somehow got a null user UUID when those should no longer exist in any Signal system");
+          continue;
+        }
         try {
           long directoryAddress = parseAddress(user.getRight());
           directoryMap.insert(directoryAddress, user.getLeft());
@@ -400,7 +369,9 @@ public class DirectoryManager implements Managed {
           PubSubMessage update = PubSubMessage.parseFrom(message.getContent().get());
 
           if (update.getType() == PubSubMessage.Type.ADDED) {
-            getCurrentDirectoryMap().insert(parseAddress(new String(update.getContent().toByteArray())), null);
+            // No longer supported.
+            logger.error("Obsolete PubSubMessage type ADDED sent over SQS from the Signal Service. Should no longer be sent now that all users have UUID an use ADDED_USER instead.");
+            obsoluteTypeAdded.inc();
           } else if (update.getType() == PubSubMessage.Type.ADDED_USER) {
             Pair<UUID, String> addedUser;
             try {

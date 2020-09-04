@@ -135,7 +135,7 @@ public class DirectoryQueueManager implements Managed, Runnable {
     Optional<String> number     = Optional.ofNullable(messageAttributes.get("id"))
                                           .map(MessageAttributeValue::getStringValue)
                                           .filter(numberValue -> !numberValue.isEmpty());
-    Optional<String> uuidString = Optional.ofNullable(messageAttributes.get("uuid"))
+    Optional<String> optUuidString = Optional.ofNullable(messageAttributes.get("uuid"))
                                           .map(MessageAttributeValue::getStringValue)
                                           .filter(uuidValue -> !uuidValue.isEmpty());
     Optional<String> action     = Optional.ofNullable(messageAttributes.get("action"))
@@ -145,10 +145,12 @@ public class DirectoryQueueManager implements Managed, Runnable {
       throw new InvalidQueueMessageException("missing number");
     }
 
-    Optional<UUID> uuid;
+    UUID uuid;
     try {
-      uuid = uuidString.map(UUID::fromString);
+      uuid = optUuidString.map(UUID::fromString)
+                          .orElseThrow(() -> new InvalidQueueMessageException("missing UUID for user"));
     } catch (Exception ex) {
+      var uuidString = optUuidString.orElse(null);
       logger.error("invalid uuid: " + uuidString);
       throw new InvalidQueueMessageException("invalid uuid: " + uuidString);
     }

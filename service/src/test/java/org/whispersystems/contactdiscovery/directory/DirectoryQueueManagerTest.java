@@ -46,19 +46,22 @@ public class DirectoryQueueManagerTest {
   private final UUID             validUuidTwo     = UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc");
   private final Message          badMessageOne    = mock(Message.class);
   private final Message          badMessageTwo    = mock(Message.class);
+  private final Message          badMessageThree  = mock(Message.class);
 
   @Before
   public void setup() {
     when(validMessageOne.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.of(validUuidOne), "+14085550001", "add"));
     when(validMessageOne.getReceiptHandle()).thenReturn("validMessageOne");
-    when(validMessageTwo.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.empty(), "+14085550002", "delete"));
+    when(validMessageTwo.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.of(validUuidTwo), "+14085550002", "delete"));
     when(validMessageTwo.getReceiptHandle()).thenReturn("validMessageTwo");
     when(badMessageOne.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.of(validUuidTwo), "+14085550003", ""));
     when(badMessageOne.getReceiptHandle()).thenReturn("badMessageOne");
     when(badMessageTwo.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.of(validUuidTwo), "", "add"));
     when(badMessageTwo.getReceiptHandle()).thenReturn("badMessageTwo");
+    when(badMessageThree.getMessageAttributes()).thenReturn(createMessageAttributes(Optional.empty(), "+14085550004", "delete"));
+    when(badMessageThree.getReceiptHandle()).thenReturn("badMessageThree");
 
-    when(directoryQueue.waitForMessages()).thenReturn(Arrays.asList(validMessageOne, validMessageTwo, badMessageOne, badMessageTwo));
+    when(directoryQueue.waitForMessages()).thenReturn(Arrays.asList(validMessageOne, validMessageTwo, badMessageOne, badMessageTwo, badMessageThree));
 
     when(directoryManager.isConnected()).thenReturn(true);
   }
@@ -82,12 +85,13 @@ public class DirectoryQueueManagerTest {
     verify(directoryQueue).deleteMessage(eq("validMessageTwo"));
     verify(directoryQueue).deleteMessage(eq("badMessageOne"));
     verify(directoryQueue).deleteMessage(eq("badMessageTwo"));
+    verify(directoryQueue).deleteMessage(eq("badMessageThree"));
 
     verify(directoryQueue, times(3)).waitForMessages();
 
     verify(directoryManager, times(3)).isConnected();
-    verify(directoryManager).addUser(eq(Optional.of(validUuidOne)), eq("+14085550001"));
-    verify(directoryManager).removeUser(eq(Optional.empty()), eq("+14085550002"));
+    verify(directoryManager).addUser(eq(validUuidOne), eq("+14085550001"));
+    verify(directoryManager).removeUser(eq(validUuidTwo), eq("+14085550002"));
 
     verifyNoMoreInteractions(directoryQueue);
     verifyNoMoreInteractions(directoryManager);

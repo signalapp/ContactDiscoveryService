@@ -41,8 +41,6 @@ public class DirectoryCache {
   private static final MetricRegistry METRIC_REGISTRY  = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Timer          GET_USERS_ZRANGE = METRIC_REGISTRY.timer(name(DirectoryCache.class, "getUsersInRange", "ZRANGEBYLEX"));
 
-  private static final String ADDRESS_SET             = "signal_addresses_sorted::1";
-  private static final String ADDRESS_SET_BUILT       = "signal_addresses_built";
   private static final String USER_SET                = "signal_users_sorted::1";
   private static final String USER_SET_BUILT          = "signal_users_built";
   private static final String USER_LAST_RECONCILED    = "signal_users_last_reconciled";
@@ -52,17 +50,8 @@ public class DirectoryCache {
 
   private final Logger logger = LoggerFactory.getLogger(DirectoryCache.class);
 
-  public boolean isAddressSetBuilt(Jedis jedis) {
-    return jedis.exists(ADDRESS_SET_BUILT);
-  }
-
   public boolean isUserSetBuilt(Jedis jedis) {
     return jedis.exists(USER_SET_BUILT);
-  }
-
-  public ScanResult<Tuple> getAllAddresses(Jedis jedis, String cursor, int count) {
-    ScanParams scanParams = new ScanParams().count(count);
-    return jedis.zscan(ADDRESS_SET, cursor, scanParams);
   }
 
   public ScanResult<Pair<UUID, String>> getAllUsers(Jedis jedis, String cursor, int count) {
@@ -102,24 +91,12 @@ public class DirectoryCache {
     return users;
   }
 
-  public boolean addAddress(Jedis jedis, String address) {
-    return 1L == jedis.zadd(ADDRESS_SET, 0, address);
-  }
-
   public boolean addUser(Jedis jedis, UUID uuid, String address) {
-    boolean userAdded    = (1L == jedis.zadd(USER_SET, 0, encodeUser(uuid, address)));
-    boolean addressAdded = addAddress(jedis, address);
-    return userAdded || addressAdded;
-  }
-
-  public boolean removeAddress(Jedis jedis, String address) {
-    return 1L == jedis.zrem(ADDRESS_SET, address);
+    return (1L == jedis.zadd(USER_SET, 0, encodeUser(uuid, address)));
   }
 
   public boolean removeUser(Jedis jedis, UUID uuid, String address) {
-    boolean userRemoved    = (1L == jedis.zrem(USER_SET, encodeUser(uuid, address)));
-    boolean addressRemoved = removeAddress(jedis, address);
-    return userRemoved || addressRemoved;
+    return (1L == jedis.zrem(USER_SET, encodeUser(uuid, address)));
   }
 
   public Optional<UUID> getUuidLastReconciled(Jedis jedis) {
@@ -138,10 +115,6 @@ public class DirectoryCache {
       jedis.del(USER_LAST_RECONCILED);
       jedis.set(USER_SET_BUILT, "1");
     }
-  }
-
-  public long getAddressCount(Jedis jedis) {
-    return jedis.zcard(ADDRESS_SET);
   }
 
   public long getUserCount(Jedis jedis) {

@@ -112,8 +112,8 @@ public class DirectoryMapTest {
       long rehashThreshold = (long) (capacity.get() * maxLoadFactor);
       while (addedCount < rehashThreshold - 1) {
         addedCount += 1;
-        assertThat(directoryMap.insert(addedCount, null)).isTrue();
-        assertThat(directoryMap.insert(addedCount, null)).isFalse();
+        assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isTrue();
+        assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isFalse();
       }
 
       directoryMap.commit();
@@ -123,8 +123,8 @@ public class DirectoryMapTest {
       });
 
       addedCount += 1;
-      assertThat(directoryMap.insert(addedCount, null)).isTrue();
-      assertThat(directoryMap.insert(addedCount, null)).isFalse();
+      assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isTrue();
+      assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isFalse();
 
       directoryMap.commit();
       assertThat(directoryMap.size()).isEqualTo(addedCount);
@@ -149,8 +149,8 @@ public class DirectoryMapTest {
 
     LongStream.rangeClosed(1, addedCount)
               .forEach(readdElement -> {
-                assertThat(directoryMap.insert(readdElement, null)).isTrue();
-                assertThat(directoryMap.insert(readdElement, null)).isFalse();
+                assertThat(directoryMap.insert(readdElement, UUID.randomUUID())).isTrue();
+                assertThat(directoryMap.insert(readdElement, UUID.randomUUID())).isFalse();
               });
 
     directoryMap.commit();
@@ -167,12 +167,12 @@ public class DirectoryMapTest {
     Set<Long> randomElements = randomElements(1000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryMap.insert(addElement, null)).isTrue();
-      assertThat(directoryMap.insert(addElement, null)).isFalse();
+      assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue();
+      assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isFalse();
     });
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(1000);
-    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isFalse());
+    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isFalse());
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(1000);
   }
@@ -184,16 +184,16 @@ public class DirectoryMapTest {
     Set<Long> randomElements = randomElements(10000);
 
     randomElements.stream().forEach(addElement -> {
-      assertThat(directoryMap.insert(addElement, null)).isTrue();
+      assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue();
       assertThat(directoryMap.remove(addElement)).isTrue();
       assertThat(directoryMap.remove(addElement)).isFalse();
-      assertThat(directoryMap.insert(addElement, null)).isTrue();
-      assertThat(directoryMap.insert(addElement, null)).isFalse();
+      assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue();
+      assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isFalse();
     });
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
-    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isFalse());
+    randomElements.stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isFalse());
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
@@ -205,7 +205,7 @@ public class DirectoryMapTest {
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(0);
 
-    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isTrue());
+    shuffle(randomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue());
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(randomElements.size());
 
@@ -213,7 +213,7 @@ public class DirectoryMapTest {
     Set<Long> allRandomElements  = new HashSet<>(randomElements);
     allRandomElements.addAll(moreRandomElements);
 
-    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, null)).isTrue());
+    shuffle(moreRandomElements).stream().forEach(addElement -> assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue());
     directoryMap.commit();
     assertThat(directoryMap.size()).isEqualTo(allRandomElements.size());
 
@@ -245,7 +245,7 @@ public class DirectoryMapTest {
         shuffledRandomElementLists
             .stream()
             .map(shuffledRandomElements -> new Thread(() -> {
-                  shuffledRandomElements.stream().forEach(addElement -> directoryMap.insert(addElement, null));
+                  shuffledRandomElements.stream().forEach(addElement -> directoryMap.insert(addElement, UUID.randomUUID()));
             }, "SetInsertThread"))
             .collect(Collectors.toList())
     );
@@ -346,6 +346,11 @@ public class DirectoryMapTest {
     });
   }
 
+  @Test(expected = IllegalArgumentException.class)
+  public void testUuidRequired() {
+    var directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    directoryMap.insert(1, null);
+  }
   private long[] getLongsFromByteBuffer(ByteBuffer buffer) {
     var longBuf = buffer.asLongBuffer();
     var longs = new long[longBuf.capacity()];

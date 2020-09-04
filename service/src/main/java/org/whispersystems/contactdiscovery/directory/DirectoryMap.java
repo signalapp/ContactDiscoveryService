@@ -46,6 +46,9 @@ public class DirectoryMap {
   }
 
   public boolean insert(long element, UUID value) {
+    if (value == null) {
+      throw new IllegalArgumentException("no users without UUIDs allowed in the directory map");
+    }
     var success = false;
     synchronized (writeBufLock) {
       success = workingBuffers.insert(element, value);

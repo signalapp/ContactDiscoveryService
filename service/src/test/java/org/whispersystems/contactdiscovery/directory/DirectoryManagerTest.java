@@ -28,7 +28,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
@@ -68,9 +67,7 @@ public class DirectoryManagerTest {
 
     when(directoryMapFactory.create(anyLong())).thenReturn(directoryMap);
 
-    when(directoryCache.isAddressSetBuilt(any())).thenReturn(true);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(true);
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
 
     when(pubSubConnection.read()).thenAnswer(new Answer<PubSubReply>() {
@@ -89,7 +86,6 @@ public class DirectoryManagerTest {
 
   @Test(expected = DirectoryUnavailableException.class)
   public void testGetAddressListDirectoryUnavailable() throws Exception {
-    when(directoryCache.isAddressSetBuilt(any())).thenReturn(false);
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
@@ -100,7 +96,6 @@ public class DirectoryManagerTest {
 
   @Test
   public void testAdd() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
@@ -135,22 +130,22 @@ public class DirectoryManagerTest {
     Thread.sleep(200);
 
     verify(directoryMap).insert(eq(Long.parseLong("14153333333")), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")));
-    verify(directoryMap).insert(eq(Long.parseLong("14154444444")), isNull());
 
-    directoryManager.addUser(Optional.empty(), "+14155555555");
-    directoryManager.addUser(Optional.of(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), "+14155555555");
+    directoryManager.addUser(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc"), "+14155555555");
 
-    verify(directoryMap).insert(eq(Long.parseLong("14155555555")), isNull());
-    verify(directoryCache).addAddress(any(), eq("+14155555555"));
-    verify(directoryCache).addUser(any(), eq(UUID.fromString("e29272d9-4146-45bf-b58f-f8fbf4597fc5")), eq("+14155555555"));
-//    verify(jedis).publish(eq("signal_address_update".getBytes()), any());
+    verify(directoryMap).insert(eq(Long.parseLong("14155555555")), eq(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc")));
+    verify(directoryCache).addUser(any(), eq(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc")), eq("+14155555555"));
+  }
 
+  @Test(expected = IllegalArgumentException.class)
+  public void testAddNullUUID() throws Exception {
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
+    directoryManager.start();
+    directoryManager.addUser(null, "+14155555555");
   }
 
   private void reconcileAll(boolean enableReconciliation) throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
-    when(directoryCache.removeAddress(any(), eq("+14152222222"))).thenReturn(true);
 
     List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
@@ -161,7 +156,6 @@ public class DirectoryManagerTest {
 
     assertThat(reconciled).isEqualTo(!enableReconciliation);
 
-    verify(directoryCache).isAddressSetBuilt(any());
     verify(directoryCache).isUserSetBuilt(any());
 
     verify(directoryCache, atLeast(0)).getUserCount(any());
@@ -185,7 +179,6 @@ public class DirectoryManagerTest {
 
   @Test
   public void testReconcileRange() throws Exception {
-    when(directoryCache.getAllAddresses(any(), any(), anyInt())).thenReturn(addressesScanResult);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
@@ -202,7 +195,6 @@ public class DirectoryManagerTest {
 
     assertThat(reconciledTwo).isEqualTo(true);
 
-    verify(directoryCache).isAddressSetBuilt(any());
     verify(directoryCache).isUserSetBuilt(any());
     verify(directoryCache).getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())));
     verify(directoryCache).setUuidLastReconciled(any(), eq(Optional.of(validUserOne.getLeft())));
