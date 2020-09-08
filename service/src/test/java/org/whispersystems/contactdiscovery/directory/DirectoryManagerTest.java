@@ -191,6 +191,7 @@ public class DirectoryManagerTest {
     assertThat(reconciledOne).isEqualTo(true);
 
     when(directoryCache.getUuidLastReconciled(any())).thenReturn(Optional.of(validUserOne.getLeft()));
+    when(directoryCache.addUser(eq(jedis), eq(validUserThree.getLeft()), eq(validUserThree.getRight()))).thenReturn(true);
     boolean reconciledTwo = directoryManager.reconcile(Optional.of(validUserOne.getLeft()), Optional.empty(), Arrays.asList(validUserTwo, validUserThree));
 
     assertThat(reconciledTwo).isEqualTo(true);
