@@ -15,7 +15,7 @@ public class SgxEnclaveIntegrationTest {
 
   @Test
   public void testGoldenPath() throws SgxException, DecoderException, IOException {
-    var mrenclave = "a3bfdf9717e35ce4f6fd3888133d65a71a880cd6a26c41d1e47647ed3e7704fa";
+    var mrenclave = "c98e00a4e3ff977a56afefe7362a27e4961e4f19e211febfbb19b897e6b80b15";
     var debugBuild = false;
     var stream = SgxEnclaveIntegrationTest.class.getResourceAsStream("/enclave/current.mrenclave");
     if (stream != null) {
