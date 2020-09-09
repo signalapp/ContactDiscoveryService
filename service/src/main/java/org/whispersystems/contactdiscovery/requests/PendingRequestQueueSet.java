@@ -17,19 +17,14 @@
 package org.whispersystems.contactdiscovery.requests;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
-import org.whispersystems.contactdiscovery.enclave.SgxEnclave;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.util.ThreadUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -75,47 +70,49 @@ class PendingRequestQueueSet {
     return response;
   }
 
-  Pair<SgxEnclave, List<PendingRequest>> get(int maxAddressCount) {
-    ArrayList<PendingRequestQueue> queues = new ArrayList<>(this.queues.values());
+  PendingRequestQueueSetGetResult get(int maxAddressCount) {
+    var queues = new ArrayList<>(this.queues.entrySet());
     Collections.shuffle(queues);
 
     synchronized (this) {
       while (true) {
         long currentTime = System.currentTimeMillis();
 
-        Optional<PendingRequestQueue> oldestQueue = queues.stream()
-                                                          .filter(q -> !q.isEmpty())
-                                                          .filter(q -> q.getElapsedTimeMillis(currentTime) > maxWait)
-                                                          .reduce((oldest, candidate) -> oldest.getElapsedTimeMillis(currentTime) > candidate.getElapsedTimeMillis(currentTime) ? oldest : candidate);
+        var oldestQueue = queues.stream()
+                                .filter(q -> !q.getValue().isEmpty())
+                                .filter(q -> q.getValue().getElapsedTimeMillis(currentTime) > maxWait)
+                                .reduce((oldest, candidate) -> oldest.getValue().getElapsedTimeMillis(currentTime) > candidate.getValue().getElapsedTimeMillis(currentTime) ? oldest : candidate);
 
 
         if (oldestQueue.isPresent()) {
-          return new ImmutablePair<>(oldestQueue.get().getEnclave(),
-                                     oldestQueue.get().get(maxAddressCount));
+          return new PendingRequestQueueSetGetResult(oldestQueue.get().getKey(),
+                                                     oldestQueue.get().getValue().getEnclave(),
+                                                     oldestQueue.get().getValue().get(maxAddressCount));
         }
 
-        Optional<PendingRequestQueue> batchSizeReadyQueue = queues.stream()
-                                                                  .filter(q -> q.getPendingAddresses() >= maxAddressCount)
-                                                                  .findFirst();
+        var batchSizeReadyQueue = queues.stream()
+                                        .filter(q -> q.getValue().getPendingAddresses() >= maxAddressCount)
+                                        .findFirst();
 
         if (batchSizeReadyQueue.isPresent()) {
-          return new ImmutablePair<>(batchSizeReadyQueue.get().getEnclave(),
-                                     batchSizeReadyQueue.get().get(maxAddressCount));
+          return new PendingRequestQueueSetGetResult(batchSizeReadyQueue.get().getKey(),
+                                                     batchSizeReadyQueue.get().getValue().getEnclave(),
+                                                     batchSizeReadyQueue.get().getValue().get(maxAddressCount));
         }
 
-        Optional<PendingRequestQueue> largestQueue = queues.stream()
-                                                           .filter(q -> !q.isEmpty())
-                                                           .reduce((firstQueue, secondQueue) -> firstQueue.getPendingAddresses() > secondQueue.getPendingAddresses() ? firstQueue : secondQueue);
+        var largestQueue = queues.stream()
+                                 .filter(q -> !q.getValue().isEmpty())
+                                 .reduce((firstQueue, secondQueue) -> firstQueue.getValue().getPendingAddresses() > secondQueue.getValue().getPendingAddresses() ? firstQueue : secondQueue);
 
         if (largestQueue.isPresent()) {
-          return new ImmutablePair<>(largestQueue.get().getEnclave(),
-                                     largestQueue.get().get(maxAddressCount));
+          return new PendingRequestQueueSetGetResult(largestQueue.get().getKey(),
+                                                     largestQueue.get().getValue().getEnclave(),
+                                                     largestQueue.get().getValue().get(maxAddressCount));
         }
 
         ThreadUtils.wait(this);
       }
     }
   }
-
 
 }

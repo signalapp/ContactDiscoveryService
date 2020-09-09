@@ -18,16 +18,17 @@
 package org.whispersystems.contactdiscovery.requests;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.lifecycle.Managed;
 import net.openhft.affinity.Affinity;
 import net.openhft.affinity.AffinityLock;
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
@@ -75,8 +76,12 @@ public class RequestManager implements Managed {
   @SuppressWarnings("unused")
   private static final Gauge hostIdGauge = metricRegistry.register(name(RequestManager.class, "hostId"), (Gauge<String>) () -> LOCAL_ENCLAVE_HOST_ID);
 
-  private static final ConcurrentMap<String, Counter> perEncalvePendingRequests     = new ConcurrentHashMap<>();
-  private static final ConcurrentMap<String, Counter> perEncalvePendingPhoneNumbers = new ConcurrentHashMap<>();
+  private static final ConcurrentMap<String, Counter> perEnclavePendingRequests     = new ConcurrentHashMap<>();
+  private static final ConcurrentMap<String, Counter> perEnclavePendingPhoneNumbers = new ConcurrentHashMap<>();
+
+  private final ImmutableMap<String, Meter> perEnclaveProcessedNumbersMeter;
+  private final ImmutableMap<String, Timer> perEnclaveProcessBatchTimer;
+  private final ImmutableMap<String, Histogram> perEnclaveBatchSizeHistogram;
 
   private final DirectoryManager       directoryManager;
   private final PendingRequestQueueSet pending;
@@ -85,14 +90,23 @@ public class RequestManager implements Managed {
   public RequestManager(DirectoryManager directoryManager, SgxEnclaveManager enclaveManager, int targetBatchSize) {
     logger.info("Using LOCAL_ENCLAVE_HOST_ID: " + LOCAL_ENCLAVE_HOST_ID);
 
-    Map<String, PendingRequestQueue> queueMap = new HashMap<>();
+    var queueMap = new HashMap<String, PendingRequestQueue>();
+    var perEnclaveProcessedNumbersMeterBuilder = ImmutableMap.<String, Meter>builder();
+    var perEnclaveProcessBatchTimerBuilder = ImmutableMap.<String, Timer>builder();
+    var perEnclaveBatchSizeHistogramBuilder = ImmutableMap.<String, Histogram>builder();
 
     for (Map.Entry<String, SgxEnclave> entry : enclaveManager.getEnclaves().entrySet()) {
       queueMap.put(entry.getKey(), new PendingRequestQueue(entry.getValue()));
+      perEnclaveProcessedNumbersMeterBuilder.put(entry.getKey(), new Meter());
+      perEnclaveProcessBatchTimerBuilder.put(entry.getKey(), new Timer());
+      perEnclaveBatchSizeHistogramBuilder.put(entry.getKey(), new Histogram(new ExponentiallyDecayingReservoir()));
     }
 
+    this.perEnclaveProcessedNumbersMeter = perEnclaveProcessedNumbersMeterBuilder.build();
+    this.perEnclaveProcessBatchTimer = perEnclaveProcessBatchTimerBuilder.build();
+    this.perEnclaveBatchSizeHistogram = perEnclaveBatchSizeHistogramBuilder.build();
     this.directoryManager = directoryManager;
-    this.pending          = new PendingRequestQueueSet(queueMap);
+    this.pending = new PendingRequestQueueSet(queueMap);
     this.targetBatchSize  = targetBatchSize;
   }
 
@@ -102,9 +116,9 @@ public class RequestManager implements Managed {
     pendingRequests.inc();
     var addressCount = request.getAddressCount();
     pendingPhoneNumbers.inc(addressCount);
-    var perEnclaveRequests = perEncalvePendingRequests.computeIfAbsent(enclaveId,
+    var perEnclaveRequests = perEnclavePendingRequests.computeIfAbsent(enclaveId,
                                               key -> metricRegistry.counter(name(RequestManager.class, "pendingRequests", "perEnclave", key)));
-    var perEnclaveNumbers = perEncalvePendingPhoneNumbers.computeIfAbsent(enclaveId,
+    var perEnclaveNumbers = perEnclavePendingPhoneNumbers.computeIfAbsent(enclaveId,
                                                   key -> metricRegistry.counter(name(RequestManager.class, "pendingPhoneNumbers", "perEnclave", key)));
     perEnclaveRequests.inc();
     perEnclaveNumbers.inc(addressCount);
@@ -117,20 +131,34 @@ public class RequestManager implements Managed {
   }
 
   @Override
-  public void start() throws Exception {
-    int threadCount = AffinityLock.cpuLayout()
-                                  .sockets() *
-                      AffinityLock.cpuLayout()
-                                  .coresPerSocket();
+  public void start() {
+    for (Map.Entry<String, Meter> entry : perEnclaveProcessedNumbersMeter.entrySet()) {
+      metricRegistry.register(name(RequestManager.class, "processedNumbers", entry.getKey()), entry.getValue());
+    }
+    for (Map.Entry<String, Timer> entry : perEnclaveProcessBatchTimer.entrySet()) {
+      metricRegistry.register(name(RequestManager.class, "processBatch", entry.getKey()), entry.getValue());
+    }
+    for (Map.Entry<String, Histogram> entry : perEnclaveBatchSizeHistogram.entrySet()) {
+      metricRegistry.register(name(RequestManager.class, "batchSize", entry.getKey()), entry.getValue());
+    }
 
-    for (int i = 0; i< threadCount; i++) {
+    final int threadCount = AffinityLock.cpuLayout().sockets() * AffinityLock.cpuLayout().coresPerSocket();
+    for (int i = 0; i < threadCount; i++) {
       new EnclaveThread(directoryManager, i).start();
     }
   }
 
   @Override
-  public void stop() throws Exception {
-
+  public void stop() {
+    for (Map.Entry<String, Meter> entry : perEnclaveProcessedNumbersMeter.entrySet()) {
+      metricRegistry.remove(name(RequestManager.class, "processedNumbers", entry.getKey()));
+    }
+    for (Map.Entry<String, Timer> entry : perEnclaveProcessBatchTimer.entrySet()) {
+      metricRegistry.remove(name(RequestManager.class, "processBatch", entry.getKey()));
+    }
+    for (Map.Entry<String, Histogram> entry : perEnclaveBatchSizeHistogram.entrySet()) {
+      metricRegistry.remove(name(RequestManager.class, "batchSize", entry.getKey()));
+    }
   }
 
   private class EnclaveThread extends Thread {
@@ -149,16 +177,13 @@ public class RequestManager implements Managed {
         logger.info(this.getClass().getSimpleName() + " on CPU: " + lock.cpuId());
 
         for (;;) {
-          Pair<SgxEnclave, List<PendingRequest>> work     = pending.get(targetBatchSize);
-          SgxEnclave                             enclave  = work.getLeft();
-          List<PendingRequest>                   requests = work.getRight();
-
-          processBatch(enclave, requests);
+          PendingRequestQueueSetGetResult work = pending.get(targetBatchSize);
+          processBatch(work.getEnclaveId(), work.getEnclave(), work.getRequests());
         }
       }
     }
 
-    private void processBatch(SgxEnclave enclave, List<PendingRequest> requests) {
+    private void processBatch(String enclaveId, SgxEnclave enclave, List<PendingRequest> requests) {
       try {
         int batchSize = requests.stream().mapToInt(r -> r.getRequest().getAddressCount()).sum();
         try (SgxEnclave.SgxsdBatch batch = enclave.newBatch(threadId, batchSize)) {
@@ -187,7 +212,8 @@ public class RequestManager implements Managed {
           processedNumbersMeter.mark(batchSize);
           batchSizeHistogram.update(batchSize);
 
-          try (Timer.Context timer = processBatchTimer.time()) {
+          try (Timer.Context ignored1 = updatePerEnclaveMetrics(enclaveId, batchSize);
+               Timer.Context ignored2 = processBatchTimer.time()) {
             directoryManager.borrowBuffers(batch::process);
           }
         }
@@ -197,6 +223,29 @@ public class RequestManager implements Managed {
         requests.stream()
                 .map(PendingRequest::getResponse)
                 .forEach(future -> future.completeExceptionally(t));
+      }
+    }
+
+    private Timer.Context updatePerEnclaveMetrics(String enclaveId, int batchSize) {
+      var meter = perEnclaveProcessedNumbersMeter.get(enclaveId);
+      var histogram = perEnclaveBatchSizeHistogram.get(enclaveId);
+      var timer = perEnclaveProcessBatchTimer.get(enclaveId);
+
+      if (meter != null) {
+        meter.mark(batchSize);
+      } else {
+        logger.error("Missing meter for enclave " + enclaveId + " yet still processing a batch for it");
+      }
+      if (histogram != null) {
+        histogram.update(batchSize);
+      } else {
+        logger.error("Missing histogram for enclave " + enclaveId + " yet still processing a batch for it");
+      }
+      if (timer != null) {
+        return timer.time();
+      } else {
+        logger.error("Missing timer for enclave " + enclaveId + " yet still processing a batch for it");
+        return null;
       }
     }
   }

@@ -73,17 +73,19 @@ public class PendingRequestQueueSetTest {
     queue.put("mrenclave1", discoveryRequestOne);
     queue.put("mrenclave2", discoveryRequestTwo);
 
-    Pair<SgxEnclave, List<PendingRequest>> firstGet = queue.get(1000);
+    PendingRequestQueueSetGetResult firstGet = queue.get(1000);
 
-    assertEquals(firstGet.getLeft(), enclaveOne);
-    assertEquals(firstGet.getRight().size(), 1);
-    assertEquals(firstGet.getRight().get(0).getRequest(), discoveryRequestOne);
+    assertEquals(firstGet.getEnclaveId(), "mrenclave1");
+    assertEquals(firstGet.getEnclave(), enclaveOne);
+    assertEquals(firstGet.getRequests().size(), 1);
+    assertEquals(firstGet.getRequests().get(0).getRequest(), discoveryRequestOne);
 
-    Pair<SgxEnclave, List<PendingRequest>> secondGet = queue.get(10);
+    PendingRequestQueueSetGetResult secondGet = queue.get(10);
 
-    assertEquals(secondGet.getLeft(), enclaveTwo);
-    assertEquals(secondGet.getRight().size(), 1);
-    assertEquals(secondGet.getRight().get(0).getRequest(), discoveryRequestTwo);
+    assertEquals(secondGet.getEnclaveId(), "mrenclave2");
+    assertEquals(secondGet.getEnclave(), enclaveTwo);
+    assertEquals(secondGet.getRequests().size(), 1);
+    assertEquals(secondGet.getRequests().get(0).getRequest(), discoveryRequestTwo);
   }
 
   @Test
@@ -109,17 +111,19 @@ public class PendingRequestQueueSetTest {
     queue.put("mrenclave1", discoveryRequestOne);
     queue.put("mrenclave2", discoveryRequestTwo);
 
-    Pair<SgxEnclave, List<PendingRequest>> firstGet = queue.get(2000);
+    PendingRequestQueueSetGetResult firstGet = queue.get(2000);
 
-    assertEquals(firstGet.getLeft(), enclaveTwo);
-    assertEquals(firstGet.getRight().size(), 1);
-    assertEquals(firstGet.getRight().get(0).getRequest(), discoveryRequestTwo);
+    assertEquals(firstGet.getEnclaveId(), "mrenclave2");
+    assertEquals(firstGet.getEnclave(), enclaveTwo);
+    assertEquals(firstGet.getRequests().size(), 1);
+    assertEquals(firstGet.getRequests().get(0).getRequest(), discoveryRequestTwo);
 
-    Pair<SgxEnclave, List<PendingRequest>> secondGet = queue.get(3000);
+    PendingRequestQueueSetGetResult secondGet = queue.get(3000);
 
-    assertEquals(secondGet.getLeft(), enclaveOne);
-    assertEquals(secondGet.getRight().size(), 1);
-    assertEquals(secondGet.getRight().get(0).getRequest(), discoveryRequestOne);
+    assertEquals(secondGet.getEnclaveId(), "mrenclave1");
+    assertEquals(secondGet.getEnclave(), enclaveOne);
+    assertEquals(secondGet.getRequests().size(), 1);
+    assertEquals(secondGet.getRequests().get(0).getRequest(), discoveryRequestOne);
   }
 
   @Test
@@ -147,17 +151,19 @@ public class PendingRequestQueueSetTest {
     Thread.sleep(501);
 
     queue.put("mrenclave2", discoveryRequestTwo);
-    Pair<SgxEnclave, List<PendingRequest>> firstGet = queue.get(1000);
+    PendingRequestQueueSetGetResult firstGet = queue.get(1000);
 
-    assertEquals(firstGet.getLeft(), enclaveOne);
-    assertEquals(firstGet.getRight().size(), 1);
-    assertEquals(firstGet.getRight().get(0).getRequest(), discoveryRequestOne);
+    assertEquals(firstGet.getEnclaveId(), "mrenclave1");
+    assertEquals(firstGet.getEnclave(), enclaveOne);
+    assertEquals(firstGet.getRequests().size(), 1);
+    assertEquals(firstGet.getRequests().get(0).getRequest(), discoveryRequestOne);
 
-    Pair<SgxEnclave, List<PendingRequest>> secondGet = queue.get(3000);
+    PendingRequestQueueSetGetResult secondGet = queue.get(3000);
 
-    assertEquals(secondGet.getLeft(), enclaveTwo);
-    assertEquals(secondGet.getRight().size(), 1);
-    assertEquals(secondGet.getRight().get(0).getRequest(), discoveryRequestTwo);
+    assertEquals(secondGet.getEnclaveId(), "mrenclave2");
+    assertEquals(secondGet.getEnclave(), enclaveTwo);
+    assertEquals(secondGet.getRequests().size(), 1);
+    assertEquals(secondGet.getRequests().get(0).getRequest(), discoveryRequestTwo);
   }
 
   @Test
@@ -179,12 +185,7 @@ public class PendingRequestQueueSetTest {
     PendingRequestQueueSet queue = new PendingRequestQueueSet(map);
 
     ExecutorService executorService = Executors.newSingleThreadExecutor();
-    Future<Pair<SgxEnclave, List<PendingRequest>>> future = executorService.submit(new Callable<Pair<SgxEnclave, List<PendingRequest>>>() {
-      @Override
-      public Pair<SgxEnclave, List<PendingRequest>> call() throws Exception {
-        return queue.get(500);
-      }
-    });
+    var future = executorService.submit(() -> queue.get(500));
 
     try {
       future.get(500, TimeUnit.MILLISECONDS);
@@ -195,11 +196,12 @@ public class PendingRequestQueueSetTest {
 
     queue.put("mrenclave1", discoveryRequestOne);
 
-    Pair<SgxEnclave, List<PendingRequest>> firstGet = future.get(500, TimeUnit.MILLISECONDS);
+    PendingRequestQueueSetGetResult firstGet = future.get(500, TimeUnit.MILLISECONDS);
 
-    assertEquals(firstGet.getLeft(), enclaveOne);
-    assertEquals(firstGet.getRight().size(), 1);
-    assertEquals(firstGet.getRight().get(0).getRequest(), discoveryRequestOne);
+    assertEquals(firstGet.getEnclaveId(), "mrenclave1");
+    assertEquals(firstGet.getEnclave(), enclaveOne);
+    assertEquals(firstGet.getRequests().size(), 1);
+    assertEquals(firstGet.getRequests().get(0).getRequest(), discoveryRequestOne);
   }
 
 
