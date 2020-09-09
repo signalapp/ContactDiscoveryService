@@ -41,6 +41,7 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequestEnvelope;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,8 @@ public class RequestManager implements Managed {
    * will go away when we work out the routing code to the new rate limiter service.
    */
   public static final String LOCAL_ENCLAVE_HOST_ID = UUID.randomUUID().toString();
+  private static final long MIN_BACKLOG_SIZE = 60_000;
+  private static final Duration MAX_BACKLOG_TIME = Duration.ofMinutes(1);
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
@@ -111,10 +114,13 @@ public class RequestManager implements Managed {
   }
 
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
-      throws NoSuchEnclaveException
-  {
+      throws NoSuchEnclaveException, RequestManagerFullException {
+    final var addressCount = request.getAddressCount();
+    final var backlog = addressCount + pendingPhoneNumbers.getCount();
+    if (backlog >= MIN_BACKLOG_SIZE && estimateTimeToProcessBacklog(backlog).compareTo(MAX_BACKLOG_TIME) >= 0) {
+      throw new RequestManagerFullException();
+    }
     pendingRequests.inc();
-    var addressCount = request.getAddressCount();
     pendingPhoneNumbers.inc(addressCount);
     var perEnclaveRequests = perEnclavePendingRequests.computeIfAbsent(enclaveId,
                                               key -> metricRegistry.counter(name(RequestManager.class, "pendingRequests", "perEnclave", key)));
@@ -159,6 +165,12 @@ public class RequestManager implements Managed {
     for (Map.Entry<String, Histogram> entry : perEnclaveBatchSizeHistogram.entrySet()) {
       metricRegistry.remove(name(RequestManager.class, "batchSize", entry.getKey()));
     }
+  }
+
+  private Duration estimateTimeToProcessBacklog(long backlog) {
+    // assume rates less than 1000 per second are bad measuring or startup error
+    final var backlogItemsPerSecond = Math.max(processedNumbersMeter.getOneMinuteRate(), 1000);
+    return Duration.ofSeconds((long) (backlog / backlogItemsPerSecond));
   }
 
   private class EnclaveThread extends Thread {

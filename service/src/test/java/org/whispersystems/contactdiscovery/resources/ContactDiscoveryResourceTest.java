@@ -15,7 +15,9 @@ import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.DirectoryUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.RequestManagerFullExceptionMapper;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
+import org.whispersystems.contactdiscovery.requests.RequestManagerFullException;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
@@ -31,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyInt;
@@ -64,6 +67,7 @@ public class ContactDiscoveryResourceTest {
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
                                                             .addProvider(new RateLimitExceededExceptionMapper())
+                                                            .addProvider(new RequestManagerFullExceptionMapper())
                                                             .addProvider(new DirectoryUnavailableExceptionMapper())
                                                             .addResource(new ContactDiscoveryResource(rateLimiter, requestManager, Set.of(validEnclaveId)))
                                                             .build();
@@ -185,4 +189,16 @@ public class ContactDiscoveryResourceTest {
     assertEquals(503, response.getStatus());
   }
 
+  @Test
+  public void testTooManyRequestsQueued() throws Exception {
+    doThrow(new RequestManagerFullException()).when(requestManager).submit(eq(validEnclaveId), any());
+    var response = resources.getJerseyTest()
+                            .target("/v1/discovery/" + validEnclaveId)
+                            .request(MediaType.APPLICATION_JSON_TYPE)
+                            .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                            .put(Entity.entity(validDiscoveryRequest, MediaType.APPLICATION_JSON_TYPE));
+
+    verify(rateLimiter, times(1)).validate(AuthHelper.VALID_NUMBER, validDiscoveryRequest.getAddressCount());
+    assertEquals(503, response.getStatus());
+  }
 }

@@ -52,6 +52,7 @@ import org.whispersystems.contactdiscovery.mappers.InvalidRequestSizeExceptionMa
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.RequestManagerFullExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.SignedQuoteUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.metrics.CpuUsageGauge;
 import org.whispersystems.contactdiscovery.metrics.FileDescriptorGauge;
@@ -193,6 +194,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new IOExceptionMapper());
     environment.jersey().register(new NoSuchEnclaveExceptionMapper());
     environment.jersey().register(new RateLimitExceededExceptionMapper());
+    environment.jersey().register(new RequestManagerFullExceptionMapper());
     environment.jersey().register(new SignedQuoteUnavailableExceptionMapper());
     environment.jersey().register(new NoSuchPendingRequestExceptionMapper());
     environment.jersey().register(new AEADBadTagExceptionMapper());
