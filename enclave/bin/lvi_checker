@@ -21,7 +21,7 @@ redzone_arg = re.compile(r'[-]0x[0-9a-f]+[(]%rsp')
 redundant_rex = re.compile(r'rex[.][A-Z]+$')
 
 # If you adjust this, also adjust bolt_skip_funcx.txt
-skip_funcs = ["cds_construct_hash"]
+skip_funcs = ["cds_contruct_hash"]
 
 retcode = 0
 func = None
