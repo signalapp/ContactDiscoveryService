@@ -89,6 +89,7 @@ public class RemoteAttestationResource {
   @Path("/{enclaveId}")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
+  @RequestLimiter
   public Response getAttestationHandshake(@Auth User user,
                                           @PathParam("enclaveId") String enclaveId,
                                           @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,

@@ -45,6 +45,7 @@ public class RemoteAttestationResourceTest {
 
   private final SgxHandshakeManager handshakeManager = mock(SgxHandshakeManager.class);
   private final RateLimiter rateLimiter = mock(RateLimiter.class);
+  private final RequestLimiterFilter requestLimiterFilter = new RequestLimiterFilter();
 
   private byte[] serverEphemeral;
   private byte[] serverPublic;
@@ -57,6 +58,7 @@ public class RemoteAttestationResourceTest {
   public final ResourceTestRule resources = ResourceTestRule.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
                                                             .addProvider(new AuthValueFactoryProvider.Binder())
+                                                            .addProvider(new RequestLimiterFeature(requestLimiterFilter))
                                                             .setMapper(SystemMapper.getMapper())
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())
@@ -200,4 +202,21 @@ public class RemoteAttestationResourceTest {
     verify(handshakeManager, times(1)).getHandshake(eq(INVALID_ENCLAVE_ID), eq(clientPublic));
   }
 
+  @Test
+  public void testRequestLimiter() throws Exception {
+    byte[] clientPublic = new byte[32];
+    new SecureRandom().nextBytes(clientPublic);
+
+    requestLimiterFilter.getAndSet(100);
+
+    Response response = resources.getJerseyTest()
+            .target("/v1/attestation/" + VALID_ENCLAVE_ID)
+            .request(MediaType.APPLICATION_JSON_TYPE)
+            .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+            .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE));
+
+    assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
+
+    verifyNoMoreInteractions(handshakeManager);
+  }
 }

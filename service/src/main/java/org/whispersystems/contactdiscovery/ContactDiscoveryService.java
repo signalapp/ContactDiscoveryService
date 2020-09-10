@@ -52,6 +52,7 @@ import org.whispersystems.contactdiscovery.mappers.InvalidRequestSizeExceptionMa
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.RequestLimiterTaskExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RequestManagerFullExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.SignedQuoteUnavailableExceptionMapper;
 import org.whispersystems.contactdiscovery.metrics.CpuUsageGauge;
@@ -67,6 +68,9 @@ import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
 import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.PingResource;
 import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterFeature;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterFilter;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterTask;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.NativeUtils;
 import org.whispersystems.dropwizard.simpleauth.AuthDynamicFeature;
@@ -156,10 +160,13 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
 
+    RequestLimiterFilter requestLimiterFilter = new RequestLimiterFilter();
+
     var healthCheckOverride = new AtomicBoolean(true);
     var onResource          = new HealthCheckOverride.HealthCheckOn(healthCheckOverride);
     var offResource         = new HealthCheckOverride.HealthCheckOff(healthCheckOverride);
     var pingResource        = new PingResource(healthCheckOverride);
+    var requestLimiterTask  = new RequestLimiterTask(requestLimiterFilter);
 
     environment.lifecycle().manage(sgxEnclaveManager);
     environment.lifecycle().manage(sgxRevocationListManager);
@@ -184,6 +191,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                                              .setPrincipal(SignalService.class)
                                                              .buildAuthFilter()));
     environment.jersey().register(new AuthValueFactoryProvider.Binder());
+    environment.jersey().register(new RequestLimiterFeature(requestLimiterFilter));
 
     environment.jersey().register(remoteAttestationResource);
     environment.jersey().register(contactDiscoveryResource);
@@ -202,6 +210,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new InvalidAddressExceptionMapper());
     environment.jersey().register(new DirectoryUnavailableExceptionMapper());
     environment.jersey().register(new CompletionExceptionMapper());
+    environment.jersey().register(new RequestLimiterTaskExceptionMapper());
 
     environment.metrics().register("gc", new GarbageCollectorMetricSet());
     environment.metrics().register("threads", new CachedThreadStatesGaugeSet(10, TimeUnit.SECONDS));
@@ -214,6 +223,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
 
     environment.admin().addTask(onResource);
     environment.admin().addTask(offResource);
+    environment.admin().addTask(requestLimiterTask);
   }
 
 }
