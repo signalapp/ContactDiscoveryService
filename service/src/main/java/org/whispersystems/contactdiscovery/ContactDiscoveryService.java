@@ -51,6 +51,7 @@ import org.whispersystems.contactdiscovery.mappers.InvalidAddressExceptionMapper
 import org.whispersystems.contactdiscovery.mappers.InvalidRequestSizeExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.NoSuchPendingRequestExceptionMapper;
+import org.whispersystems.contactdiscovery.mappers.PendingRequestFlushExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RequestLimiterTaskExceptionMapper;
 import org.whispersystems.contactdiscovery.mappers.RequestManagerFullExceptionMapper;
@@ -66,6 +67,7 @@ import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
 import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.PendingRequestsFlushTask;
 import org.whispersystems.contactdiscovery.resources.PingResource;
 import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
 import org.whispersystems.contactdiscovery.resources.RequestLimiterFeature;
@@ -167,6 +169,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     var offResource         = new HealthCheckOverride.HealthCheckOff(healthCheckOverride);
     var pingResource        = new PingResource(healthCheckOverride);
     var requestLimiterTask  = new RequestLimiterTask(requestLimiterFilter);
+    var flushRequestsTask   = new PendingRequestsFlushTask(requestManager);
 
     environment.lifecycle().manage(sgxEnclaveManager);
     environment.lifecycle().manage(sgxRevocationListManager);
@@ -211,6 +214,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new DirectoryUnavailableExceptionMapper());
     environment.jersey().register(new CompletionExceptionMapper());
     environment.jersey().register(new RequestLimiterTaskExceptionMapper());
+    environment.jersey().register(new PendingRequestFlushExceptionMapper());
 
     environment.metrics().register("gc", new GarbageCollectorMetricSet());
     environment.metrics().register("threads", new CachedThreadStatesGaugeSet(10, TimeUnit.SECONDS));
@@ -224,6 +228,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.admin().addTask(onResource);
     environment.admin().addTask(offResource);
     environment.admin().addTask(requestLimiterTask);
+    environment.admin().addTask(flushRequestsTask);
   }
 
 }

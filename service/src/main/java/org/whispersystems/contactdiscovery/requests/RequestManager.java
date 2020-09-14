@@ -173,6 +173,10 @@ public class RequestManager implements Managed {
     return Duration.ofSeconds((long) (backlog / backlogItemsPerSecond));
   }
 
+  public int flushPendingQueues() {
+    return pending.flushQueues();
+  }
+
   private class EnclaveThread extends Thread {
 
     private final int              threadId;

@@ -3,9 +3,12 @@ package org.whispersystems.contactdiscovery.requests;
 import org.junit.Test;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclave;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
+import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterTaskException;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,6 +19,7 @@ import java.util.concurrent.TimeoutException;
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -138,4 +142,47 @@ public class PendingRequestQueueTest {
     assertEquals(fromFuture.get(0), pendingRequest);
   }
 
+  @Test
+  public void testFlush() throws ExecutionException, InterruptedException {
+    SgxEnclave enclave = mock(SgxEnclave.class);
+    PendingRequestQueue queue = new PendingRequestQueue(enclave);
+
+    DiscoveryRequest requestOne = mock(DiscoveryRequest.class);
+    DiscoveryRequest requestTwo = mock(DiscoveryRequest.class);
+
+    CompletableFuture<DiscoveryResponse> responseOne = new CompletableFuture<>();
+    CompletableFuture<DiscoveryResponse> responseTwo = new CompletableFuture<>();
+
+    PendingRequest pendingOne = new PendingRequest(requestOne, responseOne);
+    PendingRequest pendingTwo = new PendingRequest(requestTwo, responseTwo);
+
+    when(requestOne.getAddressCount()).thenReturn(1000);
+    when(requestTwo.getAddressCount()).thenReturn(721);
+
+    queue.put(pendingOne);
+    assertEquals(1000, queue.getPendingAddresses());
+    assertFalse(queue.isEmpty());
+
+    queue.put(pendingTwo);
+    assertEquals(1721, queue.getPendingAddresses());
+    assertFalse(queue.isEmpty());
+
+    int flushedAddressCount = queue.flush();
+    assertEquals(1721, flushedAddressCount);
+    assertTrue(queue.isEmpty());
+
+    try {
+      var response1 = responseOne.get();
+      fail("Missing exception for flushed queue");
+    } catch (ExecutionException e) {
+      assertTrue(e.getCause() instanceof PendingRequestFlushException);
+    }
+
+    try {
+      var response1 = responseTwo.get();
+      fail("Missing exception for flushed queue");
+    } catch (ExecutionException e) {
+      assertTrue(e.getCause() instanceof PendingRequestFlushException);
+    }
+  }
 }

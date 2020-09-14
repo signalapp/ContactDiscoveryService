@@ -115,4 +115,14 @@ class PendingRequestQueueSet {
     }
   }
 
+  int flushQueues() {
+    var queues = this.queues.values();
+    int flushedRequests = 0;
+
+    synchronized (this) {
+      flushedRequests = queues.stream().reduce(0, (subtotal, queue) -> subtotal + queue.flush(), Integer::sum);
+    }
+
+    return flushedRequests;
+  }
 }

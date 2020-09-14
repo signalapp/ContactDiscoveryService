@@ -92,4 +92,13 @@ public class PendingRequestQueue {
   public SgxEnclave getEnclave() {
     return enclave;
   }
+
+  public synchronized int flush() {
+    int oldAddressCount = addressCount;
+    queue.forEach(request -> request.getResponse().completeExceptionally(new PendingRequestFlushException()));
+    queue.clear();
+    addressCount = 0;
+    lastGet = 0;
+    return oldAddressCount;
+  }
 }
