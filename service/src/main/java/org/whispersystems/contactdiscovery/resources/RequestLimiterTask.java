@@ -10,7 +10,7 @@ import java.io.PrintWriter;
 
 public class RequestLimiterTask extends Task {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(HealthCheckOverride.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(RequestLimiterTask.class);
   private final RequestLimiterFilter requestLimiterFilter;
 
   public RequestLimiterTask(RequestLimiterFilter requestLimiterFiler) {
