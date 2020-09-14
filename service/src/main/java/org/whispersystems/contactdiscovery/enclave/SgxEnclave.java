@@ -30,6 +30,8 @@ import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -41,14 +43,17 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class SgxEnclave implements Runnable {
   private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Timer NATIVE_LOOKUP_TIMER = METRIC_REGISTRY.timer(name(SgxEnclave.class, "nativeLookup"));
+  private static final ConcurrentMap<String, Timer> PER_ENCLAVE_TIMERS = new ConcurrentHashMap<>();
   private static final Meter NATIVE_LOOKUP_ERROR_METER = METRIC_REGISTRY.meter(name(SgxEnclave.class, "nativeLookup", "errors"));
   private static final byte PENDING_REQUESTS_TABLE_ORDER = 16; // 2^16 = 65536 pending requests buffer size
 
   private final Logger logger = LoggerFactory.getLogger(SgxEnclave.class);
 
   private final String  enclavePath;
+  private final String  enclaveId;
   private final boolean debug;
   private final byte[]  spid;
+  private final Timer perEnclaveTimer;
 
   private Thread       thread          = null;
   private EnclaveState enclaveState    = null;
@@ -63,14 +68,16 @@ public class SgxEnclave implements Runnable {
         }
   }
 
-  public SgxEnclave(String enclavePath, boolean debug, byte[] spid) {
+  public SgxEnclave(String enclavePath, String enclaveId, boolean debug, byte[] spid) {
     if (enclavePath == null || spid == null || spid.length != 16) {
       throw new IllegalArgumentException("Bad SgxEnclave arguments");
     }
 
     this.enclavePath = enclavePath;
+    this.enclaveId   = enclaveId;
     this.debug       = debug;
     this.spid        = spid;
+    this.perEnclaveTimer = PER_ENCLAVE_TIMERS.computeIfAbsent(enclaveId, key -> METRIC_REGISTRY.timer(name(SgxEnclave.class, "nativeLookup", "perEnclave", key)));
   }
 
   synchronized void start() throws SgxException {
@@ -310,7 +317,7 @@ public class SgxEnclave implements Runnable {
 
       processed = true;
 
-      try (Timer.Context timer = NATIVE_LOOKUP_TIMER.time()) {
+      try (Timer.Context ctx = NATIVE_LOOKUP_TIMER.time(); Timer.Context perEnclaveCtx = perEnclaveTimer.time()) {
         try {
           nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inUuidsBuf, inPhoneCount);
         } catch (SgxException ex) {

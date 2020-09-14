@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.enclave;
 
+import io.dropwizard.lifecycle.Managed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.configuration.EnclaveConfiguration;
@@ -26,8 +27,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import io.dropwizard.lifecycle.Managed;
 
 /**
  * Collection of all enclaves, indexed by MRENCLAVE value
@@ -44,6 +43,7 @@ public class SgxEnclaveManager implements Managed {
     for (EnclaveInstanceConfiguration instance : configuration.getInstances()) {
       File enclaveLibrary = NativeUtils.extractNativeResource("/enclave/" + instance.getMrenclave() + ".so");
       enclaves.put(instance.getMrenclave(), new SgxEnclave(enclaveLibrary.getAbsolutePath(),
+                                                           instance.getMrenclave(),
                                                            instance.isDebug(),
                                                            configuration.getSpid()));
     }
