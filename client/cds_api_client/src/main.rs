@@ -102,10 +102,11 @@ async fn send_requests(arguments: &CliArgs) -> Result<(), Box<dyn std::error::Er
             let credentials = get_credentials(&arguments.username, &arguments.password, &arguments.token_secret);
             let enclave_name = arguments.enclave_name.clone();
             let query_phones = get_phones(&phone_list, arguments.num_phones);
+            let discovery_delay = arguments.discovery_delay_ms.map(|ms| std::time::Duration::from_millis(ms)).clone();
             let work_handle = tokio::spawn(async move {
                 timeout(
                     Duration::from_secs(timeout_seconds),
-                    client.discovery_request(&credentials, &enclave_name, &query_phones, request_id),
+                    client.discovery_request(&credentials, &enclave_name, &query_phones, request_id, discovery_delay),
                 )
                 .await
             });
@@ -344,4 +345,15 @@ struct CliArgs {
     /// Timeout for requests in seconds
     #[structopt(long, default_value = "5")]
     request_timeout: u64,
+
+    /// Optional delay, in milliseconds, between attestation request
+    /// and discovery request.
+    ///
+    /// WARNING: You *never* want to use this option under normal
+    /// circumstances.  It is only for testing the server behavior
+    /// when a large delay exists between attestation and discovery.
+    /// When using this option, you will also want to adjust the
+    /// --request-timeout parameter accordingly.
+    #[structopt(long)]
+    discovery_delay_ms: Option<u64>,
 }

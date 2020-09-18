@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+use std::time::Duration;
+
 use cds_api::entities::*;
 use cookie::Cookie;
 use futures::prelude::*;
@@ -122,6 +124,7 @@ impl CdsApiClient {
         enclave_name: &str,
         phone_list: &[u64],
         request_id: usize,
+        maybe_discovery_delay: Option<Duration>,
     ) -> Result<CdsApiDiscoveryResponse, CdsApiClientError>
     {
         let client = cds_client::Client::new(&mut rand::thread_rng());
@@ -150,6 +153,17 @@ impl CdsApiClient {
                 data: attestation.ciphertext.clone(),
             },
         };
+
+        // Delay between attestation request and discovery request if
+        // desired.
+
+        match maybe_discovery_delay {
+            Some(duration) => {
+                debug!("delaying {:?} before discovery request", duration);
+                tokio::time::delay_for(duration).await;
+            }
+            None => (),
+        }
 
         let (server_key, discovery_request) =
             client.discovery_request(&mut rand::thread_rng(), attestation_key, negotiation, &phone_list)?;
