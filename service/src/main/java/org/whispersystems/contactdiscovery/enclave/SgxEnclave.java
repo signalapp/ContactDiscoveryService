@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -295,12 +296,29 @@ public class SgxEnclave implements Runnable {
       try {
         nativeServerCall(getEnclaveState().id, stateHandle, callArgs, future);
       } catch (SgxException ex) {
-        future.completeExceptionally(convertSgxException(ex));
+        future.completeExceptionally(ex);
         handleSgxException(ex);
       }
 
       phoneCount += queryPhoneCount;
-      return batchFuture.applyToEither(future, reply -> reply);
+      return batchFuture.applyToEither(future.exceptionally(throwable -> {
+        Throwable t = throwable;
+        if (t instanceof CompletionException) {
+          t = t.getCause();
+        }
+        if (t instanceof SgxException) {
+          SgxException sgxException = (SgxException) t;
+          Exception    exception    = convertSgxException(sgxException);
+          if (sgxException != exception) {
+            throw new CompletionException(exception);
+          }
+        }
+        if (throwable instanceof CompletionException) {
+          throw (CompletionException) throwable;
+        } else {
+          throw new CompletionException(throwable);
+        }
+      }), reply -> reply);
     }
 
     public synchronized void close() throws SgxException {
