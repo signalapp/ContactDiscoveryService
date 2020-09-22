@@ -26,7 +26,6 @@ import io.dropwizard.auth.Auth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.auth.User;
-import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
@@ -116,14 +115,9 @@ public class ContactDiscoveryResource {
       return;
     }
 
-    var before = System.currentTimeMillis();
     requestManager.submit(enclaveId, request)
                   .thenAccept(asyncResponse::resume)
                   .exceptionally(throwable -> {
-                    // Replace with tracing in the future
-                    LOGGER.error("Error during discovery with User-Agent {}, duration (ms) {}: ",
-                                 userAgent, System.currentTimeMillis()-before, throwable
-                    );
                     asyncResponse.resume(throwable.getCause());
                     return null;
                   });
