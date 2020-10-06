@@ -44,20 +44,6 @@ typedef struct ms_sgxsd_enclave_server_stop_t {
 	sgxsd_server_state_handle_t ms_state_handle;
 } ms_sgxsd_enclave_server_stop_t;
 
-typedef struct ms_cds_enclave_update_ratelimit_state_t {
-	sgx_status_t ms_retval;
-	uuid_t ms_ratelimit_state_uuid;
-	uint8_t* ms_ratelimit_state_data;
-	size_t ms_ratelimit_state_size;
-	phone_t* ms_query_phones;
-	size_t ms_query_phone_count;
-} ms_cds_enclave_update_ratelimit_state_t;
-
-typedef struct ms_cds_enclave_delete_ratelimit_state_t {
-	sgx_status_t ms_retval;
-	uuid_t ms_ratelimit_state_uuid;
-} ms_cds_enclave_delete_ratelimit_state_t;
-
 typedef struct ms_sgxsd_ocall_reply_t {
 	sgx_status_t ms_retval;
 	const sgxsd_msg_header_t* ms_reply_header;
@@ -157,30 +143,6 @@ sgx_status_t sgxsd_enclave_server_stop(sgx_enclave_id_t eid, sgx_status_t* retva
 	ms.ms_p_args = p_args;
 	ms.ms_state_handle = state_handle;
 	status = sgx_ecall(eid, 6, &ocall_table_cds_enclave, &ms);
-	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
-	return status;
-}
-
-sgx_status_t cds_enclave_update_ratelimit_state(sgx_enclave_id_t eid, sgx_status_t* retval, uuid_t ratelimit_state_uuid, uint8_t* ratelimit_state_data, size_t ratelimit_state_size, phone_t* query_phones, size_t query_phone_count)
-{
-	sgx_status_t status;
-	ms_cds_enclave_update_ratelimit_state_t ms;
-	ms.ms_ratelimit_state_uuid = ratelimit_state_uuid;
-	ms.ms_ratelimit_state_data = ratelimit_state_data;
-	ms.ms_ratelimit_state_size = ratelimit_state_size;
-	ms.ms_query_phones = query_phones;
-	ms.ms_query_phone_count = query_phone_count;
-	status = sgx_ecall(eid, 7, &ocall_table_cds_enclave, &ms);
-	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
-	return status;
-}
-
-sgx_status_t cds_enclave_delete_ratelimit_state(sgx_enclave_id_t eid, sgx_status_t* retval, uuid_t ratelimit_state_uuid)
-{
-	sgx_status_t status;
-	ms_cds_enclave_delete_ratelimit_state_t ms;
-	ms.ms_ratelimit_state_uuid = ratelimit_state_uuid;
-	status = sgx_ecall(eid, 8, &ocall_table_cds_enclave, &ms);
 	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;
 }

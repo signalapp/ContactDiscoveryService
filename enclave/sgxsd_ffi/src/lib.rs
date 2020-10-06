@@ -76,9 +76,8 @@ use rand_core::{CryptoRng, RngCore};
 use sgx_ffi::util::{clear, SecretValue};
 
 use crate::bindgen_wrapper::{
-    br_sha1_SIZE, br_sha1_context, br_sha1_init, br_sha1_out, br_sha1_update, br_sha224_update, br_sha256_SIZE, br_sha256_context,
-    br_sha256_init, br_sha256_out, curve25519_donna, sgx_status_t as SgxStatus, sgxsd_aes_gcm_decrypt, sgxsd_aes_gcm_encrypt,
-    sgxsd_enclave_read_rand, sgxsd_rand_buf, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS,
+    br_sha224_update, br_sha256_SIZE, br_sha256_context, br_sha256_init, br_sha256_out, curve25519_donna, sgx_status_t as SgxStatus,
+    sgxsd_aes_gcm_decrypt, sgxsd_aes_gcm_encrypt, sgxsd_enclave_read_rand, sgxsd_rand_buf, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS,
 };
 
 //
@@ -101,10 +100,6 @@ pub type AesGcmMac = sgxsd_aes_gcm_mac;
 
 pub struct SHA256Context {
     context: br_sha256_context,
-}
-
-pub struct SHA1Context {
-    context: br_sha1_context,
 }
 
 pub struct Curve25519Key {
@@ -284,50 +279,6 @@ impl Default for SHA256Context {
     fn default() -> Self {
         let mut state = Self {
             context: br_sha256_context {
-                vtable: ptr::null(),
-                buf:    [0; 64],
-                count:  Default::default(),
-                val:    Default::default(),
-            },
-        };
-        state.reset();
-        state
-    }
-}
-
-//
-// SHA1Context impls
-//
-
-impl SHA1Context {
-    pub const fn hash_len() -> usize {
-        br_sha1_SIZE as usize
-    }
-
-    pub fn reset(&mut self) {
-        unsafe { br_sha1_init(&mut self.context) };
-    }
-
-    pub fn update(&mut self, data: &[u8]) {
-        unsafe { br_sha1_update(&mut self.context, data.as_ptr() as *const c_void, data.len()) };
-    }
-
-    pub fn result(&mut self, out: &mut [u8; Self::hash_len()]) {
-        unsafe { br_sha1_out(&self.context, out.as_mut_ptr() as *mut c_void) }
-    }
-
-    pub fn clear(&mut self) {
-        self.reset();
-        clear(&mut self.context.buf);
-    }
-}
-
-unsafe impl Send for br_sha1_context {}
-unsafe impl Sync for br_sha1_context {}
-impl Default for SHA1Context {
-    fn default() -> Self {
-        let mut state = Self {
-            context: br_sha1_context {
                 vtable: ptr::null(),
                 buf:    [0; 64],
                 count:  Default::default(),

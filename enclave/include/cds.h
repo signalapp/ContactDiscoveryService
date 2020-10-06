@@ -70,8 +70,6 @@ _Static_assert(sizeof(cds_stop_args_t) == sizeof(uint64_t) + sizeof(uint64_t) + 
 typedef enum cds_status_code {
     CDS_ERROR_INVALID_REQUEST_SIZE      = SGX_MK_ERROR(0x20001),
     CDS_ERROR_QUERY_COMMITMENT_MISMATCH = SGX_MK_ERROR(0x20002),
-    CDS_ERROR_RATE_LIMIT_EXCEEDED       = SGX_MK_ERROR(0x20003),
-    CDS_ERROR_INVALID_RATE_LIMIT_STATE  = SGX_MK_ERROR(0x20004),
 } cds_status_code_t;
 
 #endif

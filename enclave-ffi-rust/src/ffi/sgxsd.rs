@@ -26,8 +26,8 @@ use sgx_sdk_ffi::*;
 use super::bindgen_wrapper::{
     sgx_destroy_enclave, sgx_report_attestation_status, sgx_status_t, sgxsd_enclave_get_next_report, sgxsd_enclave_negotiate_request,
     sgxsd_enclave_node_init, sgxsd_enclave_server_call, sgxsd_enclave_server_start, sgxsd_enclave_server_stop,
-    sgxsd_enclave_set_current_quote, sgxsd_msg_tag__bindgen_ty_1, sgxsd_msg_tag_t, sgxsd_node_init_args_t,
-    CDS_ERROR_INVALID_RATE_LIMIT_STATE, CDS_ERROR_INVALID_REQUEST_SIZE, CDS_ERROR_QUERY_COMMITMENT_MISMATCH, CDS_ERROR_RATE_LIMIT_EXCEEDED,
+    sgxsd_enclave_set_current_quote, sgxsd_msg_tag__bindgen_ty_1, sgxsd_msg_tag_t, sgxsd_node_init_args_t, CDS_ERROR_INVALID_REQUEST_SIZE,
+    CDS_ERROR_QUERY_COMMITMENT_MISMATCH,
 };
 
 pub use super::bindgen_wrapper::{
@@ -129,8 +129,6 @@ impl fmt::Display for SgxsdError {
 pub enum CdsError {
     InvalidRequestSize      = CDS_ERROR_INVALID_REQUEST_SIZE,
     QueryCommitmentMismatch = CDS_ERROR_QUERY_COMMITMENT_MISMATCH,
-    RateLimitExceeded       = CDS_ERROR_RATE_LIMIT_EXCEEDED,
-    InvalidRateLimitState   = CDS_ERROR_INVALID_RATE_LIMIT_STATE,
 }
 
 impl TryFrom<u32> for CdsError {
@@ -140,8 +138,6 @@ impl TryFrom<u32> for CdsError {
         match value {
             x if x == CdsError::InvalidRequestSize as u32 => Ok(CdsError::InvalidRequestSize),
             x if x == CdsError::QueryCommitmentMismatch as u32 => Ok(CdsError::QueryCommitmentMismatch),
-            x if x == CdsError::RateLimitExceeded as u32 => Ok(CdsError::RateLimitExceeded),
-            x if x == CdsError::InvalidRateLimitState as u32 => Ok(CdsError::InvalidRateLimitState),
             _ => Err(()),
         }
     }
@@ -408,15 +404,7 @@ mod tests {
         let code = CDS_ERROR_QUERY_COMMITMENT_MISMATCH;
         assert_eq!(CdsError::try_from(code), Ok(CdsError::QueryCommitmentMismatch));
 
-        let code = CDS_ERROR_RATE_LIMIT_EXCEEDED;
-        assert_eq!(CdsError::try_from(code), Ok(CdsError::RateLimitExceeded));
-
-        let code = CDS_ERROR_INVALID_RATE_LIMIT_STATE;
-        assert_eq!(CdsError::try_from(code), Ok(CdsError::InvalidRateLimitState));
-
         assert_eq!(CdsError::try_from(0), Err(()));
-        assert_eq!(CdsError::try_from(CDS_ERROR_INVALID_RATE_LIMIT_STATE + 10), Err(()));
-        assert_eq!(CdsError::try_from(CDS_ERROR_INVALID_RATE_LIMIT_STATE - 10), Err(()));
     }
 
     #[test]

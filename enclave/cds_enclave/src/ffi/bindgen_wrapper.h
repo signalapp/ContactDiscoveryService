@@ -18,7 +18,6 @@
 #include "cds_enclave_t.h"
 #include "cds.h"
 #include "cds-enclave-hash.h"
-#include "cds-enclave-ratelimit-set.h"
 #include "cttk.h"
 
 typedef cti_def(cti65_t, 65);

@@ -22,7 +22,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // LVI mitigations to not do too much damage to our latencies. See the
     // output enclave/bin/nightly-rustc-lvi bash script for what we used to guide the initial lfence
     // additions which we then pruned back.
-    run_rustc("c_src/cds-enclave-ratelimit-set.rs", "c_src/cds-enclave-ratelimit-set.rs.s").unwrap();
 
     #[cfg(feature = "cbindgen")]
     cbindgen::Builder::new()
@@ -37,19 +36,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .generate()?
         .write_to_file("../include/cds-enclave-hash.h");
 
-    #[cfg(feature = "cbindgen")]
-    cbindgen::Builder::new()
-        .with_src("c_src/cds-enclave-ratelimit-set.rs")
-        .with_language(cbindgen::Language::C)
-        .with_include_guard("_CDS_ENCLAVE_RATELIMIT_SET_H")
-        .generate()?
-        .write_to_file("../include/cds-enclave-ratelimit-set.h");
-
     cc::Build::new()
         .compiler("clang")
         .file("c_src/cds-enclave-hash.rs.s")
-        .file("c_src/cds-enclave-ratelimit-set.rs.s")
-        .file("c_src/cttk/int31.c")
         .include("c_src")
         .include("../include")
         .compile("cds_enclave_c");
@@ -89,9 +78,5 @@ fn run_rustc(in_file: impl AsRef<Path>, out_file: impl AsRef<Path>) -> Result<()
         .stdin(Stdio::null())
         .status()
         .expect("error spawning rustc");
-    if result.success() {
-        Ok(())
-    } else {
-        Err(result)
-    }
+    if result.success() { Ok(()) } else { Err(result) }
 }

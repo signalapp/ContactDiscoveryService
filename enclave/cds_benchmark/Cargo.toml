@@ -12,7 +12,3 @@ criterion = { version = "0.3" }
 [[bench]]
 name    = "hash_lookup"
 harness = false
-
-[[bench]]
-name    = "ratelimit_set"
-harness = false

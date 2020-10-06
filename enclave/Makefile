@@ -293,15 +293,12 @@ $(TEST_SGXSD_OBJECTS): $(builddir)/test/%.o: %.c $(includedir)/sgxsd.h $(include
 .PRECIOUS: cds_enclave/c_src/cds-enclave-hash.c.s
 cds_enclave/c_src/cds-enclave-hash.c.s: | $(SGX_INCLUDEDIR)
 
-.PRECIOUS: cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
-cds_enclave/c_src/cds-enclave-ratelimit-set.c.s: | $(SGX_INCLUDEDIR)
-
 $(includedir)/cds_enclave_t.h $(includedir)/cds_enclave_u.h: $(includedir)/sgxsd.edl
 
 $(builddir)/cds_enclave_t.o: $(includedir)/cds_enclave_t.c
 	$(CC) -o $@ $(CFLAGS) $(ENCLAVE_CFLAGS) -c $<
 
-$(CDS_ENCLAVE_RUST_STATICLIB): cds_enclave/c_src/cds-enclave-hash.c.s cds_enclave/c_src/cds-enclave-ratelimit-set.c.s
+$(CDS_ENCLAVE_RUST_STATICLIB): cds_enclave/c_src/cds-enclave-hash.c.s
 
 $(CDS_ENCLAVE_TARGET): $(C_OBJECTS) $(CDS_ENCLAVE_RUST_STATICLIB)
 $(CDS_ENCLAVE_TARGET): LDFLAGS := -L$(dir $(CDS_ENCLAVE_RUST_STATICLIB))

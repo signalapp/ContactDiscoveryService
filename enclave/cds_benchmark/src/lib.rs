@@ -23,9 +23,6 @@ extern "C" {
         p_query_phone_results: *mut u8,
         query_phone_count: usize,
     ) -> u32;
-
-    fn cds_ratelimit_set_add(p_slots_data: *mut u8, slots_data_size: usize, p_query_phones: *const u64, query_phones_count: usize);
-
 }
 
 pub fn hash_lookup(in_phones: &[Phone], in_uuids: &[Uuid], query_phones: &[Phone], query_phone_results: &mut [Uuid]) -> u32 {
@@ -38,16 +35,5 @@ pub fn hash_lookup(in_phones: &[Phone], in_uuids: &[Uuid], query_phones: &[Phone
             query_phone_results.as_ptr() as *mut u8,
             query_phones.len(),
         )
-    }
-}
-
-pub fn ratelimit_set_add(ratelimit_state_slots_data: &mut [u8], query_phones: &[u64]) {
-    unsafe {
-        cds_ratelimit_set_add(
-            ratelimit_state_slots_data.as_mut_ptr(),
-            ratelimit_state_slots_data.len(),
-            query_phones.as_ptr(),
-            query_phones.len(),
-        );
     }
 }

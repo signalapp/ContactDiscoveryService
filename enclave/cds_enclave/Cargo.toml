@@ -11,14 +11,11 @@ test      = ["sgx_ffi/test", "sgxsd_ffi/test"]
 benchmark = []
 
 [dependencies]
-hashbrown  = { version = "0.6", default-features = false, features = [] }
 libc       = { version = "0.2", default-features = false, features = [] }
 num-traits = { version = "0.2", default-features = false, features = [] }
 rand_core  = { version = "0.5", default-features = false, features = [] }
 sgx_ffi    = { path = "../sgx_ffi" }
 sgxsd_ffi  = { path = "../sgxsd_ffi" }
-spin       = "0.5"
-subtle     = { version = "2.2", default-features = false, features = [] }
 
 [dev-dependencies]
 lazy_static = "1.4"

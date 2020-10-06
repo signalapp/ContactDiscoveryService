@@ -3573,8 +3573,6 @@ pub type sgxsd_server_terminate_args_t = sgxsd_server_terminate_args;
 pub type cds_stop_args_t = sgxsd_server_terminate_args;
 pub const CDS_ERROR_INVALID_REQUEST_SIZE: cds_status_code = 131073;
 pub const CDS_ERROR_QUERY_COMMITMENT_MISMATCH: cds_status_code = 131074;
-pub const CDS_ERROR_RATE_LIMIT_EXCEEDED: cds_status_code = 131075;
-pub const CDS_ERROR_INVALID_RATE_LIMIT_STATE: cds_status_code = 131076;
 pub type cds_status_code = u32;
 pub use self::cds_status_code as cds_status_code_t;
 extern "C" {
@@ -3618,18 +3616,6 @@ extern "C" {
     ) -> sgx_status_t;
 }
 extern "C" {
-    pub fn cds_enclave_update_ratelimit_state(
-        ratelimit_state_uuid: uuid_t,
-        ratelimit_state_data: *mut u8,
-        ratelimit_state_size: usize,
-        query_phones: *mut phone_t,
-        query_phone_count: usize,
-    ) -> sgx_status_t;
-}
-extern "C" {
-    pub fn cds_enclave_delete_ratelimit_state(ratelimit_state_uuid: uuid_t) -> sgx_status_t;
-}
-extern "C" {
     pub fn sgxsd_ocall_reply(
         retval: *mut sgx_status_t,
         reply_header: *const sgxsd_msg_header_t,
@@ -3637,17 +3623,6 @@ extern "C" {
         reply_data_size: usize,
         msg_tag: sgxsd_msg_tag_t,
     ) -> sgx_status_t;
-}
-extern "C" {
-    pub fn cds_ratelimit_set_add(
-        p_slots_data: *mut u8,
-        slots_data_size: usize,
-        p_query_phones: *const u64,
-        query_phones_count: usize,
-    );
-}
-extern "C" {
-    pub fn cds_ratelimit_set_size(p_slots_data: *const u8, slots_data_size: usize) -> u32;
 }
 pub type errno_t = libc::c_int;
 extern "C" {

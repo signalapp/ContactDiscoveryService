@@ -62,12 +62,9 @@ mod hasher;
 mod service;
 
 pub mod external {
-    use core::ptr::NonNull;
-
-    use sgx_ffi::sgx::{SgxStatus, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS};
+    use sgx_ffi::sgx::SgxStatus;
     use sgxsd_ffi::ecalls::SgxsdServer;
 
-    use super::ffi::hash_lookup::{Phone, Uuid};
     use super::service::main;
 
     #[no_mangle]
@@ -98,41 +95,9 @@ pub mod external {
     {
         sgxsd_ffi::ecalls::sgxsd_enclave_server_terminate(p_args, p_state)
     }
-
-    #[no_mangle]
-    pub extern "C" fn cds_enclave_update_ratelimit_state(
-        ratelimit_state_uuid: Uuid,
-        ratelimit_state_data: Option<NonNull<u8>>,
-        ratelimit_state_size: usize,
-        query_phones: Option<NonNull<Phone>>,
-        query_phone_count: usize,
-    ) -> SgxStatus
-    {
-        let ratelimit_state_data = match ratelimit_state_data {
-            Some(ratelimit_state_data) => unsafe { core::slice::from_raw_parts_mut(ratelimit_state_data.as_ptr(), ratelimit_state_size) },
-            None => return SGX_ERROR_INVALID_PARAMETER,
-        };
-        let query_phones = match query_phones {
-            Some(query_phones) => unsafe { core::slice::from_raw_parts(query_phones.as_ptr(), query_phone_count) },
-            None => return SGX_ERROR_INVALID_PARAMETER,
-        };
-
-        match main::update_ratelimit_state(ratelimit_state_uuid, ratelimit_state_data, query_phones) {
-            Ok(()) => SGX_SUCCESS,
-            Err(error) => error,
-        }
-    }
-
-    #[no_mangle]
-    pub extern "C" fn cds_enclave_delete_ratelimit_state(ratelimit_state_uuid: Uuid) -> SgxStatus {
-        match main::delete_ratelimit_state(ratelimit_state_uuid) {
-            Ok(()) => SGX_SUCCESS,
-            Err(error) => error,
-        }
-    }
 }
 
 #[cfg(any(test, feature = "test"))]
 pub mod test {
-    pub use crate::ffi::{hash_lookup, ratelimit_set};
+    pub use crate::ffi::hash_lookup;
 }
