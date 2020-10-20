@@ -58,6 +58,7 @@ BEARSSL_SOURCES := \
 	$(c_srcdir)/bearssl/hash/sha1.c \
 	$(c_srcdir)/bearssl/codec/dec32be.c \
 	$(c_srcdir)/bearssl/codec/enc32be.c \
+	$(c_srcdir)/bearssl/mac/hmac.c \
 	$(c_srcdir)/bearssl/symcipher/aes_x86ni_ctr.c \
 	$(c_srcdir)/bearssl/symcipher/aes_x86ni.c
 BEARSSL_OBJECTS := $(addprefix $(builddir)/,$(BEARSSL_SOURCES:.c=.o))
