@@ -44,6 +44,17 @@ typedef struct ms_sgxsd_enclave_server_stop_t {
 	sgxsd_server_state_handle_t ms_state_handle;
 } ms_sgxsd_enclave_server_stop_t;
 
+typedef struct ms_sgxsd_enclave_ratelimit_fingerprint_t {
+	sgx_status_t ms_retval;
+	uint8_t* ms_fingerprint_key;
+	const sgxsd_msg_header_t* ms_msg_header;
+	uint8_t* ms_msg_data;
+	size_t ms_msg_data_size;
+	sgxsd_msg_tag_t ms_msg_tag;
+	uint8_t* ms_fingerprint;
+	size_t ms_fingerprint_size;
+} ms_sgxsd_enclave_ratelimit_fingerprint_t;
+
 typedef struct ms_sgxsd_ocall_reply_t {
 	sgx_status_t ms_retval;
 	const sgxsd_msg_header_t* ms_reply_header;
@@ -143,6 +154,22 @@ sgx_status_t sgxsd_enclave_server_stop(sgx_enclave_id_t eid, sgx_status_t* retva
 	ms.ms_p_args = p_args;
 	ms.ms_state_handle = state_handle;
 	status = sgx_ecall(eid, 6, &ocall_table_cds_enclave, &ms);
+	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
+	return status;
+}
+
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint(sgx_enclave_id_t eid, sgx_status_t* retval, uint8_t fingerprint_key[32], const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_data_size, sgxsd_msg_tag_t msg_tag, uint8_t* fingerprint, size_t fingerprint_size)
+{
+	sgx_status_t status;
+	ms_sgxsd_enclave_ratelimit_fingerprint_t ms;
+	ms.ms_fingerprint_key = (uint8_t*)fingerprint_key;
+	ms.ms_msg_header = msg_header;
+	ms.ms_msg_data = msg_data;
+	ms.ms_msg_data_size = msg_data_size;
+	ms.ms_msg_tag = msg_tag;
+	ms.ms_fingerprint = fingerprint;
+	ms.ms_fingerprint_size = fingerprint_size;
+	status = sgx_ecall(eid, 7, &ocall_table_cds_enclave, &ms);
 	if (status == SGX_SUCCESS && retval) *retval = ms.ms_retval;
 	return status;
 }

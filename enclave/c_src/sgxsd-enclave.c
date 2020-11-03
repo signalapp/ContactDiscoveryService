@@ -33,7 +33,7 @@
 #include "bearssl_aead.h"
 #include "bearssl_hash.h"
 
-#include "sgxsd.h"
+#include "cds.h"
 #include "sgxsd-enclave.h"
 
 #if UNIT_TESTING
@@ -434,6 +434,37 @@ sgx_status_t sgxsd_enclave_add_pending_request(sgxsd_pending_request_id_t *p_pen
     return SGX_SUCCESS;
 }
 
+sgx_status_t sgxsd_enclave_get_pending_request(const sgxsd_pending_request_id_t *p_pending_request_id, sgxsd_pending_request_t *p_pending_request) {
+    uint64_t pending_request_id_val = 0;
+    sgx_status_t decrypt_res =
+            sgxsd_aes_gcm_decrypt(&g_sgxsd_enclave_pending_request_id_key, /* p_key */
+                                  &p_pending_request_id->data, sizeof(p_pending_request_id->data), /* p_src, src_len */
+                                  &pending_request_id_val, /* p_dst */
+                                  &p_pending_request_id->iv, /* p_iv */
+                                  NULL, 0, /* p_aad, aad_len */
+                                  &p_pending_request_id->mac /* p_in_mac */);
+    _Static_assert(sizeof(p_pending_request_id->data) == sizeof(pending_request_id_val), "pending_request_id_val overflow");
+    if (decrypt_res != SGX_SUCCESS) {
+        return decrypt_res;
+    }
+
+    sgxsd_spin_lock(&g_sgxsd_enclave_pending_requests_lock);
+    uint64_t pending_request_count_mask = ((uint64_t){1} << g_sgxsd_enclave_pending_requests_table_order) - 1;
+    sgxsd_pending_request_t *p_found_pending_request =
+            &g_sgxsd_enclave_pending_requests[pending_request_id_val & pending_request_count_mask];
+
+    sgx_status_t res;
+    if (p_found_pending_request->id_val == pending_request_id_val) {
+        *p_pending_request = *p_found_pending_request;
+        res = SGX_SUCCESS;
+    } else {
+        res = SGXSD_ERROR_PENDING_REQUEST_NOT_FOUND;
+    }
+
+    sgxsd_spin_unlock(&g_sgxsd_enclave_pending_requests_lock);
+    return res;
+}
+
 sgx_status_t sgxsd_enclave_remove_pending_request(const sgxsd_pending_request_id_t *p_pending_request_id, sgxsd_pending_request_t *p_pending_request) {
     uint64_t pending_request_id_val = 0;
     sgx_status_t decrypt_res =
@@ -448,11 +479,10 @@ sgx_status_t sgxsd_enclave_remove_pending_request(const sgxsd_pending_request_id
         return decrypt_res;
     }
 
+    sgxsd_spin_lock(&g_sgxsd_enclave_pending_requests_lock);
     uint64_t pending_request_count_mask = ((uint64_t){1} << g_sgxsd_enclave_pending_requests_table_order) - 1;
     sgxsd_pending_request_t *p_found_pending_request =
-        &g_sgxsd_enclave_pending_requests[pending_request_id_val & pending_request_count_mask];
-
-    sgxsd_spin_lock(&g_sgxsd_enclave_pending_requests_lock);
+            &g_sgxsd_enclave_pending_requests[pending_request_id_val & pending_request_count_mask];
 
     sgx_status_t res;
     if (p_found_pending_request->id_val == pending_request_id_val) {
@@ -822,4 +852,111 @@ sgx_status_t sgxsd_enclave_server_stop_locked(const sgxsd_server_terminate_args_
     memset_s(p_state_desc, sizeof(*p_state_desc), 0, sizeof(*p_state_desc));
 
     return sgxsd_enclave_server_terminate(p_args, p_state);
+}
+
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint_locked(uint8_t fingerprint_key[32],
+                                                        const sgxsd_server_handle_call_args_t *call_args,
+                                                        const sgxsd_msg_header_t *msg_header,
+                                                        uint8_t *msg_data, size_t msg_data_size,
+                                                        sgxsd_msg_tag_t msg_tag,
+                                                        sgxsd_server_state_desc_t *p_state_desc,
+                                                        uint8_t *fingerprint, size_t fingerprint_size);
+
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint(uint8_t fingerprint_key[32],
+                                                 const sgxsd_server_handle_call_args_t *call_args,
+                                                 const sgxsd_msg_header_t *msg_header,
+                                                 uint8_t *msg_data, size_t msg_data_size,
+                                                 sgxsd_msg_tag_t msg_tag,
+                                                 sgxsd_server_state_handle_t state_handle,
+                                                 uint8_t *fingerprint, size_t fingerprint_size) {
+    if (!g_sgxsd_enclave_node_initialized) {
+        return SGX_ERROR_INVALID_STATE;
+    }
+    if (state_handle >= g_sgxsd_enclave_max_servers) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+    sgxsd_server_state_desc_t *p_state_desc = &g_sgxsd_enclave_server_states[state_handle];
+    sgxsd_spin_lock(&p_state_desc->lock);
+
+    sgx_status_t res =
+            sgxsd_enclave_ratelimit_fingerprint_locked(fingerprint_key, call_args, msg_header, msg_data, msg_data_size,
+                                                       msg_tag, p_state_desc, fingerprint, fingerprint_size);
+
+    sgxsd_spin_unlock(&p_state_desc->lock);
+    return res;
+}
+
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint_locked(uint8_t fingerprint_key[32],
+                                                        const sgxsd_server_handle_call_args_t *call_args,
+                                                        const sgxsd_msg_header_t *p_msg_header,
+                                                        uint8_t *msg_data, size_t msg_data_size,
+                                                        sgxsd_msg_tag_t msg_tag,
+                                                        sgxsd_server_state_desc_t *p_state_desc,
+                                                        uint8_t *fingerprint, size_t fingerprint_size) {
+    if (!p_state_desc->valid) {
+        return SGX_ERROR_INVALID_STATE;
+    }
+    if (p_msg_header == NULL) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+    if (msg_data == NULL || msg_data_size == 0) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    // get pending request by ID
+    sgxsd_pending_request_t pending_request;
+    sgx_status_t get_pending_request_res = sgxsd_enclave_get_pending_request(&p_msg_header->pending_request_id, &pending_request);
+    if (get_pending_request_res != SGX_SUCCESS) {
+        return get_pending_request_res;
+    }
+
+    // derive server and client sending AES-GCM keys
+    sgxsd_aes_gcm_key_t client_key;
+    sgxsd_msg_from_t msg_from = {
+            .valid = true,
+            .tag = msg_tag,
+    };
+    sgxsd_enclave_derive_request_keys(&pending_request, &client_key, &msg_from.server_key);
+
+    // erase HKDF PRK
+    memset_s(&pending_request, sizeof(pending_request), 0, sizeof(pending_request));
+
+    // message is decrypted in-place
+    sgxsd_msg_buf_t decrypted_msg = {
+            .data = msg_data,
+            .size = msg_data_size,
+    };
+    // validate and decrypt the message
+    sgx_status_t decrypt_msg_res =
+            sgxsd_aes_gcm_decrypt(&client_key, /* p_key */
+                                  msg_data, msg_data_size, /* p_src, src_len */
+                                  decrypted_msg.data, /* p_dst */
+                                  &p_msg_header->iv, /* p_iv */
+                                  &p_msg_header->pending_request_id, /* p_aad */
+                                  sizeof(p_msg_header->pending_request_id), /* aad_len */
+                                  &p_msg_header->mac /* p_in_mac */);
+
+    // erase client sending AES-GCM key
+    memset_s(&client_key, sizeof(client_key), 0, sizeof(client_key));
+
+    if (decrypt_msg_res != SGX_SUCCESS) {
+        // erase copy of plaintext ticket keys on stack
+        memset_s(&msg_from, sizeof(msg_from), 0, sizeof(msg_from));
+        if (decrypt_msg_res == SGX_ERROR_INVALID_PARAMETER) {
+            return SGX_ERROR_UNEXPECTED;
+        }
+        return decrypt_msg_res;
+    }
+
+    // call the server_handle_call callback
+    sgx_status_t res =
+            sgxsd_enclave_create_ratelimit_fingerprint(fingerprint_key, call_args, decrypted_msg, msg_from, fingerprint, fingerprint_size);
+
+    // erase the decrypted message data
+    memset_s(decrypted_msg.data, decrypted_msg.size, 0, decrypted_msg.size);
+
+    // erase copy of plaintext ticket keys on stack
+    memset_s(&msg_from, sizeof(msg_from), 0, sizeof(msg_from));
+
+    return res;
 }

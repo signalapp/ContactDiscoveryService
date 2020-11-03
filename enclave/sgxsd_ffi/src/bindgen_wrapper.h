@@ -17,4 +17,5 @@
 
 #include "sgxsd-enclave.h"
 #include "bearssl_hash.h"
+#include "bearssl_hmac.h"
 #include "curve25519-donna.h"

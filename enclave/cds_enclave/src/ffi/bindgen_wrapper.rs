@@ -3616,6 +3616,17 @@ extern "C" {
     ) -> sgx_status_t;
 }
 extern "C" {
+    pub fn sgxsd_enclave_ratelimit_fingerprint(
+        fingerprint_key: *mut u8,
+        msg_header: *const sgxsd_msg_header_t,
+        msg_data: *mut u8,
+        msg_data_size: usize,
+        msg_tag: sgxsd_msg_tag_t,
+        fingerprint: *mut u8,
+        fingerprint_size: usize,
+    ) -> sgx_status_t;
+}
+extern "C" {
     pub fn sgxsd_ocall_reply(
         retval: *mut sgx_status_t,
         reply_header: *const sgxsd_msg_header_t,

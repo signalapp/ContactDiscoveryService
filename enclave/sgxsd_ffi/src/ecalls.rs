@@ -142,7 +142,8 @@ where S: SgxsdServer {
     }
 }
 
-struct ECallSlice(Option<ptr::NonNull<u8>>, usize);
+pub struct ECallSlice(pub Option<ptr::NonNull<u8>>, pub usize);
+
 impl AsRef<[u8]> for ECallSlice {
     fn as_ref(&self) -> &[u8] {
         if self.1 != 0 {

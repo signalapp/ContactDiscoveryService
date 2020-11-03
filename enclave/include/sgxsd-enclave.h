@@ -21,6 +21,7 @@
 #ifndef _SGXSD_ENCLAVE_H
 #define _SGXSD_ENCLAVE_H
 
+#include <stdint.h>
 #include "sgx_error.h"
 
 #include "sgxsd.h"
@@ -54,6 +55,14 @@ sgx_status_t sgxsd_enclave_server_init(const sgxsd_server_init_args_t *p_args, s
 sgx_status_t sgxsd_enclave_server_handle_call(const sgxsd_server_handle_call_args_t *p_args, sgxsd_msg_buf_t msg, sgxsd_msg_from_t from, sgxsd_server_state_t **pp_state);
 sgx_status_t sgxsd_enclave_server_terminate(const sgxsd_server_terminate_args_t *p_args, sgxsd_server_state_t *p_state);
 
+// the api for getting a SHA256-HMAC fingerprint of the phone numbers
+typedef uint64_t phone_t;
+sgx_status_t sgxsd_enclave_create_ratelimit_fingerprint(uint8_t fingerprint_key[32],
+                                                        const sgxsd_server_handle_call_args_t *args,
+                                                        sgxsd_msg_buf_t msg,
+                                                        sgxsd_msg_from_t from,
+                                                        uint8_t *fingerprint,
+                                                        size_t fingerprint_size);
 //
 // public api
 //

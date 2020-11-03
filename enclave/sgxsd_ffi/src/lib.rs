@@ -75,10 +75,7 @@ use num_traits::ToPrimitive;
 use rand_core::{CryptoRng, RngCore};
 use sgx_ffi::util::{clear, SecretValue};
 
-use crate::bindgen_wrapper::{
-    br_sha224_update, br_sha256_SIZE, br_sha256_context, br_sha256_init, br_sha256_out, curve25519_donna, sgx_status_t as SgxStatus,
-    sgxsd_aes_gcm_decrypt, sgxsd_aes_gcm_encrypt, sgxsd_enclave_read_rand, sgxsd_rand_buf, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS,
-};
+use crate::bindgen_wrapper::{br_hmac_context, br_hmac_init, br_hmac_update, br_hmac_out, br_hmac_key_context, br_sha224_update, br_sha256_SIZE, br_sha256_context, br_sha256_init, br_sha256_out, curve25519_donna, sgx_status_t as SgxStatus, sgxsd_aes_gcm_decrypt, sgxsd_aes_gcm_encrypt, sgxsd_enclave_read_rand, sgxsd_rand_buf, SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS, br_hmac_key_init};
 
 //
 // public API
@@ -289,6 +286,62 @@ impl Default for SHA256Context {
         state
     }
 }
+
+pub struct SHA256HMACContext {
+    key_context: br_hmac_key_context,
+    context: br_hmac_context,
+}
+
+impl SHA256HMACContext {
+    pub fn new(mut key: [u8; Self::hash_len()]) -> Self {
+        let sha256_context: SHA256Context = Default::default();
+        let mut br_key = br_hmac_key_context{
+            dig_vtable: ptr::null(),
+            ksi: [0; 64],
+            kso: [0; 64],
+        };
+        unsafe {
+            br_hmac_key_init(&mut br_key, sha256_context.context.vtable, key.as_mut_ptr() as *mut c_void, key.len());
+        }
+        let state = br_hmac_context{
+            dig: Default::default(),
+            kso: [0; 64],
+            out_len: 0
+        };
+        let mut ctx = Self{
+            key_context: br_key,
+            context: state,
+        };
+        ctx.reset();
+        return ctx;
+    }
+
+    pub const fn hash_len() -> usize {
+        br_sha256_SIZE as usize
+    }
+
+    pub fn reset(&mut self) {
+        unsafe { br_hmac_init(&mut self.context, &mut self.key_context, Self::hash_len()) };
+    }
+
+    pub fn update(&mut self, data: &[u8]) {
+        unsafe { br_hmac_update(&mut self.context, data.as_ptr() as *const c_void, data.len()) };
+    }
+
+    pub fn result(&mut self, out: &mut [u8; Self::hash_len()]) {
+        unsafe { br_hmac_out(&self.context, out.as_mut_ptr() as *mut c_void); }
+    }
+
+    pub fn clear(&mut self) {
+        self.reset();
+        clear(&mut self.context.kso);
+        clear(&mut self.key_context.ksi);
+        clear(&mut self.key_context.kso);
+    }
+}
+
+unsafe impl Send for br_hmac_context {}
+unsafe impl Sync for br_hmac_context {}
 
 //
 // Curve25519 impls

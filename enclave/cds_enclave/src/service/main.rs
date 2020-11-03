@@ -29,7 +29,7 @@ use crate::ffi::sgxsd::*;
 //
 
 pub struct SgxsdServerState {
-    requests:     Vec<PendingRequest>,
+    requests: Vec<PendingRequest>,
     query_phones: PhoneList,
 }
 
@@ -45,15 +45,15 @@ const COMMITMENT_NONCE_SIZE: usize = 32;
 struct PhoneList(Vec<Phone>);
 
 struct PendingRequest {
-    from:                SgxsdMsgFrom,
+    from: SgxsdMsgFrom,
     request_phone_count: u32,
 }
 
-struct Request {
-    phones: RequestPhoneList,
+pub struct Request {
+    pub(crate) phones: RequestPhoneList,
 }
 
-struct RequestPhoneList {
+pub struct RequestPhoneList {
     data: SecretValue<Box<[u8]>>,
 }
 
@@ -66,7 +66,10 @@ impl SgxsdServerState {
         if (args.query_phone_count == 0 || args.query_phone_count.to_usize() > self.query_phones.capacity() - self.query_phones.len()) {
             return Err(SGX_ERROR_INVALID_PARAMETER);
         }
+        return Self::decode_phone_list(args, request_data);
+    }
 
+    pub fn decode_phone_list<'a>(args: &'a CallArgs, request_data: &[u8]) -> Result<Request, SgxStatus> {
         let query_data_slice = UntrustedSlice::new(args.query.data, args.query.size.to_usize()).map_err(|_| SGX_ERROR_INVALID_PARAMETER)?;
         let mut query_phones = RequestPhoneList::new(
             query_data_slice
@@ -78,9 +81,9 @@ impl SgxsdServerState {
             .checked_sub(COMMITMENT_NONCE_SIZE)
             .ok_or(CDS_ERROR_INVALID_REQUEST_SIZE)?;
 
-        if (request_data.len() != AesGcmKey::len() ||
-            query_phones_data_len % BYTES_PER_PHONE != 0 ||
-            query_phones_data_len / BYTES_PER_PHONE != args.query_phone_count.to_usize())
+        if (request_data.len() != AesGcmKey::len()
+            || query_phones_data_len % BYTES_PER_PHONE != 0
+            || query_phones_data_len / BYTES_PER_PHONE != args.query_phone_count.to_usize())
         {
             return Err(CDS_ERROR_INVALID_REQUEST_SIZE);
         }
@@ -97,7 +100,7 @@ impl SgxsdServerState {
         let mut context: SHA256Context = Default::default();
         context.update(data);
 
-        let mut commitment: [u8; SHA256Context::hash_len()] = Default::default();
+        let mut commitment: [u8; SHA256Context::hash_len()] = [0; SHA256Context::hash_len()];
         context.result(&mut commitment);
 
         if &commitment == expected_commitment {
@@ -117,7 +120,7 @@ impl SgxsdServer for SgxsdServerState {
         let args = args.ok_or(SGX_ERROR_INVALID_PARAMETER)?;
 
         Ok(Self {
-            requests:     Vec::with_capacity(args.max_query_phones.to_usize() / 4),
+            requests: Vec::with_capacity(args.max_query_phones.to_usize() / 4),
             query_phones: PhoneList::new(args.max_query_phones.to_usize()),
         })
     }
@@ -256,10 +259,8 @@ impl RequestPhoneList {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::*;
     use std::ffi::c_void;
     use std::mem;
-    use std::rc::*;
 
     use mockers::matchers::*;
     use mockers::*;
@@ -273,7 +274,7 @@ mod tests {
 
     fn empty_init_args() -> Box<StartArgs> {
         Box::new(StartArgs {
-            max_query_phones:     0,
+            max_query_phones: 0,
             max_ratelimit_states: 0,
         })
     }
@@ -285,8 +286,8 @@ mod tests {
     }
     fn valid_stop_args() -> Box<StopArgs> {
         Box::new(StopArgs {
-            in_phones:      VALID_IN_PHONES.as_ptr() as *mut Phone,
-            in_uuids:       VALID_IN_UUIDS.as_ptr() as *mut Uuid,
+            in_phones: VALID_IN_PHONES.as_ptr() as *mut Phone,
+            in_uuids: VALID_IN_UUIDS.as_ptr() as *mut Uuid,
             in_phone_count: 1,
         })
     }
@@ -331,8 +332,8 @@ mod tests {
         let server = SgxsdServerState::init(Some(&empty_init_args())).unwrap();
         server
             .terminate(Some(&StopArgs {
-                in_phones:      VALID_IN_PHONES.as_ptr() as *mut Phone,
-                in_uuids:       VALID_IN_UUIDS.as_ptr() as *mut Uuid,
+                in_phones: VALID_IN_PHONES.as_ptr() as *mut Phone,
+                in_uuids: VALID_IN_UUIDS.as_ptr() as *mut Uuid,
                 in_phone_count: 1 + usize::max_value() / mem::size_of::<Phone>(),
             }))
             .unwrap_err();
@@ -347,8 +348,8 @@ mod tests {
         let server = SgxsdServerState::init(Some(&empty_init_args())).unwrap();
         server
             .terminate(Some(&StopArgs {
-                in_phones:      VALID_IN_PHONES.as_ptr() as *mut Phone,
-                in_uuids:       VALID_IN_UUIDS.as_ptr() as *mut Uuid,
+                in_phones: VALID_IN_PHONES.as_ptr() as *mut Phone,
+                in_uuids: VALID_IN_UUIDS.as_ptr() as *mut Uuid,
                 in_phone_count: 1 + usize::max_value() / mem::size_of::<Uuid>(),
             }))
             .unwrap_err();
@@ -378,7 +379,7 @@ mod tests {
         );
 
         let server = SgxsdServerState::init(Some(&StartArgs {
-            max_query_phones:     1,
+            max_query_phones: 1,
             max_ratelimit_states: 0,
         }))
         .unwrap();
@@ -395,7 +396,7 @@ mod tests {
         );
 
         let mut server = SgxsdServerState::init(Some(&StartArgs {
-            max_query_phones:     1,
+            max_query_phones: 1,
             max_ratelimit_states: 0,
         }))
         .unwrap();

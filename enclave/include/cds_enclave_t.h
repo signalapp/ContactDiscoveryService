@@ -8,6 +8,7 @@
 
 #include "cds.h"
 #include "stdbool.h"
+#include "stdint.h"
 #include "sgx_quote.h"
 #include "sgx_report.h"
 #include "sgxsd.h"
@@ -27,6 +28,7 @@ sgx_status_t sgxsd_enclave_negotiate_request(const sgxsd_request_negotiation_req
 sgx_status_t sgxsd_enclave_server_start(const sgxsd_server_init_args_t* p_args, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_call(const sgxsd_server_handle_call_args_t* p_args, const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_size, sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_stop(const sgxsd_server_terminate_args_t* p_args, sgxsd_server_state_handle_t state_handle);
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint(uint8_t fingerprint_key[32], const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_data_size, sgxsd_msg_tag_t msg_tag, uint8_t* fingerprint, size_t fingerprint_size);
 
 sgx_status_t SGX_CDECL sgxsd_ocall_reply(sgx_status_t* retval, const sgxsd_msg_header_t* reply_header, const uint8_t* reply_data, size_t reply_data_size, sgxsd_msg_tag_t msg_tag);
 

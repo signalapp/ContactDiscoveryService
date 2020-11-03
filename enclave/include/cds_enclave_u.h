@@ -9,6 +9,7 @@
 
 #include "cds.h"
 #include "stdbool.h"
+#include "stdint.h"
 #include "sgx_quote.h"
 #include "sgx_report.h"
 #include "sgxsd.h"
@@ -33,6 +34,7 @@ sgx_status_t sgxsd_enclave_negotiate_request(sgx_enclave_id_t eid, sgx_status_t*
 sgx_status_t sgxsd_enclave_server_start(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_init_args_t* p_args, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_call(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_handle_call_args_t* p_args, const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_size, sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_stop(sgx_enclave_id_t eid, sgx_status_t* retval, const sgxsd_server_terminate_args_t* p_args, sgxsd_server_state_handle_t state_handle);
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint(sgx_enclave_id_t eid, sgx_status_t* retval, uint8_t fingerprint_key[32], const sgxsd_msg_header_t* msg_header, uint8_t* msg_data, size_t msg_data_size, sgxsd_msg_tag_t msg_tag, uint8_t* fingerprint, size_t fingerprint_size);
 
 #ifdef __cplusplus
 }

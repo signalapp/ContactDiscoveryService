@@ -36,13 +36,6 @@ impl<T> ::core::clone::Clone for __IncompleteArrayField<T> {
         Self::new()
     }
 }
-pub const false_: u32 = 0;
-pub const true_: u32 = 1;
-pub const __bool_true_false_are_defined: u32 = 1;
-pub const EXIT_FAILURE: u32 = 1;
-pub const EXIT_SUCCESS: u32 = 0;
-pub const RAND_MAX: u32 = 2147483647;
-pub const MB_CUR_MAX: u32 = 1;
 pub const INT8_MIN: i32 = -128;
 pub const INT16_MIN: i32 = -32768;
 pub const INT32_MIN: i32 = -2147483648;
@@ -90,6 +83,13 @@ pub const PTRDIFF_MAX: u64 = 9223372036854775807;
 pub const SIZE_MAX: i32 = -1;
 pub const WINT_MIN: u32 = 0;
 pub const WINT_MAX: u32 = 4294967295;
+pub const false_: u32 = 0;
+pub const true_: u32 = 1;
+pub const __bool_true_false_are_defined: u32 = 1;
+pub const EXIT_FAILURE: u32 = 1;
+pub const EXIT_SUCCESS: u32 = 0;
+pub const RAND_MAX: u32 = 2147483647;
+pub const MB_CUR_MAX: u32 = 1;
 pub const SGX_FLAGS_INITTED: u32 = 1;
 pub const SGX_FLAGS_DEBUG: u32 = 2;
 pub const SGX_FLAGS_MODE64BIT: u32 = 4;
@@ -165,79 +165,6 @@ pub const br_sha512_ID: u32 = 6;
 pub const br_sha512_SIZE: u32 = 64;
 pub const br_md5sha1_ID: u32 = 0;
 pub const br_md5sha1_SIZE: u32 = 36;
-pub const SGX_SUCCESS: _status_t = 0;
-pub const SGX_ERROR_UNEXPECTED: _status_t = 1;
-pub const SGX_ERROR_INVALID_PARAMETER: _status_t = 2;
-pub const SGX_ERROR_OUT_OF_MEMORY: _status_t = 3;
-pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
-pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
-pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
-pub const SGX_PTHREAD_EXIT: _status_t = 9;
-pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
-pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
-pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
-pub const SGX_ERROR_ECALL_NOT_ALLOWED: _status_t = 4103;
-pub const SGX_ERROR_OCALL_NOT_ALLOWED: _status_t = 4104;
-pub const SGX_ERROR_STACK_OVERRUN: _status_t = 4105;
-pub const SGX_ERROR_UNDEFINED_SYMBOL: _status_t = 8192;
-pub const SGX_ERROR_INVALID_ENCLAVE: _status_t = 8193;
-pub const SGX_ERROR_INVALID_ENCLAVE_ID: _status_t = 8194;
-pub const SGX_ERROR_INVALID_SIGNATURE: _status_t = 8195;
-pub const SGX_ERROR_NDEBUG_ENCLAVE: _status_t = 8196;
-pub const SGX_ERROR_OUT_OF_EPC: _status_t = 8197;
-pub const SGX_ERROR_NO_DEVICE: _status_t = 8198;
-pub const SGX_ERROR_MEMORY_MAP_CONFLICT: _status_t = 8199;
-pub const SGX_ERROR_INVALID_METADATA: _status_t = 8201;
-pub const SGX_ERROR_DEVICE_BUSY: _status_t = 8204;
-pub const SGX_ERROR_INVALID_VERSION: _status_t = 8205;
-pub const SGX_ERROR_MODE_INCOMPATIBLE: _status_t = 8206;
-pub const SGX_ERROR_ENCLAVE_FILE_ACCESS: _status_t = 8207;
-pub const SGX_ERROR_INVALID_MISC: _status_t = 8208;
-pub const SGX_ERROR_INVALID_LAUNCH_TOKEN: _status_t = 8209;
-pub const SGX_ERROR_MAC_MISMATCH: _status_t = 12289;
-pub const SGX_ERROR_INVALID_ATTRIBUTE: _status_t = 12290;
-pub const SGX_ERROR_INVALID_CPUSVN: _status_t = 12291;
-pub const SGX_ERROR_INVALID_ISVSVN: _status_t = 12292;
-pub const SGX_ERROR_INVALID_KEYNAME: _status_t = 12293;
-pub const SGX_ERROR_SERVICE_UNAVAILABLE: _status_t = 16385;
-pub const SGX_ERROR_SERVICE_TIMEOUT: _status_t = 16386;
-pub const SGX_ERROR_AE_INVALID_EPIDBLOB: _status_t = 16387;
-pub const SGX_ERROR_SERVICE_INVALID_PRIVILEGE: _status_t = 16388;
-pub const SGX_ERROR_EPID_MEMBER_REVOKED: _status_t = 16389;
-pub const SGX_ERROR_UPDATE_NEEDED: _status_t = 16390;
-pub const SGX_ERROR_NETWORK_FAILURE: _status_t = 16391;
-pub const SGX_ERROR_AE_SESSION_INVALID: _status_t = 16392;
-pub const SGX_ERROR_BUSY: _status_t = 16394;
-pub const SGX_ERROR_MC_NOT_FOUND: _status_t = 16396;
-pub const SGX_ERROR_MC_NO_ACCESS_RIGHT: _status_t = 16397;
-pub const SGX_ERROR_MC_USED_UP: _status_t = 16398;
-pub const SGX_ERROR_MC_OVER_QUOTA: _status_t = 16399;
-pub const SGX_ERROR_KDF_MISMATCH: _status_t = 16401;
-pub const SGX_ERROR_UNRECOGNIZED_PLATFORM: _status_t = 16402;
-pub const SGX_ERROR_UNSUPPORTED_CONFIG: _status_t = 16403;
-pub const SGX_ERROR_NO_PRIVILEGE: _status_t = 20482;
-pub const SGX_ERROR_PCL_ENCRYPTED: _status_t = 24577;
-pub const SGX_ERROR_PCL_NOT_ENCRYPTED: _status_t = 24578;
-pub const SGX_ERROR_PCL_MAC_MISMATCH: _status_t = 24579;
-pub const SGX_ERROR_PCL_SHA_MISMATCH: _status_t = 24580;
-pub const SGX_ERROR_PCL_GUID_MISMATCH: _status_t = 24581;
-pub const SGX_ERROR_FILE_BAD_STATUS: _status_t = 28673;
-pub const SGX_ERROR_FILE_NO_KEY_ID: _status_t = 28674;
-pub const SGX_ERROR_FILE_NAME_MISMATCH: _status_t = 28675;
-pub const SGX_ERROR_FILE_NOT_SGX_FILE: _status_t = 28676;
-pub const SGX_ERROR_FILE_CANT_OPEN_RECOVERY_FILE: _status_t = 28677;
-pub const SGX_ERROR_FILE_CANT_WRITE_RECOVERY_FILE: _status_t = 28678;
-pub const SGX_ERROR_FILE_RECOVERY_NEEDED: _status_t = 28679;
-pub const SGX_ERROR_FILE_FLUSH_FAILED: _status_t = 28680;
-pub const SGX_ERROR_FILE_CLOSE_FAILED: _status_t = 28681;
-pub const SGX_ERROR_UNSUPPORTED_ATT_KEY_ID: _status_t = 32769;
-pub const SGX_ERROR_ATT_KEY_CERTIFICATION_FAILURE: _status_t = 32770;
-pub const SGX_ERROR_ATT_KEY_UNINITIALIZED: _status_t = 32771;
-pub const SGX_ERROR_INVALID_ATT_KEY_CERT_DATA: _status_t = 32772;
-pub const SGX_ERROR_PLATFORM_CERT_UNAVAILABLE: _status_t = 32773;
-pub const SGX_INTERNAL_ERROR_ENCLAVE_CREATE_INTERRUPTED: _status_t = 61441;
-pub type _status_t = u32;
-pub use self::_status_t as sgx_status_t;
 pub type __int8_t = libc::c_schar;
 pub type __uint8_t = libc::c_uchar;
 pub type __int16_t = libc::c_short;
@@ -369,6 +296,97 @@ impl Default for __mbstate_t {
 }
 pub type __intmax_t = __int64_t;
 pub type __uintmax_t = __uint64_t;
+pub type int_least8_t = __int_least8_t;
+pub type uint_least8_t = __uint_least8_t;
+pub type int_least16_t = __int_least16_t;
+pub type uint_least16_t = __uint_least16_t;
+pub type int_least32_t = __int_least32_t;
+pub type uint_least32_t = __uint_least32_t;
+pub type int_least64_t = __int_least64_t;
+pub type uint_least64_t = __uint_least64_t;
+pub type int_fast8_t = __int_fast8_t;
+pub type uint_fast8_t = __uint_fast8_t;
+pub type int_fast16_t = __int_fast16_t;
+pub type uint_fast16_t = __uint_fast16_t;
+pub type int_fast32_t = __int_fast32_t;
+pub type uint_fast32_t = __uint_fast32_t;
+pub type int_fast64_t = __int_fast64_t;
+pub type uint_fast64_t = __uint_fast64_t;
+pub type intmax_t = __intmax_t;
+pub type uintmax_t = __uintmax_t;
+pub const SGX_SUCCESS: _status_t = 0;
+pub const SGX_ERROR_UNEXPECTED: _status_t = 1;
+pub const SGX_ERROR_INVALID_PARAMETER: _status_t = 2;
+pub const SGX_ERROR_OUT_OF_MEMORY: _status_t = 3;
+pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
+pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
+pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
+pub const SGX_PTHREAD_EXIT: _status_t = 9;
+pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
+pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
+pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
+pub const SGX_ERROR_ECALL_NOT_ALLOWED: _status_t = 4103;
+pub const SGX_ERROR_OCALL_NOT_ALLOWED: _status_t = 4104;
+pub const SGX_ERROR_STACK_OVERRUN: _status_t = 4105;
+pub const SGX_ERROR_UNDEFINED_SYMBOL: _status_t = 8192;
+pub const SGX_ERROR_INVALID_ENCLAVE: _status_t = 8193;
+pub const SGX_ERROR_INVALID_ENCLAVE_ID: _status_t = 8194;
+pub const SGX_ERROR_INVALID_SIGNATURE: _status_t = 8195;
+pub const SGX_ERROR_NDEBUG_ENCLAVE: _status_t = 8196;
+pub const SGX_ERROR_OUT_OF_EPC: _status_t = 8197;
+pub const SGX_ERROR_NO_DEVICE: _status_t = 8198;
+pub const SGX_ERROR_MEMORY_MAP_CONFLICT: _status_t = 8199;
+pub const SGX_ERROR_INVALID_METADATA: _status_t = 8201;
+pub const SGX_ERROR_DEVICE_BUSY: _status_t = 8204;
+pub const SGX_ERROR_INVALID_VERSION: _status_t = 8205;
+pub const SGX_ERROR_MODE_INCOMPATIBLE: _status_t = 8206;
+pub const SGX_ERROR_ENCLAVE_FILE_ACCESS: _status_t = 8207;
+pub const SGX_ERROR_INVALID_MISC: _status_t = 8208;
+pub const SGX_ERROR_INVALID_LAUNCH_TOKEN: _status_t = 8209;
+pub const SGX_ERROR_MAC_MISMATCH: _status_t = 12289;
+pub const SGX_ERROR_INVALID_ATTRIBUTE: _status_t = 12290;
+pub const SGX_ERROR_INVALID_CPUSVN: _status_t = 12291;
+pub const SGX_ERROR_INVALID_ISVSVN: _status_t = 12292;
+pub const SGX_ERROR_INVALID_KEYNAME: _status_t = 12293;
+pub const SGX_ERROR_SERVICE_UNAVAILABLE: _status_t = 16385;
+pub const SGX_ERROR_SERVICE_TIMEOUT: _status_t = 16386;
+pub const SGX_ERROR_AE_INVALID_EPIDBLOB: _status_t = 16387;
+pub const SGX_ERROR_SERVICE_INVALID_PRIVILEGE: _status_t = 16388;
+pub const SGX_ERROR_EPID_MEMBER_REVOKED: _status_t = 16389;
+pub const SGX_ERROR_UPDATE_NEEDED: _status_t = 16390;
+pub const SGX_ERROR_NETWORK_FAILURE: _status_t = 16391;
+pub const SGX_ERROR_AE_SESSION_INVALID: _status_t = 16392;
+pub const SGX_ERROR_BUSY: _status_t = 16394;
+pub const SGX_ERROR_MC_NOT_FOUND: _status_t = 16396;
+pub const SGX_ERROR_MC_NO_ACCESS_RIGHT: _status_t = 16397;
+pub const SGX_ERROR_MC_USED_UP: _status_t = 16398;
+pub const SGX_ERROR_MC_OVER_QUOTA: _status_t = 16399;
+pub const SGX_ERROR_KDF_MISMATCH: _status_t = 16401;
+pub const SGX_ERROR_UNRECOGNIZED_PLATFORM: _status_t = 16402;
+pub const SGX_ERROR_UNSUPPORTED_CONFIG: _status_t = 16403;
+pub const SGX_ERROR_NO_PRIVILEGE: _status_t = 20482;
+pub const SGX_ERROR_PCL_ENCRYPTED: _status_t = 24577;
+pub const SGX_ERROR_PCL_NOT_ENCRYPTED: _status_t = 24578;
+pub const SGX_ERROR_PCL_MAC_MISMATCH: _status_t = 24579;
+pub const SGX_ERROR_PCL_SHA_MISMATCH: _status_t = 24580;
+pub const SGX_ERROR_PCL_GUID_MISMATCH: _status_t = 24581;
+pub const SGX_ERROR_FILE_BAD_STATUS: _status_t = 28673;
+pub const SGX_ERROR_FILE_NO_KEY_ID: _status_t = 28674;
+pub const SGX_ERROR_FILE_NAME_MISMATCH: _status_t = 28675;
+pub const SGX_ERROR_FILE_NOT_SGX_FILE: _status_t = 28676;
+pub const SGX_ERROR_FILE_CANT_OPEN_RECOVERY_FILE: _status_t = 28677;
+pub const SGX_ERROR_FILE_CANT_WRITE_RECOVERY_FILE: _status_t = 28678;
+pub const SGX_ERROR_FILE_RECOVERY_NEEDED: _status_t = 28679;
+pub const SGX_ERROR_FILE_FLUSH_FAILED: _status_t = 28680;
+pub const SGX_ERROR_FILE_CLOSE_FAILED: _status_t = 28681;
+pub const SGX_ERROR_UNSUPPORTED_ATT_KEY_ID: _status_t = 32769;
+pub const SGX_ERROR_ATT_KEY_CERTIFICATION_FAILURE: _status_t = 32770;
+pub const SGX_ERROR_ATT_KEY_UNINITIALIZED: _status_t = 32771;
+pub const SGX_ERROR_INVALID_ATT_KEY_CERT_DATA: _status_t = 32772;
+pub const SGX_ERROR_PLATFORM_CERT_UNAVAILABLE: _status_t = 32773;
+pub const SGX_INTERNAL_ERROR_ENCLAVE_CREATE_INTERRUPTED: _status_t = 61441;
+pub type _status_t = u32;
+pub use self::_status_t as sgx_status_t;
 pub type va_list = __va_list;
 pub type wchar_t = libc::c_int;
 #[repr(C)]
@@ -621,24 +639,6 @@ extern "C" {
 extern "C" {
     pub fn alloca(arg1: usize) -> *mut libc::c_void;
 }
-pub type int_least8_t = __int_least8_t;
-pub type uint_least8_t = __uint_least8_t;
-pub type int_least16_t = __int_least16_t;
-pub type uint_least16_t = __uint_least16_t;
-pub type int_least32_t = __int_least32_t;
-pub type uint_least32_t = __uint_least32_t;
-pub type int_least64_t = __int_least64_t;
-pub type uint_least64_t = __uint_least64_t;
-pub type int_fast8_t = __int_fast8_t;
-pub type uint_fast8_t = __uint_fast8_t;
-pub type int_fast16_t = __int_fast16_t;
-pub type uint_fast16_t = __uint_fast16_t;
-pub type int_fast32_t = __int_fast32_t;
-pub type uint_fast32_t = __uint_fast32_t;
-pub type int_fast64_t = __int_fast64_t;
-pub type uint_fast64_t = __uint_fast64_t;
-pub type intmax_t = __intmax_t;
-pub type uintmax_t = __uintmax_t;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct _attributes_t {
@@ -2786,6 +2786,17 @@ extern "C" {
         p_state: *mut sgxsd_server_state_t,
     ) -> sgx_status_t;
 }
+pub type phone_t = u64;
+extern "C" {
+    pub fn sgxsd_enclave_create_ratelimit_fingerprint(
+        fingerprint_key: *mut u8,
+        args: *const sgxsd_server_handle_call_args_t,
+        msg: sgxsd_msg_buf_t,
+        from: sgxsd_msg_from_t,
+        fingerprint: *mut u8,
+        fingerprint_size: usize,
+    ) -> sgx_status_t;
+}
 extern "C" {
     pub fn sgxsd_enclave_server_reply(
         reply_buf: sgxsd_msg_buf_t,
@@ -4370,6 +4381,229 @@ extern "C" {
     #[doc = ""]
     #[doc = " \\return  the `pwr8` GHASH implementation, or `0`."]
     pub fn br_ghash_pwr8_get() -> br_ghash;
+}
+#[doc = " \\brief HMAC key context."]
+#[doc = ""]
+#[doc = " The HMAC key context is initialised with a hash function implementation"]
+#[doc = " and a secret key. Contents are opaque (callers should not access them"]
+#[doc = " directly). The caller is responsible for allocating the context where"]
+#[doc = " appropriate. Context initialisation and usage incurs no dynamic"]
+#[doc = " allocation, so there is no release function."]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct br_hmac_key_context {
+    pub dig_vtable: *const br_hash_class,
+    pub ksi: [libc::c_uchar; 64usize],
+    pub kso: [libc::c_uchar; 64usize],
+}
+#[test]
+fn bindgen_test_layout_br_hmac_key_context() {
+    assert_eq!(
+        ::core::mem::size_of::<br_hmac_key_context>(),
+        136usize,
+        concat!("Size of: ", stringify!(br_hmac_key_context))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<br_hmac_key_context>(),
+        8usize,
+        concat!("Alignment of ", stringify!(br_hmac_key_context))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_key_context>())).dig_vtable as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_key_context),
+            "::",
+            stringify!(dig_vtable)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_key_context>())).ksi as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_key_context),
+            "::",
+            stringify!(ksi)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_key_context>())).kso as *const _ as usize },
+        72usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_key_context),
+            "::",
+            stringify!(kso)
+        )
+    );
+}
+impl Default for br_hmac_key_context {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+extern "C" {
+    #[doc = " \\brief HMAC key context initialisation."]
+    #[doc = ""]
+    #[doc = " Initialise the key context with the provided key, using the hash function"]
+    #[doc = " identified by `digest_vtable`. This supports arbitrary key lengths."]
+    #[doc = ""]
+    #[doc = " \\param kc              HMAC key context to initialise."]
+    #[doc = " \\param digest_vtable   pointer to the hash function implementation vtable."]
+    #[doc = " \\param key             pointer to the HMAC secret key."]
+    #[doc = " \\param key_len         HMAC secret key length (in bytes)."]
+    pub fn br_hmac_key_init(
+        kc: *mut br_hmac_key_context,
+        digest_vtable: *const br_hash_class,
+        key: *const libc::c_void,
+        key_len: usize,
+    );
+}
+#[doc = " \\brief HMAC computation context."]
+#[doc = ""]
+#[doc = " The HMAC computation context maintains the state for a single HMAC"]
+#[doc = " computation. It is modified as input bytes are injected. The context"]
+#[doc = " is caller-allocated and has no release function since it does not"]
+#[doc = " dynamically allocate external resources. Its contents are opaque."]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct br_hmac_context {
+    pub dig: br_hash_compat_context,
+    pub kso: [libc::c_uchar; 64usize],
+    pub out_len: usize,
+}
+#[test]
+fn bindgen_test_layout_br_hmac_context() {
+    assert_eq!(
+        ::core::mem::size_of::<br_hmac_context>(),
+        280usize,
+        concat!("Size of: ", stringify!(br_hmac_context))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<br_hmac_context>(),
+        8usize,
+        concat!("Alignment of ", stringify!(br_hmac_context))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_context>())).dig as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_context),
+            "::",
+            stringify!(dig)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_context>())).kso as *const _ as usize },
+        208usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_context),
+            "::",
+            stringify!(kso)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<br_hmac_context>())).out_len as *const _ as usize },
+        272usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(br_hmac_context),
+            "::",
+            stringify!(out_len)
+        )
+    );
+}
+impl Default for br_hmac_context {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+extern "C" {
+    #[doc = " \\brief HMAC computation initialisation."]
+    #[doc = ""]
+    #[doc = " Initialise a HMAC context with a key context. The key context is"]
+    #[doc = " unmodified. Relevant data from the key context is immediately copied;"]
+    #[doc = " the key context can thus be independently reused, modified or released"]
+    #[doc = " without impacting this HMAC computation."]
+    #[doc = ""]
+    #[doc = " An explicit output length can be specified; the actual output length"]
+    #[doc = " will be the minimum of that value and the natural HMAC output length."]
+    #[doc = " If `out_len` is 0, then the natural HMAC output length is selected. The"]
+    #[doc = " \"natural output length\" is the output length of the underlying hash"]
+    #[doc = " function."]
+    #[doc = ""]
+    #[doc = " \\param ctx       HMAC context to initialise."]
+    #[doc = " \\param kc        HMAC key context (already initialised with the key)."]
+    #[doc = " \\param out_len   HMAC output length (0 to select \"natural length\")."]
+    pub fn br_hmac_init(ctx: *mut br_hmac_context, kc: *const br_hmac_key_context, out_len: usize);
+}
+extern "C" {
+    #[doc = " \\brief Inject some bytes in HMAC."]
+    #[doc = ""]
+    #[doc = " The provided `len` bytes are injected as extra input in the HMAC"]
+    #[doc = " computation incarnated by the `ctx` HMAC context. It is acceptable"]
+    #[doc = " that `len` is zero, in which case `data` is ignored (and may be"]
+    #[doc = " `NULL`) and this function does nothing."]
+    pub fn br_hmac_update(ctx: *mut br_hmac_context, data: *const libc::c_void, len: usize);
+}
+extern "C" {
+    #[doc = " \\brief Compute the HMAC output."]
+    #[doc = ""]
+    #[doc = " The destination buffer MUST be large enough to accommodate the result;"]
+    #[doc = " its length is at most the \"natural length\" of HMAC (i.e. the output"]
+    #[doc = " length of the underlying hash function). The context is NOT modified;"]
+    #[doc = " further bytes may be processed. Thus, \"partial HMAC\" values can be"]
+    #[doc = " efficiently obtained."]
+    #[doc = ""]
+    #[doc = " Returned value is the output length (in bytes)."]
+    #[doc = ""]
+    #[doc = " \\param ctx   HMAC computation context."]
+    #[doc = " \\param out   destination buffer for the HMAC output."]
+    #[doc = " \\return  the produced value length (in bytes)."]
+    pub fn br_hmac_out(ctx: *const br_hmac_context, out: *mut libc::c_void) -> usize;
+}
+extern "C" {
+    #[doc = " \\brief Constant-time HMAC computation."]
+    #[doc = ""]
+    #[doc = " This function compute the HMAC output in constant time. Some extra"]
+    #[doc = " input bytes are processed, then the output is computed. The extra"]
+    #[doc = " input consists in the `len` bytes pointed to by `data`. The `len`"]
+    #[doc = " parameter must lie between `min_len` and `max_len` (inclusive);"]
+    #[doc = " `max_len` bytes are actually read from `data`. Computing time (and"]
+    #[doc = " memory access pattern) will not depend upon the data byte contents or"]
+    #[doc = " the value of `len`."]
+    #[doc = ""]
+    #[doc = " The output is written in the `out` buffer, that MUST be large enough"]
+    #[doc = " to receive it."]
+    #[doc = ""]
+    #[doc = " The difference `max_len - min_len` MUST be less than 2<sup>30</sup>"]
+    #[doc = " (i.e. about one gigabyte)."]
+    #[doc = ""]
+    #[doc = " This function computes the output properly only if the underlying"]
+    #[doc = " hash function uses MD padding (i.e. MD5, SHA-1, SHA-224, SHA-256,"]
+    #[doc = " SHA-384 or SHA-512)."]
+    #[doc = ""]
+    #[doc = " The provided context is NOT modified."]
+    #[doc = ""]
+    #[doc = " \\param ctx       the (already initialised) HMAC computation context."]
+    #[doc = " \\param data      the extra input bytes."]
+    #[doc = " \\param len       the extra input length (in bytes)."]
+    #[doc = " \\param min_len   minimum extra input length (in bytes)."]
+    #[doc = " \\param max_len   maximum extra input length (in bytes)."]
+    #[doc = " \\param out       destination buffer for the HMAC output."]
+    #[doc = " \\return  the produced value length (in bytes)."]
+    pub fn br_hmac_outCT(
+        ctx: *const br_hmac_context,
+        data: *const libc::c_void,
+        len: usize,
+        min_len: usize,
+        max_len: usize,
+        out: *mut libc::c_void,
+    ) -> usize;
 }
 extern "C" {
     pub fn curve25519_donna(

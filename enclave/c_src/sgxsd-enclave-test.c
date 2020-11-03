@@ -41,7 +41,14 @@ sgx_status_t sgxsd_enclave_get_next_report(sgx_target_info_t qe_target_info, sgx
 sgx_status_t sgxsd_enclave_set_current_quote();
 sgx_status_t sgxsd_enclave_negotiate_request(const sgxsd_request_negotiation_request_t *p_request, sgxsd_request_negotiation_response_t *p_response);
 sgx_status_t sgxsd_enclave_server_start(const sgxsd_server_init_args_t* p_args, sgxsd_server_state_handle_t state_handle);
-sgx_status_t sgxsd_enclave_server_call(const sgxsd_server_handle_call_args_t* p_args, const sgxsd_msg_header_t* msg_header, const uint8_t* msg_data, size_t msg_size, sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
+sgx_status_t sgxsd_enclave_ratelimit_fingerprint(uint8_t fingerprint_key[32],
+                                                 const sgxsd_server_handle_call_args_t *call_args,
+                                                 const sgxsd_msg_header_t *msg_header,
+                                                 uint8_t *msg_data, size_t msg_data_size,
+                                                 sgxsd_msg_tag_t msg_tag,
+                                                 sgxsd_server_state_handle_t state_handle,
+                                                 uint8_t *fingerprint, size_t fingerprint_size);
+        sgx_status_t sgxsd_enclave_server_call(const sgxsd_server_handle_call_args_t* p_args, const sgxsd_msg_header_t* msg_header, const uint8_t* msg_data, size_t msg_size, sgxsd_msg_tag_t msg_tag, sgxsd_server_state_handle_t state_handle);
 sgx_status_t sgxsd_enclave_server_stop(const sgxsd_server_terminate_args_t* p_args, sgxsd_server_state_handle_t state_handle);
 
 extern void *g_sgxsd_enclave_pending_requests;
@@ -75,6 +82,12 @@ void expect_sgxsd_ocall_reply(sgx_status_t ocall_res, sgx_status_t res,
                               uint64_t expected_tag);
 void expect_sgxsd_ocall_noreply(sgx_status_t ocall_res, sgx_status_t res,
                                 uint64_t expected_tag);
+void expect_sgxsd_enclave_create_ratelimit_fingerprint(sgx_status_t res,
+                                                       uint8_t expected_fingerprint_key[32],
+                                                       const sgxsd_server_handle_call_args_t *expected_args,
+                                                       sgxsd_msg_buf_t expected_msg,
+                                                       sgxsd_msg_from_t expected_from,
+                                                       size_t expected_fingerprint_size);
 
 //
 // globals
@@ -105,6 +118,7 @@ sgxsd_aes_gcm_iv_t *test_zero_iv;
 
 sgxsd_server_handle_call_args_t *old_call_args;
 uint8_t *call_data;
+uint8_t *fingerprint_out;
 
 static void setup_tests(void **state) {
   print_message("using seed: 0x%08lx\n", test_drand48_seed);
@@ -156,6 +170,8 @@ static void setup_tests(void **state) {
   old_call_args->ratelimit_state_data = NULL;
   old_call_args->query = query;
   memset(old_call_args->query_commitment, 4, sizeof(old_call_args->query_commitment));
+
+  fingerprint_out = test_malloc(old_call_args->query_phone_count);
 }
 
 static void teardown_tests(void **state) {
@@ -168,6 +184,7 @@ static void teardown_tests(void **state) {
   test_free(p_test_report);
   test_free(call_data);
   test_free(old_call_args);
+  test_free(fingerprint_out);
 }
 
 static void teardown_node_tests(void **state) {
@@ -409,6 +426,74 @@ static void test_sgxsd_server_call_replay(void **state) {
                    (old_call_args, &test_msg_header, test_msg_buf.data, test_msg_buf.size, valid_msg_from.tag, valid_server_handle));
 }
 
+
+//
+// ratelimit fingerprint tests
+//
+
+static uint8_t valid_fingerprint_key[32] = {1,2,3,4,5,6,7};
+
+static void test_sgxsd_ratelimit_fingerprint_golden_path(void **state) {
+    sgxsd_msg_buf_t msg = test_msg_buf;
+    uint8_t expected_pending_request_id[sizeof(test_msg_header.pending_request_id.data)];
+    test_sgxsd_negotiate_request(&expected_pending_request_id[0], &test_msg_header.pending_request_id);
+
+    void *p_expected_pending_request_id_data;
+    expect_sgxsd_aes_gcm_decrypt(SGX_SUCCESS, NULL,
+                                 &test_msg_header.pending_request_id.data, sizeof(test_msg_header.pending_request_id.data),
+                                 &p_expected_pending_request_id_data,
+                                 &test_msg_header.pending_request_id.iv,
+                                 NULL, 0,
+                                 &test_msg_header.pending_request_id.mac);
+    memcpy(p_expected_pending_request_id_data, &expected_pending_request_id, sizeof(expected_pending_request_id));
+
+    void *p_expected_decrypted_msg_buf_data;
+    expect_sgxsd_aes_gcm_decrypt(SGX_SUCCESS, NULL,
+                                 msg.data, msg.size,
+                                 &p_expected_decrypted_msg_buf_data,
+                                 &test_msg_header.iv,
+                                 &test_msg_header.pending_request_id, sizeof(test_msg_header.pending_request_id),
+                                 &test_msg_header.mac);
+    sgxsd_msg_buf_t expected_decrypted_msg_buf = { .data = p_expected_decrypted_msg_buf_data, .size = msg.size };
+    expect_sgxsd_enclave_create_ratelimit_fingerprint(SGX_SUCCESS, valid_fingerprint_key, old_call_args,
+                                                      expected_decrypted_msg_buf, valid_msg_from,
+                                                      old_call_args->query_phone_count);
+
+    assert_int_equal(SGX_SUCCESS, sgxsd_enclave_ratelimit_fingerprint
+            (valid_fingerprint_key, old_call_args, &test_msg_header, msg.data, msg.size, valid_msg_from.tag, valid_server_handle, fingerprint_out, old_call_args->query_phone_count));
+}
+
+static void test_sgxsd_ratelimit_fingerprint_call_still_valid(void **state) {
+    sgxsd_msg_buf_t msg = test_msg_buf;
+    uint8_t expected_pending_request_id[sizeof(test_msg_header.pending_request_id.data)];
+    test_sgxsd_negotiate_request(&expected_pending_request_id[0], &test_msg_header.pending_request_id);
+
+    void *p_expected_pending_request_id_data;
+    expect_sgxsd_aes_gcm_decrypt(SGX_SUCCESS, NULL,
+                                 &test_msg_header.pending_request_id.data, sizeof(test_msg_header.pending_request_id.data),
+                                 &p_expected_pending_request_id_data,
+                                 &test_msg_header.pending_request_id.iv,
+                                 NULL, 0,
+                                 &test_msg_header.pending_request_id.mac);
+    memcpy(p_expected_pending_request_id_data, &expected_pending_request_id, sizeof(expected_pending_request_id));
+
+    void *p_expected_decrypted_msg_buf_data;
+    expect_sgxsd_aes_gcm_decrypt(SGX_SUCCESS, NULL,
+                                 msg.data, msg.size,
+                                 &p_expected_decrypted_msg_buf_data,
+                                 &test_msg_header.iv,
+                                 &test_msg_header.pending_request_id, sizeof(test_msg_header.pending_request_id),
+                                 &test_msg_header.mac);
+    sgxsd_msg_buf_t expected_decrypted_msg_buf = { .data = p_expected_decrypted_msg_buf_data, .size = msg.size };
+    expect_sgxsd_enclave_create_ratelimit_fingerprint(SGX_SUCCESS, valid_fingerprint_key, old_call_args,
+                                                      expected_decrypted_msg_buf, valid_msg_from,
+                                                      old_call_args->query_phone_count);
+
+    assert_int_equal(SGX_SUCCESS, sgxsd_enclave_ratelimit_fingerprint
+            (valid_fingerprint_key, old_call_args, &test_msg_header, msg.data, msg.size, valid_msg_from.tag, valid_server_handle, fingerprint_out, old_call_args->query_phone_count));
+    test_sgxsd_server_call_valid(state);
+}
+
 //
 // server stop tests
 //
@@ -548,6 +633,10 @@ int main(int argc, char *argv[]) {
     unit_test_setup_teardown(test_sgxsd_server_start_already_started, test_sgxsd_server_start_valid, test_sgxsd_server_stop_valid),
     unit_test_setup_teardown(test_sgxsd_server_start_init_error, test_noop, test_sgxsd_server_stop_already_stopped),
     unit_test_setup_teardown(test_sgxsd_server_start_valid, test_noop, test_sgxsd_server_stop_valid),
+
+    // rate limit fingerprint tests
+    unit_test_setup_teardown(test_sgxsd_ratelimit_fingerprint_golden_path, test_sgxsd_server_start_valid, test_sgxsd_server_stop_valid),
+    unit_test_setup_teardown(test_sgxsd_ratelimit_fingerprint_call_still_valid, test_sgxsd_server_start_valid, test_sgxsd_server_stop_valid),
 
     // call tests
     unit_test_setup_teardown(test_sgxsd_server_call_invalid_request_id, test_sgxsd_server_start_valid, test_sgxsd_server_stop_valid),
@@ -906,6 +995,62 @@ sgx_status_t sgxsd_enclave_server_handle_call(const sgxsd_server_handle_call_arg
   check_expected(vpp_state);
   return (sgx_status_t) mock();
 }
+
+void expect_sgxsd_enclave_create_ratelimit_fingerprint(sgx_status_t res,
+                                                       uint8_t expected_fingerprint_key[32],
+                                                       const sgxsd_server_handle_call_args_t *expected_args,
+                                                       sgxsd_msg_buf_t expected_msg,
+                                                       sgxsd_msg_from_t expected_from,
+                                                       size_t expected_fingerprint_size) {
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, fingerprint_key, expected_fingerprint_key, 32);
+
+    expect_value(sgxsd_enclave_create_ratelimit_fingerprint, args->query_phone_count, expected_args->query_phone_count);
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, args->query.iv.data, expected_args->query.iv.data,
+                  sizeof(expected_args->query.iv));
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, args->query.mac.data, expected_args->query.mac.data,
+                  sizeof(expected_args->query.mac));
+    expect_value(sgxsd_enclave_create_ratelimit_fingerprint, args->query.size, expected_args->query.size);
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, args->query.data, expected_args->query.data,
+                  expected_args->query.size);
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, args->query_commitment, expected_args->query_commitment,
+                  sizeof(expected_args->query_commitment));
+
+    expect_value(sgxsd_enclave_create_ratelimit_fingerprint, msg.size, expected_msg.size);
+    if (expected_msg.size != 0) {
+        assert_int_not_equal(expected_msg.data, NULL);
+        expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, msg.data, expected_msg.data, expected_msg.size);
+    } else {
+        expect_any(sgxsd_enclave_create_ratelimit_fingerprint, msg.data);
+    }
+    expect_memory(sgxsd_enclave_create_ratelimit_fingerprint, &from.tag, &expected_from.tag, sizeof(expected_from.tag));
+
+    expect_value(sgxsd_enclave_create_ratelimit_fingerprint, fingerprint_size, expected_fingerprint_size);
+
+    will_return(sgxsd_enclave_create_ratelimit_fingerprint, res);
+}
+
+sgx_status_t sgxsd_enclave_create_ratelimit_fingerprint(uint8_t fingerprint_key[32],
+                                                        const sgxsd_server_handle_call_args_t *args,
+                                                        sgxsd_msg_buf_t msg,
+                                                        sgxsd_msg_from_t from,
+                                                        uint8_t *fingerprint,
+                                                        size_t fingerprint_size) {
+    check_expected(fingerprint_key);
+    check_expected(args->query_phone_count);
+    check_expected(args->query.iv.data);
+    check_expected(args->query.mac.data);
+    check_expected(args->query.size);
+    check_expected(args->query.data);
+    check_expected(args->query_commitment);
+
+    check_expected(msg.size);
+    check_expected(msg.data);
+    check_expected(&from.tag);
+    check_expected(fingerprint_size);
+
+    return (sgx_status_t) mock();
+}
+
 
 void expect_sgxsd_enclave_server_terminate(sgx_status_t res, void *expected_args, size_t expected_args_size) {
   expect_memory(sgxsd_enclave_server_terminate, args, expected_args, expected_args_size);

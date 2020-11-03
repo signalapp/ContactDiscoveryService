@@ -70,6 +70,17 @@ typedef struct ms_sgxsd_enclave_server_stop_t {
 	sgxsd_server_state_handle_t ms_state_handle;
 } ms_sgxsd_enclave_server_stop_t;
 
+typedef struct ms_sgxsd_enclave_ratelimit_fingerprint_t {
+	sgx_status_t ms_retval;
+	uint8_t* ms_fingerprint_key;
+	const sgxsd_msg_header_t* ms_msg_header;
+	uint8_t* ms_msg_data;
+	size_t ms_msg_data_size;
+	sgxsd_msg_tag_t ms_msg_tag;
+	uint8_t* ms_fingerprint;
+	size_t ms_fingerprint_size;
+} ms_sgxsd_enclave_ratelimit_fingerprint_t;
+
 typedef struct ms_sgxsd_ocall_reply_t {
 	sgx_status_t ms_retval;
 	const sgxsd_msg_header_t* ms_reply_header;
@@ -404,11 +415,123 @@ err:
 	return status;
 }
 
+static sgx_status_t SGX_CDECL sgx_sgxsd_enclave_ratelimit_fingerprint(void* pms)
+{
+	CHECK_REF_POINTER(pms, sizeof(ms_sgxsd_enclave_ratelimit_fingerprint_t));
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+	ms_sgxsd_enclave_ratelimit_fingerprint_t* ms = SGX_CAST(ms_sgxsd_enclave_ratelimit_fingerprint_t*, pms);
+	sgx_status_t status = SGX_SUCCESS;
+	uint8_t* _tmp_fingerprint_key = ms->ms_fingerprint_key;
+	size_t _len_fingerprint_key = 32 * sizeof(uint8_t);
+	uint8_t* _in_fingerprint_key = NULL;
+	const sgxsd_msg_header_t* _tmp_msg_header = ms->ms_msg_header;
+	size_t _len_msg_header = sizeof(sgxsd_msg_header_t);
+	sgxsd_msg_header_t* _in_msg_header = NULL;
+	uint8_t* _tmp_msg_data = ms->ms_msg_data;
+	size_t _tmp_msg_data_size = ms->ms_msg_data_size;
+	size_t _len_msg_data = _tmp_msg_data_size;
+	uint8_t* _in_msg_data = NULL;
+	uint8_t* _tmp_fingerprint = ms->ms_fingerprint;
+	size_t _len_fingerprint = sizeof(uint8_t);
+	uint8_t* _in_fingerprint = NULL;
+
+	CHECK_UNIQUE_POINTER(_tmp_fingerprint_key, _len_fingerprint_key);
+	CHECK_UNIQUE_POINTER(_tmp_msg_header, _len_msg_header);
+	CHECK_UNIQUE_POINTER(_tmp_msg_data, _len_msg_data);
+	CHECK_UNIQUE_POINTER(_tmp_fingerprint, _len_fingerprint);
+
+	//
+	// fence after pointer checks
+	//
+	sgx_lfence();
+
+	if (_tmp_fingerprint_key != NULL && _len_fingerprint_key != 0) {
+		if ( _len_fingerprint_key % sizeof(*_tmp_fingerprint_key) != 0)
+		{
+			status = SGX_ERROR_INVALID_PARAMETER;
+			goto err;
+		}
+		_in_fingerprint_key = (uint8_t*)malloc(_len_fingerprint_key);
+		if (_in_fingerprint_key == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_fingerprint_key, _len_fingerprint_key, _tmp_fingerprint_key, _len_fingerprint_key)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	if (_tmp_msg_header != NULL && _len_msg_header != 0) {
+		_in_msg_header = (sgxsd_msg_header_t*)malloc(_len_msg_header);
+		if (_in_msg_header == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_msg_header, _len_msg_header, _tmp_msg_header, _len_msg_header)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	if (_tmp_msg_data != NULL && _len_msg_data != 0) {
+		if ( _len_msg_data % sizeof(*_tmp_msg_data) != 0)
+		{
+			status = SGX_ERROR_INVALID_PARAMETER;
+			goto err;
+		}
+		_in_msg_data = (uint8_t*)malloc(_len_msg_data);
+		if (_in_msg_data == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		if (memcpy_s(_in_msg_data, _len_msg_data, _tmp_msg_data, _len_msg_data)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+
+	}
+	if (_tmp_fingerprint != NULL && _len_fingerprint != 0) {
+		if ( _len_fingerprint % sizeof(*_tmp_fingerprint) != 0)
+		{
+			status = SGX_ERROR_INVALID_PARAMETER;
+			goto err;
+		}
+		if ((_in_fingerprint = (uint8_t*)malloc(_len_fingerprint)) == NULL) {
+			status = SGX_ERROR_OUT_OF_MEMORY;
+			goto err;
+		}
+
+		memset((void*)_in_fingerprint, 0, _len_fingerprint);
+	}
+
+	ms->ms_retval = sgxsd_enclave_ratelimit_fingerprint(_in_fingerprint_key, (const sgxsd_msg_header_t*)_in_msg_header, _in_msg_data, _tmp_msg_data_size, ms->ms_msg_tag, _in_fingerprint, ms->ms_fingerprint_size);
+	if (_in_fingerprint) {
+		if (memcpy_s(_tmp_fingerprint, _len_fingerprint, _in_fingerprint, _len_fingerprint)) {
+			status = SGX_ERROR_UNEXPECTED;
+			goto err;
+		}
+	}
+
+err:
+	if (_in_fingerprint_key) free(_in_fingerprint_key);
+	if (_in_msg_header) free(_in_msg_header);
+	if (_in_msg_data) free(_in_msg_data);
+	if (_in_fingerprint) free(_in_fingerprint);
+	return status;
+}
+
 SGX_EXTERNC const struct {
 	size_t nr_ecall;
-	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[7];
+	struct {void* ecall_addr; uint8_t is_priv; uint8_t is_switchless;} ecall_table[8];
 } g_ecall_table = {
-	7,
+	8,
 	{
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_node_init, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_get_next_report, 0, 0},
@@ -417,16 +540,17 @@ SGX_EXTERNC const struct {
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_start, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_call, 0, 0},
 		{(void*)(uintptr_t)sgx_sgxsd_enclave_server_stop, 0, 0},
+		{(void*)(uintptr_t)sgx_sgxsd_enclave_ratelimit_fingerprint, 0, 0},
 	}
 };
 
 SGX_EXTERNC const struct {
 	size_t nr_ocall;
-	uint8_t entry_table[1][7];
+	uint8_t entry_table[1][8];
 } g_dyn_entry_table = {
 	1,
 	{
-		{0, 0, 0, 0, 0, 0, 0, },
+		{0, 0, 0, 0, 0, 0, 0, 0, },
 	}
 };
 
