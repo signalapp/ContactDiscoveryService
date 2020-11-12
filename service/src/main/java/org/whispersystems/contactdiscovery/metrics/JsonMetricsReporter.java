@@ -22,6 +22,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
@@ -34,19 +35,20 @@ public class JsonMetricsReporter extends ScheduledReporter {
   private final Logger logger  = LoggerFactory.getLogger(JsonMetricsReporter.class);
   private final JsonFactory factory = new JsonFactory();
 
-  private final String token;
-  // hostname is the host we send Wavefront-formatted metrics to.
-  private final String hostname;
-  // host is the FQDN of the machine this code is running on (or "localhost") and used as the "source" in Wavefront metrics.
-  private final String host;
+  // metricsHost is the host we send Wavefront-formatted metrics to.
+  private final String  metricsHost;
+  // metricsPort is the port on the metricsHost we send Wavefront metrics to.
+  private final Integer metricsPort;
+  // sourceHost is the FQDN of the machine this code is running on (or "localhost") and used as the "source" in Wavefront metrics.
+  private final String  sourceHost;
 
-  public JsonMetricsReporter(MetricRegistry registry, String token, String hostname,
+  public JsonMetricsReporter(MetricRegistry registry, String metricsHost, Integer metricsPort,
                              MetricFilter filter, TimeUnit rateUnit, TimeUnit durationUnit)
   {
     super(registry, "json-reporter", filter, rateUnit, durationUnit);
-    this.token    = token;
-    this.hostname = hostname;
-    this.host     = Optional.of(System.getenv("CDS_FQDN")).orElse("localhost");
+    this.metricsHost = Objects.requireNonNull(metricsHost,"No metrics hostname specified.");
+    this.metricsPort = Objects.requireNonNull(metricsPort, "No metrics port specified.");
+    this.sourceHost  = Optional.of(System.getenv("CDS_FQDN")).orElse("localhost");
   }
 
   @Override
@@ -57,8 +59,8 @@ public class JsonMetricsReporter extends ScheduledReporter {
                      SortedMap<String, Timer>     stringTimerSortedMap)
   {
     try {
-      logger.debug("Reporting metrics as host "+host+"...");
-      URL url = new URL("https", hostname, 443, String.format("/report/metrics?t=%s&h=%s", token, host));
+      logger.debug("Reporting metrics as host " + sourceHost + "...");
+      URL url = new URL("http", metricsHost, metricsPort, String.format("/report/metrics?h=%s", sourceHost));
       HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
       connection.setDoOutput(true);
@@ -199,8 +201,8 @@ public class JsonMetricsReporter extends ScheduledReporter {
     private       MetricFilter   filter       = MetricFilter.ALL;
     private       TimeUnit       rateUnit     = TimeUnit.SECONDS;
     private       TimeUnit       durationUnit = TimeUnit.MILLISECONDS;
-    private       String         token;
     private       String         hostname;
+    private       Integer        port;
 
     private Builder(MetricRegistry registry) {
       this.registry     = registry;
@@ -224,8 +226,8 @@ public class JsonMetricsReporter extends ScheduledReporter {
       return this;
     }
 
-    public Builder withToken(String token) {
-      this.token = token;
+    public Builder withPort(Integer port) {
+      this.port = port;
       return this;
     }
 
@@ -235,15 +237,7 @@ public class JsonMetricsReporter extends ScheduledReporter {
     }
 
     public JsonMetricsReporter build() throws UnknownHostException {
-      if (hostname == null) {
-        throw new IllegalArgumentException("No hostname specified!");
-      }
-
-      if (token == null) {
-        throw new IllegalArgumentException("No token specified!");
-      }
-
-      return new JsonMetricsReporter(registry, token, hostname, filter, rateUnit, durationUnit);
+      return new JsonMetricsReporter(registry, hostname, port, filter, rateUnit, durationUnit);
     }
   }
 }
