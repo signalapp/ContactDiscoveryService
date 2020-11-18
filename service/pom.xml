@@ -9,7 +9,7 @@
     <version>1.38</version>
 
     <properties>
-        <dropwizard.version>1.3.14</dropwizard.version>
+        <dropwizard.version>2.0.15</dropwizard.version>
         <jackson.api.version>2.9.10.5</jackson.api.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
@@ -23,13 +23,24 @@
         </dependency>
         <dependency>
             <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-auth</artifactId>
+            <version>${dropwizard.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.dropwizard</groupId>
             <artifactId>dropwizard-client</artifactId>
             <version>${dropwizard.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.whispersystems</groupId>
-            <artifactId>dropwizard-simpleauth</artifactId>
-            <version>0.4.0</version>
+            <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-servlets</artifactId>
+            <version>${dropwizard.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-testing</artifactId>
+            <version>${dropwizard.version}</version>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.dropwizard</groupId>
@@ -75,7 +86,7 @@
         <dependency>
             <groupId>org.glassfish.jersey.test-framework.providers</groupId>
             <artifactId>jersey-test-framework-provider-grizzly2</artifactId>
-            <version>2.25.1</version>
+            <version>2.32</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -106,11 +117,6 @@
             <version>2.3.1</version>
         </dependency>
         <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        <dependency>
             <groupId>com.github.tomakehurst</groupId>
             <artifactId>wiremock-standalone</artifactId>
             <version>2.26.2</version>
@@ -121,6 +127,12 @@
             <artifactId>JUnitParams</artifactId>
             <version>1.1.0</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.15.0</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

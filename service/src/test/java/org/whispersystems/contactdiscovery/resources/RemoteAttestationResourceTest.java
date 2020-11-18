@@ -1,10 +1,14 @@
 package org.whispersystems.contactdiscovery.resources;
 
+import com.google.common.collect.ImmutableSet;
+import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
 import io.dropwizard.testing.junit.ResourceTestRule;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.whispersystems.contactdiscovery.auth.SignalService;
+import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchRevocationListException;
@@ -19,7 +23,6 @@ import org.whispersystems.contactdiscovery.limits.RateLimiter;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
-import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
@@ -57,7 +60,7 @@ public class RemoteAttestationResourceTest {
   @Rule
   public final ResourceTestRule resources = ResourceTestRule.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
-                                                            .addProvider(new AuthValueFactoryProvider.Binder())
+                                                            .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(User.class, SignalService.class)))
                                                             .addProvider(new RequestLimiterFeature(requestLimiterFilter))
                                                             .setMapper(SystemMapper.getMapper())
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())

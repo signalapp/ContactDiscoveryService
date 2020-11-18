@@ -21,7 +21,14 @@ import com.codahale.metrics.jvm.CachedThreadStatesGaugeSet;
 import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
 import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import io.dropwizard.Application;
+import io.dropwizard.auth.AuthFilter;
+import io.dropwizard.auth.PolymorphicAuthDynamicFeature;
+import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
+import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
+import io.dropwizard.auth.basic.BasicCredentials;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.apache.commons.codec.DecoderException;
@@ -75,9 +82,6 @@ import org.whispersystems.contactdiscovery.resources.RequestLimiterFilter;
 import org.whispersystems.contactdiscovery.resources.RequestLimiterTask;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.NativeUtils;
-import org.whispersystems.dropwizard.simpleauth.AuthDynamicFeature;
-import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
-import org.whispersystems.dropwizard.simpleauth.BasicCredentialAuthFilter;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -185,15 +189,16 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
         }
     }, 30, 30, TimeUnit.SECONDS);
 
-    environment.jersey().register(new AuthDynamicFeature(new BasicCredentialAuthFilter.Builder<User>()
-                                                             .setAuthenticator(userAuthenticator)
-                                                             .setPrincipal(User.class)
-                                                             .buildAuthFilter(),
-                                                         new BasicCredentialAuthFilter.Builder<SignalService>()
-                                                             .setAuthenticator(signalServiceAuthenticator)
-                                                             .setPrincipal(SignalService.class)
-                                                             .buildAuthFilter()));
-    environment.jersey().register(new AuthValueFactoryProvider.Binder());
+    AuthFilter<BasicCredentials, User> userAuthFilter = new BasicCredentialAuthFilter.Builder<User>()
+        .setAuthenticator(userAuthenticator)
+        .buildAuthFilter();
+    AuthFilter<BasicCredentials, SignalService> signalServiceAuthFilter = new BasicCredentialAuthFilter.Builder<SignalService>()
+        .setAuthenticator(signalServiceAuthenticator)
+        .buildAuthFilter();
+    environment.jersey().register(new PolymorphicAuthDynamicFeature<>(ImmutableMap.of(User.class,          userAuthFilter,
+                                                                                      SignalService.class, signalServiceAuthFilter)));
+    environment.jersey().register(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(User.class, SignalService.class)));
+
     environment.jersey().register(new RequestLimiterFeature(requestLimiterFilter));
 
     environment.jersey().register(remoteAttestationResource);

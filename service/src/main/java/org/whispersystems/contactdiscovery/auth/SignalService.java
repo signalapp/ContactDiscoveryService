@@ -17,8 +17,20 @@
 package org.whispersystems.contactdiscovery.auth;
 
 
+import javax.security.auth.Subject;
+import java.security.Principal;
+
 /**
  * Placeholder representation for an authenticated Signal server
  */
-public class SignalService {
+public class SignalService implements Principal {
+  @Override
+  public String getName() {
+    return null;
+  }
+
+  @Override
+  public boolean implies(Subject subject) {
+    return false;
+  }
 }

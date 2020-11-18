@@ -1,10 +1,14 @@
 package org.whispersystems.contactdiscovery.resources;
 
+import com.google.common.collect.ImmutableSet;
+import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
 import io.dropwizard.testing.junit.ResourceTestRule;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.whispersystems.contactdiscovery.auth.SignalService;
+import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.directory.DirectoryUnavailableException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
@@ -20,7 +24,6 @@ import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.requests.RequestManagerFullException;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
-import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
 
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.client.Entity;
@@ -33,7 +36,6 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyInt;
@@ -62,7 +64,7 @@ public class ContactDiscoveryResourceTest {
   @Rule
   public final ResourceTestRule resources = ResourceTestRule.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
-                                                            .addProvider(new AuthValueFactoryProvider.Binder())
+                                                            .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(User.class, SignalService.class)))
                                                             .setMapper(SystemMapper.getMapper())
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())

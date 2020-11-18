@@ -1,12 +1,13 @@
 package org.whispersystems.contactdiscovery.resources;
 
 import com.codahale.metrics.annotation.Metered;
-import com.google.common.collect.ImmutableMultimap;
 import io.dropwizard.servlets.tasks.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HealthCheckOverride {
@@ -41,7 +42,7 @@ public class HealthCheckOverride {
     }
 
     @Override @Metered(name = "healthcheck.on")
-    public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) throws Exception {
+    public void execute(Map<String, List<String>> parameters, PrintWriter output) throws Exception {
       HealthCheckOverride.changeHealthCheck(healthOverride, true, output);
     }
   }
@@ -56,7 +57,7 @@ public class HealthCheckOverride {
     }
 
     @Override @Metered(name = "healthcheck.off")
-    public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) throws Exception {
+    public void execute(Map<String, List<String>> parameters, PrintWriter output) throws Exception {
       HealthCheckOverride.changeHealthCheck(healthOverride, false, output);
     }
   }

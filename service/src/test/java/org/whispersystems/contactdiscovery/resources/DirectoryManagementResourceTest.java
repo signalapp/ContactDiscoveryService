@@ -1,5 +1,7 @@
 package org.whispersystems.contactdiscovery.resources;
 
+import com.google.common.collect.ImmutableSet;
+import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
 import io.dropwizard.testing.junit.ResourceTestRule;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -7,20 +9,17 @@ import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.whispersystems.contactdiscovery.auth.SignalService;
+import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
-import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
 import org.whispersystems.contactdiscovery.mappers.NoSuchEnclaveExceptionMapper;
 import org.whispersystems.contactdiscovery.util.AuthHelper;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
-import org.whispersystems.dropwizard.simpleauth.AuthValueFactoryProvider;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-
-import com.google.common.collect.Streams;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,7 +40,7 @@ public class DirectoryManagementResourceTest {
   @Rule
   public final ResourceTestRule resources = ResourceTestRule.builder()
                                                             .addProvider(AuthHelper.getAuthFilter())
-                                                            .addProvider(new AuthValueFactoryProvider.Binder())
+                                                            .addProvider(new PolymorphicAuthValueFactoryProvider.Binder<>(ImmutableSet.of(User.class, SignalService.class)))
                                                             .setMapper(SystemMapper.getMapper())
                                                             .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
                                                             .addProvider(new NoSuchEnclaveExceptionMapper())

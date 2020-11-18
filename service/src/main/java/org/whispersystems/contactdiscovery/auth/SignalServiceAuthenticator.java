@@ -19,10 +19,10 @@ package org.whispersystems.contactdiscovery.auth;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
+import io.dropwizard.auth.Authenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.util.Constants;
-import org.whispersystems.dropwizard.simpleauth.Authenticator;
 
 import java.security.MessageDigest;
 import java.util.Optional;

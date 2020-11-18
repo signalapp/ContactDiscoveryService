@@ -1,12 +1,13 @@
 package org.whispersystems.contactdiscovery.resources;
 
-import com.google.common.collect.ImmutableMultimap;
 import org.junit.Test;
 
 import javax.ws.rs.WebApplicationException;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -17,15 +18,9 @@ public class RequestLimiterTaskTest {
     RequestLimiterFilter requestLimiterFilter = new RequestLimiterFilter();
     RequestLimiterTask requestLimiterTask     = new RequestLimiterTask(requestLimiterFilter);
 
-    ImmutableMultimap<String, String> map100 = ImmutableMultimap.<String, String>builder()
-        .put("percent", "100")
-        .build();
-    ImmutableMultimap<String, String> map50 = ImmutableMultimap.<String, String>builder()
-        .put("percent", "50")
-        .build();
-    ImmutableMultimap<String, String> map0 = ImmutableMultimap.<String, String>builder()
-        .put("percent", "0")
-        .build();
+    var map100 = Map.of("percent", List.of("100"));
+    var map50 = Map.of("percent", List.of("50"));
+    var map0 = Map.of("percent", List.of("0"));
 
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     requestLimiterTask.execute(map100, new PrintWriter(output));
@@ -51,7 +46,8 @@ public class RequestLimiterTaskTest {
 
     try {
       ByteArrayOutputStream output = new ByteArrayOutputStream();
-      ImmutableMultimap<String, String> mapParameterMissing = ImmutableMultimap.<String, String>builder().build();
+      // Empty map
+      Map<String, List<String>> mapParameterMissing = Map.of();
       requestLimiterTask.execute(mapParameterMissing, new PrintWriter(output));
       fail("Missing exception for missing 'percent' parameter");
     } catch (RequestLimiterTaskException e) {
@@ -60,9 +56,18 @@ public class RequestLimiterTaskTest {
 
     try {
       ByteArrayOutputStream output = new ByteArrayOutputStream();
-      ImmutableMultimap<String, String> mapParameterMissing = ImmutableMultimap.<String, String>builder()
-          .put("percent", "not-an-integer")
-          .build();
+      // Non-empty map, but without valid key
+      var mapParameterMissing = Map.of("uninteresting-key", List.of("not-an-integer"));
+      requestLimiterTask.execute(mapParameterMissing, new PrintWriter(output));
+      fail("Missing exception for missing 'percent' parameter");
+    } catch (RequestLimiterTaskException e) {
+      assertEquals("missing 'percent' parameter", e.getMessage());
+    }
+
+    try {
+      ByteArrayOutputStream output = new ByteArrayOutputStream();
+      // Non-empty map, valid key, but invalid integer value
+      var mapParameterMissing = Map.of("percent", List.of("not-an-integer"));
       requestLimiterTask.execute(mapParameterMissing, new PrintWriter(output));
       fail("Missing exception for unable to parse integer string parameter");
     } catch (RequestLimiterTaskException e) {
@@ -71,9 +76,8 @@ public class RequestLimiterTaskTest {
 
     try {
       ByteArrayOutputStream output = new ByteArrayOutputStream();
-      ImmutableMultimap<String, String> mapParameterMissing = ImmutableMultimap.<String, String>builder()
-          .put("percent", "-1")
-          .build();
+      // Non-empty map, valid key, but with out of bounds integer value
+      var mapParameterMissing = Map.of("percent", List.of("-1"));
       requestLimiterTask.execute(mapParameterMissing, new PrintWriter(output));
       fail("Missing exception for percent parameter out of bounds");
     } catch (RequestLimiterTaskException e) {
@@ -82,9 +86,8 @@ public class RequestLimiterTaskTest {
 
     try {
       ByteArrayOutputStream output = new ByteArrayOutputStream();
-      ImmutableMultimap<String, String> mapParameterMissing = ImmutableMultimap.<String, String>builder()
-          .put("percent", "101")
-          .build();
+      // Non-empty map, valid key, but with out of bounds integer value
+      var mapParameterMissing = Map.of("percent", List.of("101"));
       requestLimiterTask.execute(mapParameterMissing, new PrintWriter(output));
       fail("Missing exception for percent parameter out of bounds");
     } catch (RequestLimiterTaskException e) {

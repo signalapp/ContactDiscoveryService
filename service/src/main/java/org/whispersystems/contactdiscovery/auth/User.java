@@ -16,12 +16,15 @@
  */
 package org.whispersystems.contactdiscovery.auth;
 
+import javax.security.auth.Subject;
+import java.security.Principal;
+
 /**
  * Representation of authenticated user
  *
  * @author Moxie Marlinspike
  */
-public class User {
+public class User implements Principal {
 
   private final String number;
 
@@ -31,5 +34,15 @@ public class User {
 
   public String getNumber() {
     return number;
+  }
+
+  @Override
+  public String getName() {
+    return null;
+  }
+
+  @Override
+  public boolean implies(Subject subject) {
+    return false;
   }
 }

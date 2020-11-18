@@ -1,11 +1,12 @@
 package org.whispersystems.contactdiscovery.resources;
 
-import com.google.common.collect.ImmutableMultimap;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
@@ -17,7 +18,7 @@ public class HealthCheckOverrideTest {
     var override = new AtomicBoolean(true);
     var on = new HealthCheckOverride.HealthCheckOn(override);
     var off = new HealthCheckOverride.HealthCheckOff(override);
-    var map = ImmutableMultimap.<String, String>builder().build();
+    Map<String, List<String>> map = Map.of();
 
     var out = new ByteArrayOutputStream();
     on.execute(map, new PrintWriter(out));

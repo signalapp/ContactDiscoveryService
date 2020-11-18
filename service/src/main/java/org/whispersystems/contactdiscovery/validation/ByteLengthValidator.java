@@ -21,10 +21,11 @@ import org.hibernate.validator.internal.util.logging.LoggerFactory;
 
 import javax.validation.ConstraintValidator;
 import javax.validation.ConstraintValidatorContext;
+import java.lang.invoke.MethodHandles;
 
 public class ByteLengthValidator implements ConstraintValidator<ByteLength, byte[]> {
 
-  private static final Log log = LoggerFactory.make();
+  private static final Log log = LoggerFactory.make(MethodHandles.lookup());
 
   private int min;
   private int max;

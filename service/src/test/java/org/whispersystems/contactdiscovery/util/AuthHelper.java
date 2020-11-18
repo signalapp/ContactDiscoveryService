@@ -1,5 +1,9 @@
 package org.whispersystems.contactdiscovery.util;
 
+import com.google.common.collect.ImmutableMap;
+import io.dropwizard.auth.AuthFilter;
+import io.dropwizard.auth.PolymorphicAuthDynamicFeature;
+import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
 import org.apache.commons.codec.binary.Base64;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -7,12 +11,11 @@ import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.auth.SignalServiceAuthenticator;
 import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
-import org.whispersystems.dropwizard.simpleauth.AuthDynamicFeature;
-import org.whispersystems.dropwizard.simpleauth.BasicCredentialAuthFilter;
 
 import io.dropwizard.auth.AuthenticationException;
 import io.dropwizard.auth.basic.BasicCredentials;
 
+import java.security.Principal;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +34,7 @@ public class AuthHelper {
   public static final String VALID_SERVER_TOKEN = "foo";
   public static final String INVALID_SERVER_TOKEN = "bar";
 
-  public static AuthDynamicFeature getAuthFilter() {
+  public static PolymorphicAuthDynamicFeature<? extends Principal> getAuthFilter() {
     try {
       UserAuthenticator          userAuthenticator          = mock(UserAuthenticator.class         );
       SignalServiceAuthenticator signalServiceAuthenticator = mock(SignalServiceAuthenticator.class);
@@ -67,15 +70,14 @@ public class AuthHelper {
         }
       });
 
-
-      return new AuthDynamicFeature(new BasicCredentialAuthFilter.Builder<User>()
-                                        .setAuthenticator(userAuthenticator)
-                                        .setPrincipal(User.class)
-                                        .buildAuthFilter(),
-                                    new BasicCredentialAuthFilter.Builder<SignalService>()
-                                        .setAuthenticator(signalServiceAuthenticator)
-                                        .setPrincipal(SignalService.class)
-                                        .buildAuthFilter());
+      AuthFilter<BasicCredentials, User> userAuthFilter = new BasicCredentialAuthFilter.Builder<User>()
+          .setAuthenticator(userAuthenticator)
+          .buildAuthFilter();
+      AuthFilter<BasicCredentials, SignalService> signalServiceAuthFilter = new BasicCredentialAuthFilter.Builder<SignalService>()
+          .setAuthenticator(signalServiceAuthenticator)
+          .buildAuthFilter();
+      return new PolymorphicAuthDynamicFeature<>(ImmutableMap.of(User.class,          userAuthFilter,
+                                                                 SignalService.class, signalServiceAuthFilter));
     } catch (AuthenticationException e) {
       throw new AssertionError(e);
     }

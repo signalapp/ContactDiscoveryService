@@ -1,13 +1,14 @@
 package org.whispersystems.contactdiscovery.resources;
 
 import com.codahale.metrics.annotation.Metered;
-import com.google.common.collect.ImmutableMultimap;
 import io.dropwizard.servlets.tasks.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import java.io.PrintWriter;
+import java.util.List;
+import java.util.Map;
 
 public class PendingRequestsFlushTask extends Task {
 
@@ -21,7 +22,7 @@ public class PendingRequestsFlushTask extends Task {
 
   @Override
   @Metered(name = "flush-pending-requests")
-  public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) {
+  public void execute(Map<String, List<String>> parameters, PrintWriter output) {
     int requestCount = requestManager.flushPendingQueues();
     String line = String.format("Flushed \"%d\" pending requests", requestCount);
     LOGGER.info(line);
