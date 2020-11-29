@@ -8,7 +8,7 @@ The first step is to make sure the service has a set of what it considers to be 
 users. In your service configuration, you will have configured two values that are shared
 secrets with the main Signal service (`userToken` and `serverToken`).
 
-The `userToken` is used byt the Signal service to generate per-user authentication tokens.
+The `userToken` is used by the Signal service to generate per-user authentication tokens.
 The `serverToken`  is used directly as a shared secret to authenticate itself to the contact
 discovery micro-service.
 
