@@ -41,6 +41,7 @@ import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
@@ -60,6 +61,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -78,10 +80,12 @@ public class RemoteAttestationResource {
 
   private final SgxHandshakeManager sgxHandshakeManager;
   private final RateLimiter rateLimiter;
+  private final PhoneRateLimiter client;
 
-  public RemoteAttestationResource(SgxHandshakeManager sgxHandshakeManager, RateLimiter rateLimiter) {
+  public RemoteAttestationResource(SgxHandshakeManager sgxHandshakeManager, RateLimiter rateLimiter, PhoneRateLimiter client) {
     this.sgxHandshakeManager = sgxHandshakeManager;
     this.rateLimiter = rateLimiter;
+    this.client = client;
   }
 
   @Timed
@@ -97,10 +101,15 @@ public class RemoteAttestationResource {
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
+    var svcFuture = client.attest(user, authHeader, enclaveId, request.getClientPublic());
     RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
 
-    return Response.ok(new MultipleRemoteAttestationResponse(Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, attestation)))
-                   .build();
+    // The exceptionally here is because we want to test the performance of the new rate limit service but not rely on
+    // it to respond, yet. See CDS-157.
+    return svcFuture.exceptionally((ex) -> new HashMap<>()).thenApply((resps) -> {
+      resps.put(RequestManager.LOCAL_ENCLAVE_HOST_ID, attestation);
+      return Response.ok(new MultipleRemoteAttestationResponse(resps)).build();
+    }).join();
   }
 
   @PUT

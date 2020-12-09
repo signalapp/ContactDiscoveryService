@@ -31,6 +31,7 @@ import org.whispersystems.contactdiscovery.entities.DiscoveryRequest;
 import org.whispersystems.contactdiscovery.entities.DiscoveryResponse;
 import org.whispersystems.contactdiscovery.limits.RateLimitExceededException;
 import org.whispersystems.contactdiscovery.limits.RateLimiter;
+import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.requests.RequestManagerFullException;
 import org.whispersystems.contactdiscovery.util.Constants;
@@ -62,7 +63,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @author Moxie Marlinspike
  */
 @Path("/v1/discovery")
-@ResponseMetered
 public class ContactDiscoveryResource {
 
   private static final MetricRegistry REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
@@ -73,11 +73,13 @@ public class ContactDiscoveryResource {
 
   private final RateLimiter rateLimiter;
   private final RequestManager requestManager;
+  private final PhoneRateLimiter phoneLimiter;
   private final Set<String> enclaves;
 
-  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, Set<String> enclaves) {
+  public ContactDiscoveryResource(RateLimiter rateLimiter, RequestManager requestManager, PhoneRateLimiter phoneLimiter, Set<String> enclaves) {
     this.rateLimiter = rateLimiter;
     this.requestManager = requestManager;
+    this.phoneLimiter = phoneLimiter;
     this.enclaves = enclaves;
   }
 
@@ -91,7 +93,7 @@ public class ContactDiscoveryResource {
                                     @HeaderParam(HttpHeaders.USER_AGENT) String userAgent,
                                     @Valid DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
-          throws NoSuchEnclaveException, RateLimitExceededException, RequestManagerFullException {
+          throws RateLimitExceededException {
     final var ctx = GET_CONTACTS_TIMER.time();
     asyncResponse.register((CompletionCallback) throwable -> { ctx.close(); });
 
@@ -115,12 +117,23 @@ public class ContactDiscoveryResource {
       return;
     }
 
-    requestManager.submit(enclaveId, request)
-                  .thenAccept(asyncResponse::resume)
-                  .exceptionally(throwable -> {
-                    asyncResponse.resume(throwable.getCause());
-                    return null;
-                  });
+    phoneLimiter.discoveryAllowed(user, authHeader, enclaveId, request)
+                .thenAccept((allowed) -> {
+                  if (!allowed) {
+                    asyncResponse.resume(Response.status(429).build());
+                    return;
+                  }
+                  try {
+                    requestManager.submit(enclaveId, request)
+                                  .thenAccept(asyncResponse::resume)
+                                  .exceptionally(throwable -> {
+                                    asyncResponse.resume(throwable.getCause());
+                                    return null;
+                                  });
+                  } catch (NoSuchEnclaveException | RequestManagerFullException e) {
+                    asyncResponse.resume(e);
+                  }
+                });
   }
 
   @Timed

@@ -56,6 +56,10 @@ public class ContactDiscoveryConfiguration extends Configuration {
 
   @JsonProperty
   @NotNull
+  private RateLimitServiceConfiguration rateLimitSvc = new RateLimitServiceConfiguration();
+
+  @JsonProperty
+  @NotNull
   @Valid
   private RateLimitsConfiguration limits = new RateLimitsConfiguration();
 
@@ -74,6 +78,10 @@ public class ContactDiscoveryConfiguration extends Configuration {
 
   public DirectoryConfiguration getDirectoryConfiguration() {
     return directory;
+  }
+
+  public RateLimitServiceConfiguration getRateLimitSvc() {
+    return rateLimitSvc;
   }
 
   public RateLimitsConfiguration getLimitsConfiguration() {
