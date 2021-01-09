@@ -66,7 +66,7 @@ public class RequestManager implements Managed {
    */
   public static final String LOCAL_ENCLAVE_HOST_ID = UUID.randomUUID().toString();
   private static final long MIN_BACKLOG_SIZE = 60_000;
-  private static final Duration MAX_BACKLOG_TIME = Duration.ofMinutes(1);
+  private static final Duration MAX_BACKLOG_TIME = Duration.ofSeconds(20);
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
