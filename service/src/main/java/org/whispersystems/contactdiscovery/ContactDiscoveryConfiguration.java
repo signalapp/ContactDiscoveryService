@@ -55,8 +55,7 @@ public class ContactDiscoveryConfiguration extends Configuration {
   private DirectoryConfiguration directory;
 
   @JsonProperty
-  @NotNull
-  private RateLimitServiceConfiguration rateLimitSvc = new RateLimitServiceConfiguration();
+  private RateLimitServiceConfiguration rateLimitSvc = null;
 
   @JsonProperty
   @NotNull
