@@ -245,6 +245,8 @@
                         <descriptor>assembly-production.xml</descriptor>
                         <descriptor>assembly-staging.xml</descriptor>
                         <descriptor>assembly-testing.xml</descriptor>
+                        <descriptor>assembly-azure-staging.xml</descriptor>
+                        <descriptor>assembly-azure-production.xml</descriptor>
                     </descriptors>
                 </configuration>
                 <executions>
