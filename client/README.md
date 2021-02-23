@@ -19,3 +19,16 @@ A basic invocation looks like:
 - `--list` -- a file containing phone numbers, one per line
 
 See the output of `./cds_api_client --help` for the complete list of options.
+
+## Dependencies
+
+### Linux
+
+sudo apt install rustc
+sudo apt install pkg-config
+sudo apt install libssl-dev
+
+### MacOS
+
+brew install openssl
+brew install rustc
