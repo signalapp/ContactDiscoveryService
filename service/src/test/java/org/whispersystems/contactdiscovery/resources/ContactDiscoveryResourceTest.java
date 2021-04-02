@@ -63,6 +63,7 @@ public class ContactDiscoveryResourceTest {
 
   private DiscoveryRequest validDiscoveryRequest;
   private DiscoveryRequest invalidDiscoveryRequest;
+  private DiscoveryRequest invalidDiscoveryRequestTwo;
   private DiscoveryRequest validMultipleAttestDiscRequest;
 
   @Rule
@@ -86,8 +87,11 @@ public class ContactDiscoveryResourceTest {
     new SecureRandom().nextBytes(mac);
 
     DiscoveryRequestEnvelope validEnvelope = new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], new byte[16]);
+    DiscoveryRequestEnvelope invalidEnvelope = new DiscoveryRequestEnvelope(requestId, null, null, null);
+
     validDiscoveryRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
     invalidDiscoveryRequest = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
+    invalidDiscoveryRequestTwo = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, invalidEnvelope));
 
     var envelopes = Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope, "fakehostid", validEnvelope);
     validMultipleAttestDiscRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], envelopes);
@@ -179,6 +183,17 @@ public class ContactDiscoveryResourceTest {
                                  .request(MediaType.APPLICATION_JSON_TYPE)
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
                                  .put(Entity.entity(invalidDiscoveryRequest, MediaType.APPLICATION_JSON_TYPE));
+
+    assertEquals(422, response.getStatus());
+  }
+
+  @Test
+  public void testBadRequestEnvelope() throws Exception {
+    Response response = resources.getJerseyTest()
+                                 .target("/v1/discovery/" + validEnclaveId)
+                                 .request(MediaType.APPLICATION_JSON_TYPE)
+                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                 .put(Entity.entity(invalidDiscoveryRequestTwo, MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(422, response.getStatus());
   }

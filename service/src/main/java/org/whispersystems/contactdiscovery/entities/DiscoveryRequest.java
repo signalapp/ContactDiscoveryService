@@ -23,6 +23,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 import org.whispersystems.contactdiscovery.validation.ByteLength;
 
+import javax.validation.Valid;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
@@ -72,7 +73,7 @@ public class DiscoveryRequest {
   @JsonProperty
   @NotNull
   @Size(min = 1, max = 3)
-  private Map<String, DiscoveryRequestEnvelope> envelopes;
+  private Map<String, @Valid DiscoveryRequestEnvelope> envelopes;
 
   public DiscoveryRequest() {
 
