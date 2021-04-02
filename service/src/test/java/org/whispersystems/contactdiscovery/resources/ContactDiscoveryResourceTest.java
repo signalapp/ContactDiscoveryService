@@ -31,6 +31,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -39,12 +40,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class ContactDiscoveryResourceTest {
 
@@ -63,7 +59,6 @@ public class ContactDiscoveryResourceTest {
 
   private DiscoveryRequest validDiscoveryRequest;
   private DiscoveryRequest invalidDiscoveryRequest;
-  private DiscoveryRequest invalidDiscoveryRequestTwo;
   private DiscoveryRequest validMultipleAttestDiscRequest;
 
   @Rule
@@ -91,7 +86,6 @@ public class ContactDiscoveryResourceTest {
 
     validDiscoveryRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
     invalidDiscoveryRequest = new DiscoveryRequest(64, new byte[10], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope));
-    invalidDiscoveryRequestTwo = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, invalidEnvelope));
 
     var envelopes = Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, validEnvelope, "fakehostid", validEnvelope);
     validMultipleAttestDiscRequest = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32], envelopes);
@@ -188,14 +182,26 @@ public class ContactDiscoveryResourceTest {
   }
 
   @Test
-  public void testBadRequestEnvelope() throws Exception {
-    Response response = resources.getJerseyTest()
-                                 .target("/v1/discovery/" + validEnclaveId)
-                                 .request(MediaType.APPLICATION_JSON_TYPE)
-                                 .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                 .put(Entity.entity(invalidDiscoveryRequestTwo, MediaType.APPLICATION_JSON_TYPE));
+  public void testBadRequestEnvelope() {
+    List<DiscoveryRequestEnvelope> envelopes = List.of(new DiscoveryRequestEnvelope(requestId, new byte[12], new byte[32], null),
+                                                       new DiscoveryRequestEnvelope(requestId, new byte[12], null, new byte[16]),
+                                                       new DiscoveryRequestEnvelope(requestId, null, new byte[32], new byte[16]));
 
-    assertEquals(422, response.getStatus());
+
+    for (DiscoveryRequestEnvelope badEnvelope : envelopes) {
+      DiscoveryRequest request = new DiscoveryRequest(64, new byte[12], new byte[512], new byte[16], new byte[32],
+                                                                 Map.of(RequestManager.LOCAL_ENCLAVE_HOST_ID, badEnvelope));
+
+      Response response = resources.getJerseyTest()
+                                   .target("/v1/discovery/" + validEnclaveId)
+                                   .request(MediaType.APPLICATION_JSON_TYPE)
+                                   .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+                                   .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE));
+
+      assertEquals(422, response.getStatus());
+    }
+
+    verifyNoMoreInteractions(requestManager);
   }
 
   @Test
