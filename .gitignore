@@ -16,10 +16,7 @@
 .idea
 *.iml
 target
-/service/config/production.yml
-/service/config/staging.yml
-/service/config/testing.yml
-/service/config/local.yml
+/service/config/
 /service/src/main/resources/enclave/current.mrenclave
 /service/src/main/resources/enclave-jni.so
 dependency-reduced-pom.xml
