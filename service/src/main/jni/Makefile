@@ -28,7 +28,7 @@ default: docker install
 
 all: $(TARGET)
 
-$(builddir)/target/release/lib%.so: FORCE cds_jni/src/ffi/ffi.rs
+$(builddir)/target/release/lib%.so: FORCE
 	env -u CFLAGS \
 		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
@@ -55,10 +55,3 @@ docker:
 		--env MAKEFLAGS="$(MAKEFLAGS)" \
 		cds-jni-builder \
 		sh -c "cd src/service/src/main/jni/; make $(MAKETARGET)"
-
-cds_jni/src/ffi/ffi.rs:
-	jbindgen --jniimpl_use 'crate::jniimpl' \
-		$(projectdir)/service/src/main/jni/include/org_whispersystems_contactdiscovery_enclave_SgxEnclave.h -- \
-		-I/usr/lib/jvm/default-java/include -I/usr/lib/jvm/default-java/include/linux/ > cds_jni/src/ffi/ffi.rs
-
-genjni: cds_jni/src/ffi/ffi.rs
