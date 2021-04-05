@@ -25,6 +25,7 @@ import org.whispersystems.contactdiscovery.util.Constants;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -45,9 +46,10 @@ public class DirectoryMap {
   private boolean modified = false;
   private InternalBuffers workingBuffers;
   private InternalBuffers publishedBuffers;
+  private final AtomicInteger publishedBufferSize = new AtomicInteger();
 
-  private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
-  private static final Timer COMMIT_TIMER = METRIC_REGISTRY.timer(name(DirectoryMap.class, "commit"));
+  private final MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private final Timer commitTimer = metricRegistry.timer(name(DirectoryMap.class, "commit"));
 
   public DirectoryMap(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
     this.workingBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
@@ -101,7 +103,7 @@ public class DirectoryMap {
    * @return whether the write and read buffers were swapped
    */
   public boolean commit() {
-    try (final Timer.Context ignored = COMMIT_TIMER.time()) {
+    try (final Timer.Context ignored = commitTimer.time()) {
       synchronized (workingBufferMonitor) {
         if (!modified) {
           return false;
@@ -111,6 +113,8 @@ public class DirectoryMap {
           var oldReadBuffers = publishedBuffers;
           this.publishedBuffers = workingBuffers;
           this.workingBuffers = oldReadBuffers;
+
+          this.publishedBufferSize.set(this.publishedBuffers.size());
         } finally {
           publishedBufferReadWriteLock.writeLock().unlock();
         }
@@ -199,23 +203,21 @@ public class DirectoryMap {
     return (int) (element % slotCount);
   }
 
-  // Annoying that this exists, but used in unit tests prior to the borrowBuffers refactor.
-  @VisibleForTesting
-  protected long size() {
-    publishedBufferReadWriteLock.readLock().lock();
-    try {
-      return publishedBuffers.size();
-    } finally {
-      publishedBufferReadWriteLock.readLock().unlock();
-    }
+  /**
+   * Returns the number of elements in this map's published buffer.
+   *
+   * @return the number of elements in this map's published buffer
+   */
+  public long size() {
+    return publishedBufferSize.get();
   }
 
   private static class InternalBuffers {
 
     private float minLoadFactor;
     private float maxLoadFactor;
-    private long elementCount;
-    private long usedSlotCount;
+    private int elementCount;
+    private int usedSlotCount;
     protected ByteBuffer phonesBuffer;
     protected ByteBuffer uuidsBuffer;
 
@@ -236,11 +238,11 @@ public class DirectoryMap {
     }
 
     @VisibleForTesting
-    public long size() {
+    public int size() {
       return this.elementCount;
     }
 
-    private long capacity() {
+    private int capacity() {
       return phonesBuffer.capacity() / KEY_SIZE;
     }
 
