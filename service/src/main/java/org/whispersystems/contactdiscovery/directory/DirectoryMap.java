@@ -224,6 +224,9 @@ public class DirectoryMap {
     protected ByteBuffer phonesBuffer;
     protected ByteBuffer uuidsBuffer;
 
+    private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+    private static final Timer REHASH_TIMER = METRIC_REGISTRY.timer(name(DirectoryMap.class, "rehash"));
+
     public InternalBuffers(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
       if (minLoadFactor >= 1.0f || minLoadFactor <= 0.0f) {
         throw new IllegalArgumentException("bad minimum load factor: " + minLoadFactor);
@@ -291,37 +294,39 @@ public class DirectoryMap {
     }
 
     public void rehash() {
-      long newSlotCount = (long) (elementCount / minLoadFactor);
-      if (newSlotCount > Integer.MAX_VALUE / KEY_SIZE) {
-        newSlotCount = Integer.MAX_VALUE / KEY_SIZE;
-      }
-      if (newSlotCount < capacity()) {
-        newSlotCount = capacity();
-      }
+      try (final Timer.Context ignored = REHASH_TIMER.time()) {
+        long newSlotCount = (long)(elementCount / minLoadFactor);
+        if (newSlotCount > Integer.MAX_VALUE / KEY_SIZE) {
+          newSlotCount = Integer.MAX_VALUE / KEY_SIZE;
+        }
+        if (newSlotCount < capacity()) {
+          newSlotCount = capacity();
+        }
 
-      var newBuffer = allocateBuffer(newSlotCount, KEY_SIZE);
-      var newValueBuffer = allocateBuffer(newSlotCount, VALUE_SIZE);
-      var newBufferUsedSlotCount = 0;
+        var newBuffer = allocateBuffer(newSlotCount, KEY_SIZE);
+        var newValueBuffer = allocateBuffer(newSlotCount, VALUE_SIZE);
+        var newBufferUsedSlotCount = 0;
 
 
-      long curBufferCapacity = phonesBuffer.capacity();
-      long curValueBufferCapacity = uuidsBuffer.capacity();
-      for (long curBufferIdx = 0, curValueBufferIdx = 0;
-           curBufferIdx < curBufferCapacity && curValueBufferIdx < curValueBufferCapacity;
-           curBufferIdx += KEY_SIZE, curValueBufferIdx += VALUE_SIZE) {
-        long element = phonesBuffer.getLong((int) curBufferIdx);
-        if (element > 0) {
-          UUID value = new UUID(uuidsBuffer.getLong((int) curValueBufferIdx + 0),
-                                uuidsBuffer.getLong((int) curValueBufferIdx + 8));
-          long newBufferOldSlotValue = addToBuffer(newBuffer, newValueBuffer, element, value);
-          if (newBufferOldSlotValue == 0) {
-            newBufferUsedSlotCount++;
+        long curBufferCapacity = phonesBuffer.capacity();
+        long curValueBufferCapacity = uuidsBuffer.capacity();
+        for (long curBufferIdx = 0, curValueBufferIdx = 0;
+             curBufferIdx < curBufferCapacity && curValueBufferIdx < curValueBufferCapacity;
+             curBufferIdx += KEY_SIZE, curValueBufferIdx += VALUE_SIZE) {
+          long element = phonesBuffer.getLong((int)curBufferIdx);
+          if (element > 0) {
+            UUID value = new UUID(uuidsBuffer.getLong((int)curValueBufferIdx + 0),
+                    uuidsBuffer.getLong((int)curValueBufferIdx + 8));
+            long newBufferOldSlotValue = addToBuffer(newBuffer, newValueBuffer, element, value);
+            if (newBufferOldSlotValue == 0) {
+              newBufferUsedSlotCount++;
+            }
           }
         }
+        phonesBuffer = newBuffer;
+        uuidsBuffer = newValueBuffer;
+        usedSlotCount = newBufferUsedSlotCount;
       }
-      phonesBuffer = newBuffer;
-      uuidsBuffer = newValueBuffer;
-      usedSlotCount = newBufferUsedSlotCount;
     }
 
     public void copyFrom(InternalBuffers src) {
