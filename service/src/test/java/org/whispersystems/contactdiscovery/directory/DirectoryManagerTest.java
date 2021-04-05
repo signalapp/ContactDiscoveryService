@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -65,7 +64,7 @@ public class DirectoryManagerTest {
     when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
 
-    when(directoryMapFactory.create(anyLong())).thenReturn(directoryMap);
+    when(directoryMapFactory.create()).thenReturn(directoryMap);
 
     when(directoryCache.isUserSetBuilt(any())).thenReturn(true);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));

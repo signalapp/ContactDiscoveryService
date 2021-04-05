@@ -16,7 +16,6 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
-import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
@@ -52,9 +51,9 @@ public class DirectoryMap {
   private final MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private final Timer commitTimer = metricRegistry.timer(name(DirectoryMap.class, "commit"));
 
-  public DirectoryMap(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
-    this.workingBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
-    this.publishedBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
+  public DirectoryMap(final int capacity) {
+    this.workingBuffers = new InternalBuffers(capacity);
+    this.publishedBuffers = new InternalBuffers(capacity);
 
     metricRegistry.gauge(name(getClass(), "publishedSize"), () -> publishedBufferSize::get);
   }
@@ -186,6 +185,7 @@ public class DirectoryMap {
   private static boolean removeFromBuffer(ByteBuffer buffer, ByteBuffer valueBuffer, long element) {
     int slotCount = buffer.capacity() / KEY_SIZE;
     int slotIdx = hashElement(slotCount, element);
+    int startSlotIdx = slotIdx;
     long slotValue = buffer.getLong(slotIdx * KEY_SIZE);
     while (slotValue != 0) {
       if (slotValue == element) {
@@ -196,6 +196,9 @@ public class DirectoryMap {
       }
       if (++slotIdx == slotCount) {
         slotIdx = 0;
+      }
+      if (slotIdx == startSlotIdx) {
+        return false;
       }
       slotValue = buffer.getLong(slotIdx * KEY_SIZE);
     }
@@ -217,27 +220,14 @@ public class DirectoryMap {
 
   private static class InternalBuffers {
 
-    private float minLoadFactor;
-    private float maxLoadFactor;
     private int elementCount;
     private int usedSlotCount;
     protected ByteBuffer phonesBuffer;
     protected ByteBuffer uuidsBuffer;
 
-    private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
-    private static final Timer REHASH_TIMER = METRIC_REGISTRY.timer(name(DirectoryMap.class, "rehash"));
-
-    public InternalBuffers(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
-      if (minLoadFactor >= 1.0f || minLoadFactor <= 0.0f) {
-        throw new IllegalArgumentException("bad minimum load factor: " + minLoadFactor);
-      }
-      if (maxLoadFactor >= 1.0f || maxLoadFactor <= 0.0f || maxLoadFactor <= minLoadFactor) {
-        throw new IllegalArgumentException("bad maximum load factor: " + maxLoadFactor);
-      }
-      this.minLoadFactor = minLoadFactor;
-      this.maxLoadFactor = maxLoadFactor;
-      this.phonesBuffer = allocateBuffer(initialCapacity, KEY_SIZE);
-      this.uuidsBuffer = allocateBuffer(initialCapacity, VALUE_SIZE);
+    public InternalBuffers(final int capacity) {
+      this.phonesBuffer = allocateBuffer(capacity, KEY_SIZE);
+      this.uuidsBuffer = allocateBuffer(capacity, VALUE_SIZE);
 
       this.elementCount = 0;
       this.usedSlotCount = 0;
@@ -256,11 +246,8 @@ public class DirectoryMap {
       if (element <= 0) {
         throw new IllegalArgumentException("bad number: " + element);
       }
-      if (elementCount == capacity()) {
-        rehash();
-      }
-      if (elementCount > capacity()) {
-        throw new IllegalStateException(String.format("elementCount %d is somehow larger than capacity %d in DirectoryHashMap", elementCount, capacity()));
+      if (elementCount >= capacity()) {
+        throw new IllegalStateException("Buffer is full");
       }
       long oldSlotValue = addToBuffer(phonesBuffer, uuidsBuffer, element, value);
       var added = oldSlotValue != element;
@@ -269,9 +256,6 @@ public class DirectoryMap {
       }
       if (added) {
         elementCount++;
-        if (needsRehash()) {
-          rehash();
-        }
       }
       return added;
     }
@@ -288,50 +272,7 @@ public class DirectoryMap {
       return removed;
     }
 
-    private boolean needsRehash() {
-      long threshold = (long) (capacity() * maxLoadFactor);
-      return usedSlotCount >= threshold;
-    }
-
-    public void rehash() {
-      try (final Timer.Context ignored = REHASH_TIMER.time()) {
-        long newSlotCount = (long)(elementCount / minLoadFactor);
-        if (newSlotCount > Integer.MAX_VALUE / KEY_SIZE) {
-          newSlotCount = Integer.MAX_VALUE / KEY_SIZE;
-        }
-        if (newSlotCount < capacity()) {
-          newSlotCount = capacity();
-        }
-
-        var newBuffer = allocateBuffer(newSlotCount, KEY_SIZE);
-        var newValueBuffer = allocateBuffer(newSlotCount, VALUE_SIZE);
-        var newBufferUsedSlotCount = 0;
-
-
-        long curBufferCapacity = phonesBuffer.capacity();
-        long curValueBufferCapacity = uuidsBuffer.capacity();
-        for (long curBufferIdx = 0, curValueBufferIdx = 0;
-             curBufferIdx < curBufferCapacity && curValueBufferIdx < curValueBufferCapacity;
-             curBufferIdx += KEY_SIZE, curValueBufferIdx += VALUE_SIZE) {
-          long element = phonesBuffer.getLong((int)curBufferIdx);
-          if (element > 0) {
-            UUID value = new UUID(uuidsBuffer.getLong((int)curValueBufferIdx + 0),
-                    uuidsBuffer.getLong((int)curValueBufferIdx + 8));
-            long newBufferOldSlotValue = addToBuffer(newBuffer, newValueBuffer, element, value);
-            if (newBufferOldSlotValue == 0) {
-              newBufferUsedSlotCount++;
-            }
-          }
-        }
-        phonesBuffer = newBuffer;
-        uuidsBuffer = newValueBuffer;
-        usedSlotCount = newBufferUsedSlotCount;
-      }
-    }
-
     public void copyFrom(InternalBuffers src) {
-      this.minLoadFactor = src.minLoadFactor;
-      this.maxLoadFactor = src.maxLoadFactor;
       this.elementCount = src.elementCount;
       this.usedSlotCount = src.usedSlotCount;
       this.phonesBuffer = copy(this.phonesBuffer, src.phonesBuffer);

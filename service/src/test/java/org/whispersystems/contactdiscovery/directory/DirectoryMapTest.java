@@ -28,10 +28,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,90 +79,18 @@ public class DirectoryMapTest {
 
   @Test
   public void testFactory() throws SgxException {
-    long  initialCapacity = 1000;
-    float minLoadFactor   = 0.75f;
-    float maxLoadFactor   = 0.85f;
+    final int initialCapacity = 1000;
 
-    var factory = new DirectoryMapFactory(initialCapacity, minLoadFactor, maxLoadFactor);
-    var set = factory.create(0);
-    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(capacity).isEqualTo(initialCapacity);
-    });
-    set = factory.create(1000);
-    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(capacity).isEqualTo((long) (1000 / minLoadFactor));
-    });
-  }
-
-  @Test
-  public void testLoadFactor() throws SgxException {
-    final AtomicLong capacity = new AtomicLong(1000);
-    float minLoadFactor = 0.75f;
-    float maxLoadFactor = 0.85f;
-
-    DirectoryMap directoryMap = new DirectoryMap(capacity.get(), minLoadFactor, maxLoadFactor);
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
-      assertThat(bufCapacity).isEqualTo(capacity.get());
-    });
-
-    long addedCount = 0;
-    while (addedCount < 10000) {
-      long rehashThreshold = (long) (capacity.get() * maxLoadFactor);
-      while (addedCount < rehashThreshold - 1) {
-        addedCount += 1;
-        assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isTrue();
-        assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isFalse();
-      }
-
-      directoryMap.commit();
-      assertThat(directoryMap.size()).isEqualTo(addedCount);
-      directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
-        assertThat(bufCapacity).isEqualTo(capacity.get());
-      });
-
-      addedCount += 1;
-      assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isTrue();
-      assertThat(directoryMap.insert(addedCount, UUID.randomUUID())).isFalse();
-
-      directoryMap.commit();
-      assertThat(directoryMap.size()).isEqualTo(addedCount);
-      final var added = addedCount;
-      directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
-        assertThat(bufCapacity).isEqualTo((long) (added / minLoadFactor));
-        capacity.set(bufCapacity);
-      });
-    }
-
-    LongStream.rangeClosed(1, addedCount)
-              .forEach(removeElement -> {
-                assertThat(directoryMap.remove(removeElement)).isTrue();
-                assertThat(directoryMap.remove(removeElement)).isFalse();
-              });
-
-    directoryMap.commit();
-    assertThat(directoryMap.size()).isEqualTo(0);
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
-      assertThat(bufCapacity).isEqualTo(capacity.get());
-    });
-
-    LongStream.rangeClosed(1, addedCount)
-              .forEach(readdElement -> {
-                assertThat(directoryMap.insert(readdElement, UUID.randomUUID())).isTrue();
-                assertThat(directoryMap.insert(readdElement, UUID.randomUUID())).isFalse();
-              });
-
-    directoryMap.commit();
-    assertThat(directoryMap.size()).isEqualTo(addedCount);
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, bufCapacity) -> {
-      assertThat(bufCapacity).isEqualTo(capacity.get());
-    });
+    var factory = new DirectoryMapFactory(initialCapacity);
+    var set = factory.create();
+    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> assertThat(capacity).isEqualTo(initialCapacity));
   }
 
   @Test
   public void testDuplicateAdds() {
-    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(2_000);
 
-    Set<Long> randomElements = randomElements(1000);
+    Set<Long> randomElements = randomElements(1_000);
 
     randomElements.stream().forEach(addElement -> {
       assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue();
@@ -179,9 +105,9 @@ public class DirectoryMapTest {
 
   @Test
   public void testRandomAddRemove() {
-    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(20_000);
 
-    Set<Long> randomElements = randomElements(10000);
+    Set<Long> randomElements = randomElements(10_000);
 
     randomElements.stream().forEach(addElement -> {
       assertThat(directoryMap.insert(addElement, UUID.randomUUID())).isTrue();
@@ -231,9 +157,9 @@ public class DirectoryMapTest {
   @Test
   public void testRandomParallelAddRemove() {
     var start = System.currentTimeMillis();
-    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(110_000);
 
-    Set<Long> randomElements = randomElements(100000);
+    Set<Long> randomElements = randomElements(100_000);
     assertThat(directoryMap.size()).isEqualTo(0);
     assertThat(directoryMap.commit()).isFalse();
 
@@ -275,7 +201,7 @@ public class DirectoryMapTest {
 
   @Test
   public void testBuffers() throws SgxException {
-    DirectoryMap directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    DirectoryMap directoryMap = new DirectoryMap(1000);
 
     directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       assertThat(phonesBuffer.capacity()).isEqualTo(8000);
@@ -348,7 +274,7 @@ public class DirectoryMapTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void testUuidRequired() {
-    var directoryMap = new DirectoryMap(1000, 0.75f, 0.85f);
+    var directoryMap = new DirectoryMap(1000);
     directoryMap.insert(1, null);
   }
   private long[] getLongsFromByteBuffer(ByteBuffer buffer) {

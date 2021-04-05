@@ -18,19 +18,14 @@ package org.whispersystems.contactdiscovery.directory;
 
 public class DirectoryMapFactory {
 
-  private final long  initialCapacity;
-  private final float minLoadFactor;
-  private final float maxLoadFactor;
+  private final int capacity;
 
-  public DirectoryMapFactory(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
-    this.initialCapacity = initialCapacity;
-    this.minLoadFactor   = minLoadFactor;
-    this.maxLoadFactor   = maxLoadFactor;
+  public DirectoryMapFactory(final int capacity) {
+    this.capacity = capacity;
   }
 
-  public DirectoryMap create(long minimumCapacity) {
-    long capacity = Math.max(initialCapacity, (long) (minimumCapacity / minLoadFactor));
-    return new DirectoryMap(capacity, minLoadFactor, maxLoadFactor);
+  public DirectoryMap create() {
+    return new DirectoryMap(capacity);
   }
 
 }

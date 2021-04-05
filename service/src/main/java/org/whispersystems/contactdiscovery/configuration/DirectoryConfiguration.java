@@ -29,15 +29,7 @@ public class DirectoryConfiguration {
 
   @JsonProperty
   @NotNull
-  private int initialSize;
-
-  @JsonProperty
-  @NotNull
-  private float minLoadFactor;
-
-  @JsonProperty
-  @NotNull
-  private float maxLoadFactor;
+  private int capacity;
 
   @JsonProperty
   @NotNull
@@ -46,16 +38,8 @@ public class DirectoryConfiguration {
   @JsonProperty
   private boolean enableReconciliation = true;
 
-  public int getInitialSize() {
-    return initialSize;
-  }
-
-  public float getMinLoadFactor() {
-    return minLoadFactor;
-  }
-
-  public float getMaxLoadFactor() {
-    return maxLoadFactor;
+  public int getCapacity() {
+    return capacity;
   }
 
   public DirectorySqsConfiguration getSqsConfiguration() {

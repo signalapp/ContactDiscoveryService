@@ -21,9 +21,7 @@ redis:
    - # Redis Sentinel host:port 2
 
 directory:
-  initialSize:    # Directory hash table initial capacity (integer)
-  minLoadFactor:  # Directory hash table minimum load factor (decimal in range (0-1))
-  maxLoadFactor:  # Directory hash table maximum load factor (decimal in range (0-1))
+  capacity:       # Directory hash table capacity (integer)
   sqs:            # SQS FIFO queue config for directory event replication from Signal-Server
     accessKey:    # AWS access key ID for replication SQS FIFO queue
     accessSecret: # AWS access key secret for replication SQS FIFO queue
