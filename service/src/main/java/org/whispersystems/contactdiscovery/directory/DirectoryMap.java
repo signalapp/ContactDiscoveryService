@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2017 Open Whisper Systems
  *
  * This program is free software: you can redistribute it and/or modify
@@ -40,8 +40,8 @@ public class DirectoryMap {
   private static final int VALUE_SIZE = 16;
   private static final int KEY_SIZE = 8;
 
-  private final Object writeBufLock = new Object();
-  private final ReadWriteLock readBufferRWLock = new ReentrantReadWriteLock();
+  private final Object workingBufferMonitor = new Object();
+  private final ReadWriteLock publishedBufferReadWriteLock = new ReentrantReadWriteLock();
   private boolean modified = false;
   private InternalBuffers workingBuffers;
   private InternalBuffers publishedBuffers;
@@ -59,7 +59,7 @@ public class DirectoryMap {
       throw new IllegalArgumentException("no users without UUIDs allowed in the directory map");
     }
     var success = false;
-    synchronized (writeBufLock) {
+    synchronized (workingBufferMonitor) {
       success = workingBuffers.insert(element, value);
       if (success) {
         this.modified = true;
@@ -70,7 +70,7 @@ public class DirectoryMap {
 
   public boolean remove(long element) {
     var success = false;
-    synchronized (writeBufLock) {
+    synchronized (workingBufferMonitor) {
       success = workingBuffers.remove(element);
       if (success) {
         this.modified = true;
@@ -88,11 +88,11 @@ public class DirectoryMap {
    * borrowBuffers passes the currently readable buffers to the given BorrowFunc under a read lock.
    */
   public void borrowBuffers(BorrowFunc func) throws SgxException {
-    readBufferRWLock.readLock().lock();
+    publishedBufferReadWriteLock.readLock().lock();
     try {
       func.consume(publishedBuffers.phonesBuffer, publishedBuffers.uuidsBuffer, publishedBuffers.capacity());
     } finally {
-      readBufferRWLock.readLock().unlock();
+      publishedBufferReadWriteLock.readLock().unlock();
     }
   }
 
@@ -102,24 +102,24 @@ public class DirectoryMap {
    */
   public boolean commit() {
     try (final Timer.Context ignored = COMMIT_TIMER.time()) {
-      synchronized (writeBufLock) {
+      synchronized (workingBufferMonitor) {
         if (!modified) {
           return false;
         }
-        readBufferRWLock.writeLock().lock();
+        publishedBufferReadWriteLock.writeLock().lock();
         try {
           var oldReadBuffers = publishedBuffers;
           this.publishedBuffers = workingBuffers;
           this.workingBuffers = oldReadBuffers;
         } finally {
-          readBufferRWLock.writeLock().unlock();
+          publishedBufferReadWriteLock.writeLock().unlock();
         }
 
-        readBufferRWLock.readLock().lock();
+        publishedBufferReadWriteLock.readLock().lock();
         try {
           workingBuffers.copyFrom(publishedBuffers);
         } finally {
-          readBufferRWLock.readLock().unlock();
+          publishedBufferReadWriteLock.readLock().unlock();
         }
         this.modified = false;
       }
@@ -202,11 +202,11 @@ public class DirectoryMap {
   // Annoying that this exists, but used in unit tests prior to the borrowBuffers refactor.
   @VisibleForTesting
   protected long size() {
-    readBufferRWLock.readLock().lock();
+    publishedBufferReadWriteLock.readLock().lock();
     try {
       return publishedBuffers.size();
     } finally {
-      readBufferRWLock.readLock().unlock();
+      publishedBufferReadWriteLock.readLock().unlock();
     }
   }
 
