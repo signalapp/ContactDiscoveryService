@@ -16,13 +16,19 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
+import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
+import org.whispersystems.contactdiscovery.util.Constants;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * A double buffered open hash table that contains the directory of all registered users' phone numbers and UUIDs.
@@ -39,6 +45,9 @@ public class DirectoryMap {
   private boolean modified = false;
   private InternalBuffers workingBuffers;
   private InternalBuffers publishedBuffers;
+
+  private static final MetricRegistry METRIC_REGISTRY = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Timer COMMIT_TIMER = METRIC_REGISTRY.timer(name(DirectoryMap.class, "commit"));
 
   public DirectoryMap(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
     this.workingBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
@@ -92,28 +101,30 @@ public class DirectoryMap {
    * @return whether the write and read buffers were swapped
    */
   public boolean commit() {
-    synchronized (writeBufLock) {
-      if (!modified) {
-        return false;
-      }
-      readBufferRWLock.writeLock().lock();
-      try {
-        var oldReadBuffers = publishedBuffers;
-        this.publishedBuffers = workingBuffers;
-        this.workingBuffers = oldReadBuffers;
-      } finally {
-        readBufferRWLock.writeLock().unlock();
-      }
+    try (final Timer.Context ignored = COMMIT_TIMER.time()) {
+      synchronized (writeBufLock) {
+        if (!modified) {
+          return false;
+        }
+        readBufferRWLock.writeLock().lock();
+        try {
+          var oldReadBuffers = publishedBuffers;
+          this.publishedBuffers = workingBuffers;
+          this.workingBuffers = oldReadBuffers;
+        } finally {
+          readBufferRWLock.writeLock().unlock();
+        }
 
-      readBufferRWLock.readLock().lock();
-      try {
-        workingBuffers.copyFrom(publishedBuffers);
-      } finally {
-        readBufferRWLock.readLock().unlock();
+        readBufferRWLock.readLock().lock();
+        try {
+          workingBuffers.copyFrom(publishedBuffers);
+        } finally {
+          readBufferRWLock.readLock().unlock();
+        }
+        this.modified = false;
       }
-      this.modified = false;
+      return true;
     }
-    return true;
   }
 
   private static ByteBuffer allocateBuffer(long slotCount, int slotSize) {
