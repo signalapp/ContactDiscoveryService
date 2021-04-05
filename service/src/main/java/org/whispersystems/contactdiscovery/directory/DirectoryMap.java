@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.directory;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
@@ -54,6 +55,8 @@ public class DirectoryMap {
   public DirectoryMap(long initialCapacity, float minLoadFactor, float maxLoadFactor) {
     this.workingBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
     this.publishedBuffers = new InternalBuffers(initialCapacity, minLoadFactor, maxLoadFactor);
+
+    metricRegistry.gauge(name(getClass(), "publishedSize"), () -> publishedBufferSize::get);
   }
 
   public boolean insert(long element, UUID value) {
