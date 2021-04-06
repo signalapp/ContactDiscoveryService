@@ -39,22 +39,21 @@ ENV SHELL /bin/bash
 
 WORKDIR /home/cds
 
-ARG TOOLCHAIN=1.40.0
+ARG RUSTUP_VERSION=1.23.1
+ARG RUSTUP_SHA256=ed7773edaf1d289656bdec2aacad12413b38ad0193fff54b2231f5140a4b07c5
+ARG TOOLCHAIN=1.51.0
 
-COPY rustup-init.sha256 /tmp/docker/
-
-RUN    curl -f https://static.rust-lang.org/rustup/archive/1.20.2/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
-    && [ `sha256sum /tmp/rustup-init|cut -d' ' -f1` = `cut -d' ' -f1</tmp/docker/rustup-init.sha256` ] \
+RUN    curl -f https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
+    && [ `sha256sum /tmp/rustup-init|cut -d' ' -f1` = "${RUSTUP_SHA256}" ] \
     && chmod a+x /tmp/rustup-init \
     && /tmp/rustup-init -y --profile minimal --component rustfmt --default-toolchain "${TOOLCHAIN}" \
-    && rm -rf /tmp/rustup-init /tmp/docker
+    && rm -f /tmp/rustup-init
 
 ARG SGX_SDK_VERSION=2.7.1
-
-COPY linux-sgx.tar.gz.sha256 /tmp/docker/
+ARG SGX_SDK_SHA256=68d26293c8ea1c80266e1d897824d5fae021e6d988437ec8b6561a15352af789
 
 RUN    curl -Lf "https://github.com/intel/linux-sgx/archive/sgx_${SGX_SDK_VERSION}.tar.gz" -o /tmp/linux-sgx.tar.gz \
-    && [ `sha256sum /tmp/linux-sgx.tar.gz|cut -d' ' -f1` = `cut -d' ' -f1</tmp/docker/linux-sgx.tar.gz.sha256` ] \
+    && [ `sha256sum /tmp/linux-sgx.tar.gz|cut -d' ' -f1` = "${SGX_SDK_SHA256}" ] \
     && tar -xzf /tmp/linux-sgx.tar.gz -C /tmp/ --wildcards "linux-sgx-sgx_${SGX_SDK_VERSION}/common/inc/sgx*.h"
 
 USER root
