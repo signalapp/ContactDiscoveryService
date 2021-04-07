@@ -1,9 +1,14 @@
+// Copyright 2020 Signal Messenger, LLC.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use byteorder::{BigEndian, ByteOrder};
 use jni::objects::{JClass, JValue};
 use jni::sys::{jboolean, jlong, jobject};
 use jni::JNIEnv;
 
 use crate::{bool_to_jni_bool, generic_exception, jni_catch, PossibleError, ILLEGAL_STATE_EXCEPTION_CLASS, NULL_POINTER_EXCEPTION_CLASS};
+
+mod internal_buffers;
 
 fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Result<&'static mut DirectoryMap, PossibleError> {
     if native_handle == 0 {

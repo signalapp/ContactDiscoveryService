@@ -29,8 +29,8 @@ default: docker install
 all: $(TARGET)
 
 $(builddir)/target/release/lib%.so: FORCE
-	env -u CFLAGS \
-		$(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
+	env -u CFLAGS $(CARGO) test -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
+	env -u CFLAGS $(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
 install:
 	$(INSTALL_DATA) $(TARGET) $(resourcedir)/enclave-jni.so
