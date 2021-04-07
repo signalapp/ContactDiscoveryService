@@ -39,6 +39,9 @@ public class DirectoryMapNative implements AutoCloseable {
   }
 
   public boolean insert(long e164, UUID uuid) {
+    if (uuid == null) {
+      throw new IllegalArgumentException("no users without UUIDs allowed in the directory map");
+    }
     return nativeInsert(nativeHandle, e164, uuid);
   }
 
