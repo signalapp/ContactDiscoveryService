@@ -1,7 +1,6 @@
 // Copyright 2020 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use std::cell::RefCell;
 use std::sync::{Mutex, RwLock};
 
 use byteorder::{BigEndian, ByteOrder};
@@ -23,46 +22,41 @@ fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Res
     }
 }
 
-struct DirectoryMapBuilding(RefCell<bool>, RefCell<InternalBuffers>);
+struct DirectoryMapBuilding(bool, InternalBuffers);
 
 struct DirectoryMap {
     building: Mutex<DirectoryMapBuilding>,
-    serving: RwLock<RefCell<InternalBuffers>>,
+    serving: RwLock<InternalBuffers>,
 }
 
 impl DirectoryMap {
     fn new(capacity: usize) -> Self {
         Self {
-            building: Mutex::new(DirectoryMapBuilding(
-                RefCell::new(false),
-                RefCell::new(InternalBuffers::new(capacity)),
-            )),
-            serving: RwLock::new(RefCell::new(InternalBuffers::new(capacity))),
+            building: Mutex::new(DirectoryMapBuilding(false, InternalBuffers::new(capacity))),
+            serving: RwLock::new(InternalBuffers::new(capacity)),
         }
     }
 
     fn insert(&self, e164: [u8; 8], uuid: [u8; 16]) -> Result<bool, PossibleError> {
-        let lock = self
+        let mut lock = self
             .building
             .lock()
             .expect("DirectoryMap building lock poisoned while locking during insert");
-        let mut internal_buffers = lock.1.borrow_mut();
-        let added = internal_buffers.insert(e164, uuid)?;
+        let added = lock.1.insert(e164, uuid)?;
         if added {
-            *lock.0.borrow_mut() = true;
+            lock.0 = true;
         }
         Ok(added)
     }
 
     fn remove(&self, e164: [u8; 8]) -> Result<bool, PossibleError> {
-        let lock = self
+        let mut lock = self
             .building
             .lock()
             .expect("DirectoryMap building lock poisoned while locking during remove");
-        let mut internal_buffers = lock.1.borrow_mut();
-        let removed = internal_buffers.remove(e164)?;
+        let removed = lock.1.remove(e164)?;
         if removed {
-            *lock.0.borrow_mut() = true;
+            lock.0 = true;
         }
         Ok(removed)
     }
@@ -72,44 +66,40 @@ impl DirectoryMap {
             .serving
             .read()
             .expect("DirectoryMap serving read lock poisoned while locking during run_borrow_function");
-        let internal_buffers = RefCell::<InternalBuffers>::borrow(&read_lock);
-        borrow_function(internal_buffers.e164s_slice(), internal_buffers.uuids_slice())
+        borrow_function(read_lock.e164s_slice(), read_lock.uuids_slice())
     }
 
     fn commit(&self) -> Result<bool, PossibleError> {
-        let lock = self
+        let mut lock = self
             .building
             .lock()
             .expect("DirectoryMap building lock poisoned while locking during commit");
-        if !*lock.0.borrow() {
+        if !lock.0 {
             return Ok(false);
         }
         {
-            let write_lock = self
+            let mut write_lock = self
                 .serving
                 .write()
                 .expect("DirectoryMap serving write lock poisoned while locking during commit");
-            lock.1.swap(&*write_lock);
+            std::mem::swap(&mut lock.1, &mut *write_lock);
         }
         {
             let read_lock = self
                 .serving
                 .read()
                 .expect("DirectoryMap serving read lock poisoned while locking during commit");
-            lock.1.borrow_mut().copy_from(&*RefCell::<InternalBuffers>::borrow(&read_lock))?;
+            lock.1.copy_from(&*read_lock)?;
         }
-        *lock.0.borrow_mut() = false;
+        lock.0 = false;
         return Ok(true);
     }
 
     fn size(&self) -> usize {
-        RefCell::<InternalBuffers>::borrow(
-            &self
-                .serving
-                .read()
-                .expect("DirectoryMap serving read lock poisoned while locking during size"),
-        )
-        .size()
+        self.serving
+            .read()
+            .expect("DirectoryMap serving read lock poisoned while locking during size")
+            .size()
     }
 }
 
