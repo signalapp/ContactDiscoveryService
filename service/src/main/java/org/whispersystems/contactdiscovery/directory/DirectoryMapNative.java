@@ -50,6 +50,9 @@ public class DirectoryMapNative implements AutoCloseable {
   }
 
   public void borrow(BorrowFunction borrowFunction) {
+    if (borrowFunction == null) {
+      throw new NullPointerException("null borrow function");
+    }
     nativeBorrow(nativeHandle, borrowFunction);
   }
 
