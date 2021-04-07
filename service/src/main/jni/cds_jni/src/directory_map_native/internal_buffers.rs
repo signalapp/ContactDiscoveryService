@@ -105,6 +105,9 @@ impl InternalBuffers {
         Ok(added)
     }
 
+    /// Removes a mapping from `e164` in the internal buffer.
+    ///
+    /// Returns `true` if a mapping was removed.
     pub(super) fn remove(&mut self, e164: [u8; E164_SIZE_BYTES]) -> Result<bool, InternalBuffersError> {
         if e164 == DELETED_E164 || e164 == FREE_E164 {
             return Err(InternalBuffersError::InvalidE164(e164));
@@ -116,6 +119,9 @@ impl InternalBuffers {
         Ok(removed)
     }
 
+    /// Copies every field from the `src` internal buffer.
+    ///
+    /// `self` and `src` must have been created with the same capacity or this will return an `Err`.
     pub(super) fn copy_from(&mut self, src: &Self) -> Result<(), InternalBuffersError> {
         if self.capacity() != src.capacity() {
             return Err(InternalBuffersError::CapacityMismatch(self.capacity(), src.capacity()));
