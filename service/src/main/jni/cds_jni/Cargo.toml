@@ -7,7 +7,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.40"
-byteorder = "1.4.3"
 cds_enclave_ffi = { path = "../../../../../enclave-ffi-rust" }
 jni = "0.19"
 sgx_sdk_ffi = { git = "https://github.com/signalapp/sgx_common.git", rev = "580489343a37517d96451a5c0950d462d3e86a3b" }

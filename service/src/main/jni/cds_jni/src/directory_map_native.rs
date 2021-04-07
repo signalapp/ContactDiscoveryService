@@ -3,7 +3,6 @@
 
 use std::sync::{Mutex, RwLock};
 
-use byteorder::{BigEndian, ByteOrder};
 use jni::objects::{JClass, JValue};
 use jni::sys::{jboolean, jlong, jobject};
 use jni::JNIEnv;
@@ -134,14 +133,12 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
 ) -> jboolean {
     bool_to_jni_bool(jni_catch(env.clone(), false, || {
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
-        let mut e164_bytes = [0; 8];
-        BigEndian::write_i64(&mut e164_bytes, e164);
         let uuid_high_bits = env.call_method(uuid, "getMostSignificantBits", "()J", &[])?.j().unwrap();
         let uuid_low_bits = env.call_method(uuid, "getLeastSignificantBits", "()J", &[])?.j().unwrap();
         let mut uuid_bytes = [0; 16];
-        BigEndian::write_i64(&mut uuid_bytes[..8], uuid_high_bits);
-        BigEndian::write_i64(&mut uuid_bytes[8..], uuid_low_bits);
-        Ok(directory_map.insert(e164_bytes, uuid_bytes)?)
+        uuid_bytes[..8].copy_from_slice(&uuid_high_bits.to_be_bytes());
+        uuid_bytes[8..].copy_from_slice(&uuid_low_bits.to_be_bytes());
+        Ok(directory_map.insert(e164.to_be_bytes(), uuid_bytes)?)
     }))
 }
 
@@ -155,9 +152,7 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
 ) -> jboolean {
     bool_to_jni_bool(jni_catch(env.clone(), false, || {
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
-        let mut e164_bytes = [0; 8];
-        BigEndian::write_i64(&mut e164_bytes, e164);
-        Ok(directory_map.remove(e164_bytes)?)
+        Ok(directory_map.remove(e164.to_be_bytes())?)
     }))
 }
 

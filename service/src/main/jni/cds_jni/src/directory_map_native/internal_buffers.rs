@@ -3,7 +3,6 @@
 
 use std::ops::Range;
 
-use byteorder::{BigEndian, ByteOrder};
 use thiserror::Error as ThisError;
 
 use crate::{generic_exception, PossibleError};
@@ -135,7 +134,7 @@ impl InternalBuffers {
 }
 
 fn hash_element(slot_count: usize, e164: [u8; E164_SIZE_BYTES]) -> usize {
-    (BigEndian::read_i64(&e164) as usize) % slot_count
+    (i64::from_be_bytes(e164) as usize) % slot_count
 }
 
 fn buffer_range(slot_index: usize, element_size: usize) -> Range<usize> {
@@ -315,7 +314,7 @@ mod test {
         let mut e164 = [0u8; E164_SIZE_BYTES];
         let uuid = [42u8; UUID_SIZE_BYTES];
         for i in 0..1000 {
-            BigEndian::write_i64(&mut e164, number + (i * 17));
+            e164.copy_from_slice(&(number + (i * 17)).to_be_bytes());
             let result = internal_buffers.insert(e164, uuid);
             assert!(result.is_ok());
             assert!(result.unwrap());
@@ -323,7 +322,7 @@ mod test {
         assert_eq!(internal_buffers.size(), 1000);
         assert_eq!(internal_buffers.used_slot_count, 1000);
 
-        BigEndian::write_i64(&mut e164, number + (1000 * 17));
+        e164.copy_from_slice(&(number + (1000 * 17)).to_be_bytes());
         let result = internal_buffers.insert(e164, uuid);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), InternalBuffersError::BufferFull(1000));
