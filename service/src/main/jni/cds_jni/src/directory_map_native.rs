@@ -119,6 +119,7 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
     _class: JClass,
     native_handle: jlong,
 ) {
+    // recapture ownership of native_handle into a Box and let end of scope free it
     let _box = unsafe { Box::from_raw(native_handle as *mut DirectoryMap) };
 }
 
