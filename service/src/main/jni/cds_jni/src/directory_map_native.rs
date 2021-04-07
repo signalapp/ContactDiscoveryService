@@ -230,3 +230,98 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
         Ok(directory_map.size() as jlong)
     })
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::collections::HashSet;
+    use std::convert::TryInto;
+
+    #[test]
+    fn single_element_test() {
+        let e164 = [0u8, 0, 0, 0x03, 0x9F, 0x5E, 0x8B, 0x6D];
+        let uuid = [
+            0xDEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+        ];
+
+        let map = DirectoryMap::new(1000);
+        assert_eq!(map.size(), 0);
+
+        let result = map.commit();
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+        assert_eq!(map.size(), 0);
+
+        let result = map.insert(e164, uuid);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(map.size(), 0);
+
+        let result = map.commit();
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(map.size(), 1);
+
+        let result = map.remove(e164);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(map.size(), 1);
+
+        let result = map.remove(e164);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+        assert_eq!(map.size(), 1);
+
+        let result = map.commit();
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(map.size(), 0);
+    }
+
+    #[test]
+    fn borrow_function_test() {
+        let map = DirectoryMap::new(1000);
+        let mut set = HashSet::new();
+
+        let number = 15555550100i64;
+        let uuid = u128::from_be_bytes([
+            0xd9, 0x03, 0xcd, 0x9e, 0xab, 0x77, 0x6f, 0xf5, 0x66, 0x65, 0x98, 0x89, 0x39, 0xb4, 0xe3, 0x51,
+        ]);
+
+        let number_g = 31i64;
+        let uuid_g = 414094729u128;
+
+        for i in 0..1000usize {
+            set.insert(i);
+            let result = map.insert(
+                (number + number_g * (i as i64)).to_be_bytes(),
+                (uuid + uuid_g * (i as u128)).to_be_bytes(),
+            );
+            assert!(result.is_ok());
+            assert!(result.unwrap());
+            assert_eq!(map.size(), 0);
+        }
+
+        let result = map.commit();
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(map.size(), 1000);
+
+        let result = map.run_borrow_function(|e164s, uuids| {
+            assert_eq!(e164s.len(), 8000);
+            assert_eq!(uuids.len(), 16000);
+            assert_eq!(set.len(), 1000);
+            for i in 0..1000usize {
+                let test_number = i64::from_be_bytes(e164s[(8 * i)..(8 * (i + 1))].try_into().unwrap());
+                let test_uuid = u128::from_be_bytes(uuids[(16 * i)..(16 * (i + 1))].try_into().unwrap());
+                let original_i = ((test_number - number) / number_g) as usize;
+                assert_eq!(original_i, ((test_uuid - uuid) / uuid_g) as usize);
+                assert!(set.contains(&original_i));
+                set.remove(&original_i);
+            }
+            assert_eq!(set.len(), 0);
+            Ok(())
+        });
+        assert!(result.is_ok());
+    }
+}
