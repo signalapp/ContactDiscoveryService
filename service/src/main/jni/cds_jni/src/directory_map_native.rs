@@ -1,18 +1,17 @@
 // Copyright 2020 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+use std::cell::RefCell;
+use std::sync::{Mutex, RwLock};
+
 use byteorder::{BigEndian, ByteOrder};
 use jni::objects::{JClass, JValue};
 use jni::sys::{jboolean, jlong, jobject};
 use jni::JNIEnv;
 
-use internal_buffers::{InternalBuffers, InternalBuffersError};
+use internal_buffers::InternalBuffers;
 
 use crate::{bool_to_jni_bool, generic_exception, jni_catch, PossibleError, ILLEGAL_STATE_EXCEPTION_CLASS, NULL_POINTER_EXCEPTION_CLASS};
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::ops::Deref;
-use std::sync::{Mutex, RwLock};
 
 mod internal_buffers;
 
@@ -97,18 +96,20 @@ impl DirectoryMap {
                 .serving
                 .read()
                 .expect("DirectoryMap serving read lock poisoned while locking during commit");
-            lock.1.borrow_mut().copy_from(&*RefCell::<InternalBuffers>::borrow(&read_lock));
+            lock.1.borrow_mut().copy_from(&*RefCell::<InternalBuffers>::borrow(&read_lock))?;
         }
         *lock.0.borrow_mut() = false;
         return Ok(true);
     }
 
     fn size(&self) -> usize {
-        self.serving
-            .read()
-            .expect("DirectoryMap serving read lock poisoned while locking during size")
-            .borrow()
-            .size()
+        RefCell::<InternalBuffers>::borrow(
+            &self
+                .serving
+                .read()
+                .expect("DirectoryMap serving read lock poisoned while locking during size"),
+        )
+        .size()
     }
 }
 

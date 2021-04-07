@@ -25,16 +25,16 @@ pub(super) enum InternalBuffersError {
     CapacityMismatch(usize, usize),
 }
 
-impl From<&InternalBuffersError> for PossibleError {
-    fn from(internal_buffers_error: &InternalBuffersError) -> Self {
+impl From<InternalBuffersError> for PossibleError {
+    fn from(internal_buffers_error: InternalBuffersError) -> Self {
         match internal_buffers_error {
-            InternalBuffersError::InvalidE164(e164) => {
+            InternalBuffersError::InvalidE164(_) => {
                 generic_exception("java/lang/IllegalArgumentException", &format!("{}", internal_buffers_error))
             }
-            InternalBuffersError::BufferFull(elements) => {
+            InternalBuffersError::BufferFull(_) => {
                 generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
             }
-            InternalBuffersError::CapacityMismatch(lhs_capacity, rhs_capacity) => {
+            InternalBuffersError::CapacityMismatch(_, _) => {
                 generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
             }
         }
