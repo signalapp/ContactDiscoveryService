@@ -1,9 +1,12 @@
 // Copyright 2020 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-uuse byteorder::{BigEndian, ByteOrder};
 use std::ops::Range;
+
+use byteorder::{BigEndian, ByteOrder};
 use thiserror::Error as ThisError;
+
+use crate::{generic_exception, PossibleError};
 
 pub(super) const E164_SIZE_BYTES: usize = 8;
 pub(super) const UUID_SIZE_BYTES: usize = 16;
@@ -12,7 +15,7 @@ const FREE_E164: [u8; E164_SIZE_BYTES] = [0u8; E164_SIZE_BYTES];
 const DELETED_E164: [u8; E164_SIZE_BYTES] = [0xFFu8; E164_SIZE_BYTES];
 const FREE_UUID: [u8; UUID_SIZE_BYTES] = [0u8; UUID_SIZE_BYTES];
 
-#[derive(Debug, ThisError, Eq, PartialEq)]
+#[derive(ThisError, Debug, Eq, PartialEq)]
 pub(super) enum InternalBuffersError {
     #[error("invalid E164 of {0:?}")]
     InvalidE164([u8; E164_SIZE_BYTES]),
@@ -20,6 +23,22 @@ pub(super) enum InternalBuffersError {
     BufferFull(usize),
     #[error("our capacity ({0}) does not match rhs capacity ({1})")]
     CapacityMismatch(usize, usize),
+}
+
+impl From<&InternalBuffersError> for PossibleError {
+    fn from(internal_buffers_error: &InternalBuffersError) -> Self {
+        match internal_buffers_error {
+            InternalBuffersError::InvalidE164(e164) => {
+                generic_exception("java/lang/IllegalArgumentException", &format!("{}", internal_buffers_error))
+            }
+            InternalBuffersError::BufferFull(elements) => {
+                generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
+            }
+            InternalBuffersError::CapacityMismatch(lhs_capacity, rhs_capacity) => {
+                generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
+            }
+        }
+    }
 }
 
 pub(super) struct InternalBuffers {
@@ -44,6 +63,14 @@ impl InternalBuffers {
         result.e164s_buffer.resize(result.e164s_buffer.capacity(), 0);
         result.uuids_buffer.resize(result.uuids_buffer.capacity(), 0);
         result
+    }
+
+    pub(super) fn e164s_slice(&self) -> &[u8] {
+        self.e164s_buffer.as_slice()
+    }
+
+    pub(super) fn uuids_slice(&self) -> &[u8] {
+        self.uuids_buffer.as_slice()
     }
 
     pub(super) fn size(&self) -> usize {

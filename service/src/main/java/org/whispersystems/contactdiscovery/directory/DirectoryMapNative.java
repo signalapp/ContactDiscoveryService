@@ -17,8 +17,8 @@ public class DirectoryMapNative implements AutoCloseable {
 
   private long nativeHandle;
 
-  public DirectoryMapNative() {
-    nativeHandle = nativeInit();
+  public DirectoryMapNative(long capacity) {
+    nativeHandle = nativeInit(capacity);
   }
 
   @Override
@@ -64,7 +64,7 @@ public class DirectoryMapNative implements AutoCloseable {
     return nativeSize(nativeHandle);
   }
 
-  private static native long nativeInit();
+  private static native long nativeInit(long capacity);
   private static native void nativeFree(long nativeHandle);
   private static native boolean nativeInsert(long nativeHandle, long e164, UUID uuid);
   private static native boolean nativeRemove(long nativeHandle, long e164);
