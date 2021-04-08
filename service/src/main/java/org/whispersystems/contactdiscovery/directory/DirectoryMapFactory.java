@@ -24,8 +24,8 @@ public class DirectoryMapFactory {
     this.capacity = capacity;
   }
 
-  public DirectoryMap create() {
-    return new DirectoryMap(capacity);
+  public DirectoryMapNative create() {
+    return new DirectoryMapNative(capacity);
   }
 
 }

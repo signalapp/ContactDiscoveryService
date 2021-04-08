@@ -1,7 +1,7 @@
 // Copyright 2020 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use std::mem::{size_of, ManuallyDrop};
+use std::mem::size_of;
 use std::slice;
 use std::sync::Arc;
 
@@ -446,83 +446,64 @@ pub extern "C" fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_na
     _class: JClass,
     enclave_id: jlong,
     state_handle: jlong,
-    in_phones_buf: JObject,
-    in_uuids_buf: JObject,
-    in_phone_count: jlong,
+    e164s_handle: jlong,
+    e164s_capacity_bytes: jlong,
+    uuids_handle: jlong,
+    uuids_capacity_bytes: jlong,
 ) {
     return jni_catch(env.clone(), (), || {
-        server_stop(env, enclave_id, state_handle, in_phones_buf, in_uuids_buf, in_phone_count)
+        server_stop(
+            enclave_id,
+            state_handle,
+            e164s_handle,
+            e164s_capacity_bytes,
+            uuids_handle,
+            uuids_capacity_bytes,
+        )
     });
 }
 
 fn server_stop(
-    env: JNIEnv,
     enclave_id: i64,
     state_handle: i64,
-    in_phones_buf: JObject,
-    in_uuids_buf: JObject,
-    in_phone_count: i64,
+    e164s_handle: i64,
+    e164s_capacity_bytes: i64,
+    uuids_handle: i64,
+    uuids_capacity_bytes: i64,
 ) -> Result<(), PossibleError> {
-    let (in_phones_bytes, in_phones_capacity) = get_direct_byte_buffer_info(&env, in_phones_buf.into())?;
-    let (in_uuids_bytes, in_uuids_capacity) = get_direct_byte_buffer_info(&env, in_uuids_buf.into())?;
-    if in_phone_count < in_phones_capacity / size_of::<sgxsd::Phone>() as i64 {
-        let err = PossibleError::SgxError {
-            name: "phone_number_buffer_too_small",
+    let e164s = convert_handle_and_capacity_to_slice(&e164s_handle, e164s_capacity_bytes);
+    let uuids = convert_handle_and_capacity_to_slice(&uuids_handle, uuids_capacity_bytes);
+    if e164s.len() / size_of::<sgxsd::Phone>() != uuids.len() / size_of::<sgxsd::SgxsdUuid>() {
+        return Err(PossibleError::SgxError {
+            name: "e164s_and_uuids_buffer_length_mismatch",
             code: 0,
-        };
-        return Err(err);
+        });
     }
-    if in_phone_count < in_uuids_capacity / size_of::<sgxsd::SgxsdUuid>() as i64 {
-        let err = PossibleError::SgxError {
-            name: "uuid_buffer_too_small",
-            code: 0,
-        };
-        return Err(err);
-    }
-    if in_phone_count < 0 {
-        let err = PossibleError::SgxError {
-            name: "in_phone_count_too_small",
-            code: 0,
-        };
-        return Err(err);
-    }
-
-    let mut in_phones_bytes_undrop = ManuallyDrop::new(in_phones_bytes);
-    let mut in_uuids_bytes_undrop = ManuallyDrop::new(in_uuids_bytes);
 
     // We are abusing the memory layout here because this code is about to be promptly deleted when
-    // the DirectoryMap code is pushed from Java into Rust. Delete these unsafe calls when that
-    // occurs.
-    let in_phones = unsafe {
-        slice::from_raw_parts_mut(
-            in_phones_bytes_undrop.as_mut_ptr() as *mut u64,
-            in_phones_bytes_undrop.len() / size_of::<u64>(),
-        )
-    };
+    // the DirectoryMap BorrowFunction implementation is pushed from Java into Rust. Delete these
+    // unsafe calls when that occurs.
+    let in_phones = unsafe { slice::from_raw_parts_mut(e164s.as_mut_ptr() as *mut u64, e164s.len() / size_of::<u64>()) };
     let in_uuids = unsafe {
         slice::from_raw_parts_mut(
-            in_uuids_bytes_undrop.as_mut_ptr() as *mut sgxsd::SgxsdUuid,
-            in_uuids_bytes_undrop.len() / size_of::<sgxsd::SgxsdUuid>(),
+            uuids.as_mut_ptr() as *mut sgxsd::SgxsdUuid,
+            uuids.len() / size_of::<sgxsd::SgxsdUuid>(),
         )
     };
     let args = sgxsd::ServerStopArgs {
         in_phones: &mut in_phones[0],
         in_uuids: &mut in_uuids[0],
-        in_phone_count: in_phone_count as u64,
+        in_phone_count: in_phones.len() as u64,
     };
-    let res = sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64).map_err(PossibleError::from);
-    unsafe {
-        ManuallyDrop::drop(&mut in_phones_bytes_undrop);
-        ManuallyDrop::drop(&mut in_uuids_bytes_undrop);
-    }
-    return res;
+    Ok(sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)?)
 }
 
-fn get_direct_byte_buffer_info<'a>(env: &'a JNIEnv, buf: JByteBuffer) -> Result<(&'a mut [u8], i64), PossibleError> {
-    if buf.is_null() {
-        return Ok((&mut [], 0));
+fn convert_handle_and_capacity_to_slice(handle: &i64, capacity: i64) -> &mut [u8] {
+    if *handle == 0 {
+        &mut []
+    } else {
+        unsafe { slice::from_raw_parts_mut((*handle) as *mut u8, capacity as usize) }
     }
-    return Ok((env.get_direct_buffer_address(buf)?, env.get_direct_buffer_capacity(buf)?));
 }
 
 #[allow(non_snake_case)]

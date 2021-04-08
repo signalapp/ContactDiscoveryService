@@ -35,9 +35,17 @@ import org.apache.commons.codec.DecoderException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.contactdiscovery.auth.*;
+import org.whispersystems.contactdiscovery.auth.SignalService;
+import org.whispersystems.contactdiscovery.auth.SignalServiceAuthenticator;
+import org.whispersystems.contactdiscovery.auth.User;
+import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
-import org.whispersystems.contactdiscovery.directory.*;
+import org.whispersystems.contactdiscovery.directory.DirectoryCache;
+import org.whispersystems.contactdiscovery.directory.DirectoryManager;
+import org.whispersystems.contactdiscovery.directory.DirectoryMapFactory;
+import org.whispersystems.contactdiscovery.directory.DirectoryMapNative;
+import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
+import org.whispersystems.contactdiscovery.directory.DirectoryQueueManager;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.enclave.SgxRevocationListManager;
@@ -67,7 +75,16 @@ import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServiceClient;
 import org.whispersystems.contactdiscovery.phonelimiter.RateLimitServicePartitioner;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
-import org.whispersystems.contactdiscovery.resources.*;
+import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
+import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
+import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.PendingRequestsFlushTask;
+import org.whispersystems.contactdiscovery.resources.PingResource;
+import org.whispersystems.contactdiscovery.resources.RemoteAttestationResource;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterFeature;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterFilter;
+import org.whispersystems.contactdiscovery.resources.RequestLimiterTask;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.NativeUtils;
 
@@ -134,7 +151,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
-    AtomicReference<Optional<DirectoryMap>> optDirectorySet = new AtomicReference<>(Optional.empty());
+    AtomicReference<Optional<DirectoryMapNative>> optDirectorySet = new AtomicReference<>(Optional.empty());
 
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
@@ -226,7 +243,6 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(new RequestLimiterFeature(requestLimiterFilter));
 
     environment.jersey().register(remoteAttestationResource);
-    environment.jersey().register(remoteAttestationResource);
     environment.jersey().register(contactDiscoveryResource);
     environment.jersey().register(directoryManagementResource);
     environment.jersey().register(directorySnapshotResource);
@@ -263,10 +279,4 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.admin().addTask(flushRequestsTask);
   }
 
-  private static String generateAuthHeader(String password) {
-    if (password == null) {
-      return "";
-    }
-    return String.format("Basic %s", Base64.getEncoder().encodeToString(String.format("Service:%s", password).getBytes(StandardCharsets.US_ASCII)));
-  }
 }

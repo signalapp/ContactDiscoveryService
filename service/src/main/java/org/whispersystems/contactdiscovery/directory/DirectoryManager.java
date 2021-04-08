@@ -27,7 +27,6 @@ import io.dropwizard.lifecycle.Managed;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.contactdiscovery.directory.DirectoryMap.BorrowFunc;
 import org.whispersystems.contactdiscovery.directory.DirectoryProtos.PubSubMessage;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
@@ -48,7 +47,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -92,7 +95,7 @@ public class DirectoryManager implements Managed {
   private final AtomicBoolean built = new AtomicBoolean(false);
   private final AtomicBoolean bootstrapping = new AtomicBoolean(false);
 
-  private final AtomicReference<Optional<DirectoryMap>> currentDirectoryMap;
+  private final AtomicReference<Optional<DirectoryMapNative>> currentDirectoryMap;
 
   private Pool<Jedis>      jedisPool;
   private DirectoryCache   directoryCache;
@@ -101,7 +104,7 @@ public class DirectoryManager implements Managed {
   private KeepAliveSender  keepAliveSender;
   private DirectoryPeerManager directoryPeerManager;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, DirectoryPeerManager directoryPeerManager, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap, boolean isReconciliationEnabled) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, DirectoryPeerManager directoryPeerManager, AtomicReference<Optional<DirectoryMapNative>> currentDirectoryMap, boolean isReconciliationEnabled) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
     this.directoryMapFactory     = directoryMapFactory;
@@ -279,12 +282,11 @@ public class DirectoryManager implements Managed {
   /**
    * borrowBuffers passes the currently readable buffers to the given BorrowFunc under a read lock.
    */
-  public void borrowBuffers(BorrowFunc func) throws DirectoryUnavailableException, SgxException {
+  public void borrowBuffers(DirectoryMapNative.BorrowFunction func) throws DirectoryUnavailableException, SgxException {
     if (!isBuilt()) {
       throw new DirectoryUnavailableException();
     }
-    DirectoryMap directoryMap = getCurrentDirectoryMap();
-    directoryMap.borrowBuffers(func);
+    getCurrentDirectoryMap().borrow(func);
   }
 
   @Override
@@ -309,7 +311,7 @@ public class DirectoryManager implements Managed {
     pubSubConnection.close();
   }
 
-  private DirectoryMap getCurrentDirectoryMap() throws DirectoryUnavailableException {
+  private DirectoryMapNative getCurrentDirectoryMap() throws DirectoryUnavailableException {
     return currentDirectoryMap.get().orElseThrow(DirectoryUnavailableException::new);
   }
 
@@ -329,7 +331,7 @@ public class DirectoryManager implements Managed {
   private void addUser(Jedis jedis, UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
-    DirectoryMap directoryMap = getCurrentDirectoryMap();
+    DirectoryMapNative directoryMap = getCurrentDirectoryMap();
 
     if (directoryCache.addUser(jedis, uuid, address)) {
       jedis.publish(CHANNEL.getBytes(),
@@ -346,7 +348,7 @@ public class DirectoryManager implements Managed {
   private void removeUser(Jedis jedis, UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
     long directoryAddress = parseAddress(address);
 
-    DirectoryMap directoryMap = getCurrentDirectoryMap();
+    DirectoryMapNative directoryMap = getCurrentDirectoryMap();
 
     boolean removedUser = directoryCache.removeUser(jedis, uuid, address);
 
@@ -423,14 +425,12 @@ public class DirectoryManager implements Managed {
       built.set(userSetBuilt);
 
       final long directorySize;
-      long start = 0;
       if (userSetBuilt) {
         directorySize = directoryCache.getUserCount(jedis);
         var directoryMap = directoryMapFactory.create();
 
         logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
 
-        start = timer.stop();
         rebuildLocalUsersFromRedis(jedis, directoryMap);
         directoryMap.commit();
         this.currentDirectoryMap.set(Optional.of(directoryMap));
@@ -441,7 +441,7 @@ public class DirectoryManager implements Managed {
     }
   }
 
-  private void rebuildLocalUsersFromRedis(Jedis jedis, DirectoryMap directoryMap) {
+  private void rebuildLocalUsersFromRedis(Jedis jedis, DirectoryMapNative directoryMap) {
     String cursor = "0";
     do {
       ScanResult<Pair<UUID, String>> result;

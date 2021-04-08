@@ -324,11 +324,11 @@ public class SgxEnclave implements Runnable {
     public synchronized void close() throws SgxException {
       if (!processed) {
         batchFuture.completeExceptionally(new SgxException("batch_closed"));
-        process(null, null, 0);
+        process(0, 0, 0, 0);
       }
     }
 
-    public synchronized void process(ByteBuffer inPhonesBuf, ByteBuffer inUuidsBuf, long inPhoneCount) throws SgxException {
+    public synchronized void process(long e164sHandle, long e164sCapacityBytes, long uuidsHandle, long uuidsCapacityBytes) throws SgxException {
       if (processed) {
         throw new IllegalStateException("batch_already_processed");
       }
@@ -337,7 +337,7 @@ public class SgxEnclave implements Runnable {
 
       try (Timer.Context ctx = NATIVE_LOOKUP_TIMER.time(); Timer.Context perEnclaveCtx = perEnclaveTimer.time()) {
         try {
-          nativeServerStop(getEnclaveState().id, stateHandle, inPhonesBuf, inUuidsBuf, inPhoneCount);
+          nativeServerStop(getEnclaveState().id, stateHandle, e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes);
         } catch (SgxException ex) {
           batchFuture.completeExceptionally(convertSgxException(ex));
           NATIVE_LOOKUP_ERROR_METER.mark();
@@ -378,6 +378,6 @@ public class SgxEnclave implements Runnable {
 
   private static native void nativeServerStart(long enclaveId, long stateHandle, int maxQueryPhones) throws SgxException;
   private static native void nativeServerCall(long enclaveId, long stateHandle, NativeServerCallArgs args, CompletableFuture<SgxsdMessage> callbackFut) throws SgxException;
-  private static native void nativeServerStop(long enclaveId, long stateHandle, ByteBuffer inPhonesBuf, ByteBuffer inUuidsBuf, long inPhoneCount) throws SgxException;
+  private static native void nativeServerStop(long enclaveId, long stateHandle, long e164sHandle, long e164sCapacityBytes, long uuidsHandle, long uuidsCapacityBytes) throws SgxException;
   private static native int nativeReportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccessful);
 }

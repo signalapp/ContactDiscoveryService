@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
  * Method:    nativeInit
- * Signature: ()J
+ * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeInit
-  (JNIEnv *, jclass);
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
@@ -42,9 +42,9 @@ JNIEXPORT jboolean JNICALL Java_org_whispersystems_contactdiscovery_directory_Di
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
  * Method:    nativeBorrow
- * Signature: (JLorg/whispersystems/contactdiscovery/directory/DirectoryMapNative/BorrowFunction;)Z
+ * Signature: (JLorg/whispersystems/contactdiscovery/directory/DirectoryMapNative/BorrowFunction;)V
  */
-JNIEXPORT jboolean JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeBorrow
+JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeBorrow
   (JNIEnv *, jclass, jlong, jobject);
 
 /*

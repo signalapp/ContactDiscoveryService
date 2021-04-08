@@ -42,7 +42,7 @@ public class DirectoryManagerTest {
   private final JedisPool               jedisPool               = mock(JedisPool.class);
   private final Jedis                   jedis                   = mock(Jedis.class);
   private final DirectoryCache          directoryCache          = mock(DirectoryCache.class);
-  private final DirectoryMap directoryMap = mock(DirectoryMap.class);
+  private final DirectoryMapNative directoryMap = mock(DirectoryMapNative.class);
   private final DirectoryMapFactory directoryMapFactory = mock(DirectoryMapFactory.class);
   private final DirectoryPeerManager directoryPeerManager = mock(DirectoryPeerManager.class);
 
@@ -89,7 +89,7 @@ public class DirectoryManagerTest {
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
-    directoryManager.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+    directoryManager.borrowBuffers((e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes) -> {
       // Never called.
     });
   }

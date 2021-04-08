@@ -17,8 +17,10 @@
 package org.whispersystems.contactdiscovery.directory;
 
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
+import org.whispersystems.contactdiscovery.util.NativeUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,6 +40,11 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class DirectoryMapTest {
+
+  @BeforeClass
+  public static void setupClass() throws Exception {
+    NativeUtils.loadNativeResource("/enclave-jni.so");
+  }
 
   private final SecureRandom random = new SecureRandom();
 
@@ -82,17 +89,20 @@ public class DirectoryMapTest {
   }
 
   @Test
-  public void testFactory() throws SgxException {
+  public void testFactory() {
     final int initialCapacity = 1000;
 
     var factory = new DirectoryMapFactory(initialCapacity);
     var set = factory.create();
-    set.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> assertThat(capacity).isEqualTo(initialCapacity));
+    set.borrow(((e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes) -> {
+      assertThat(e164sCapacityBytes).isEqualTo(8 * initialCapacity);
+      assertThat(uuidsCapacityBytes).isEqualTo(16 * initialCapacity);
+    }));
   }
 
   @Test
   public void testDuplicateAdds() {
-    DirectoryMap directoryMap = new DirectoryMap(2_000);
+    DirectoryMapNative directoryMap = new DirectoryMapNative(2_000);
 
     Set<Long> randomElements = randomElements(1_000);
 
@@ -109,7 +119,7 @@ public class DirectoryMapTest {
 
   @Test
   public void testRandomAddRemove() {
-    DirectoryMap directoryMap = new DirectoryMap(20_000);
+    DirectoryMapNative directoryMap = new DirectoryMapNative(20_000);
 
     Set<Long> randomElements = randomElements(10_000);
 
@@ -161,7 +171,7 @@ public class DirectoryMapTest {
   @Test
   public void testRandomParallelAddRemove() {
     var start = System.currentTimeMillis();
-    DirectoryMap directoryMap = new DirectoryMap(110_000);
+    DirectoryMapNative directoryMap = new DirectoryMapNative(110_000);
 
     Set<Long> randomElements = randomElements(100_000);
     assertThat(directoryMap.size()).isEqualTo(0);
@@ -203,78 +213,77 @@ public class DirectoryMapTest {
     assertThat(directoryMap.size()).isEqualTo(0);
   }
 
-  @Test
-  public void testBuffers() throws SgxException {
-    DirectoryMap directoryMap = new DirectoryMap(1000);
-
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
-      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
-      assertThat(capacity).isEqualTo(1000);
-    });
-
-    directoryMap.insert(5, new UUID(6, 1));
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
-      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
-      assertThat(capacity).isEqualTo(1000);
-      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
-      assertThat(phoneLongs[5]).isEqualTo(0);
-      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
-      assertThat(uuidsLongs[10]).isEqualTo(0);
-      assertThat(uuidsLongs[11]).isEqualTo(0);
-    });
-
-    directoryMap.commit();
-
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
-      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
-      assertThat(phoneLongs[5]).isEqualTo(5);
-
-      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
-      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
-      assertThat(uuidsLongs[10]).isEqualTo(6);
-      assertThat(uuidsLongs[11]).isEqualTo(1);
-      assertThat(capacity).isEqualTo(1000);
-    });
-
-    directoryMap.insert(7, new UUID(8, 2));
-    directoryMap.commit();
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
-      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
-      assertThat(phoneLongs[5]).isEqualTo(5);
-      assertThat(phoneLongs[7]).isEqualTo(7);
-
-      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
-      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
-      assertThat(uuidsLongs[10]).isEqualTo(6);
-      assertThat(uuidsLongs[11]).isEqualTo(1);
-      assertThat(uuidsLongs[14]).isEqualTo(8);
-      assertThat(uuidsLongs[15]).isEqualTo(2);
-      assertThat(capacity).isEqualTo(1000);
-    });
-
-    directoryMap.remove(5);
-
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
-      assertThat(phoneLongs[5]).isEqualTo(5);
-    });
-
-    directoryMap.commit();
-    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
-      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
-      assertThat(phoneLongs[5]).isEqualTo(-1);
-      assertThat(phoneLongs[7]).isEqualTo(7);
-      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
-      assertThat(uuidsLongs[10]).isEqualTo(0);
-      assertThat(uuidsLongs[11]).isEqualTo(0);
-      assertThat(uuidsLongs[14]).isEqualTo(8);
-      assertThat(uuidsLongs[15]).isEqualTo(2);
-    });
-  }
+//  TODO(ehren): Move this test to Rust
+//  @Test
+//  public void testBuffers() throws SgxException {
+//    DirectoryMapNative directoryMap = new DirectoryMapNative(1000);
+//
+//    directoryMap.borrow((e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes) -> {
+//      assertThat(e164sCapacityBytes).isEqualTo(8000);
+//      assertThat(uuidsCapacityBytes).isEqualTo(16000);
+//    });
+//
+//    directoryMap.insert(5, new UUID(6, 1));
+//    directoryMap.borrow((e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes) -> {
+//      assertThat(e164sCapacityBytes).isEqualTo(8000);
+//      assertThat(uuidsCapacityBytes).isEqualTo(16000);
+//      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+//      assertThat(phoneLongs[5]).isEqualTo(0);
+//      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+//      assertThat(uuidsLongs[10]).isEqualTo(0);
+//      assertThat(uuidsLongs[11]).isEqualTo(0);
+//    });
+//
+//    directoryMap.commit();
+//
+//    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+//      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+//      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+//      assertThat(phoneLongs[5]).isEqualTo(5);
+//
+//      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+//      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+//      assertThat(uuidsLongs[10]).isEqualTo(6);
+//      assertThat(uuidsLongs[11]).isEqualTo(1);
+//      assertThat(capacity).isEqualTo(1000);
+//    });
+//
+//    directoryMap.insert(7, new UUID(8, 2));
+//    directoryMap.commit();
+//    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+//      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+//      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+//      assertThat(phoneLongs[5]).isEqualTo(5);
+//      assertThat(phoneLongs[7]).isEqualTo(7);
+//
+//      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+//      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+//      assertThat(uuidsLongs[10]).isEqualTo(6);
+//      assertThat(uuidsLongs[11]).isEqualTo(1);
+//      assertThat(uuidsLongs[14]).isEqualTo(8);
+//      assertThat(uuidsLongs[15]).isEqualTo(2);
+//      assertThat(capacity).isEqualTo(1000);
+//    });
+//
+//    directoryMap.remove(5);
+//
+//    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+//      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+//      assertThat(phoneLongs[5]).isEqualTo(5);
+//    });
+//
+//    directoryMap.commit();
+//    directoryMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+//      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+//      assertThat(phoneLongs[5]).isEqualTo(-1);
+//      assertThat(phoneLongs[7]).isEqualTo(7);
+//      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+//      assertThat(uuidsLongs[10]).isEqualTo(0);
+//      assertThat(uuidsLongs[11]).isEqualTo(0);
+//      assertThat(uuidsLongs[14]).isEqualTo(8);
+//      assertThat(uuidsLongs[15]).isEqualTo(2);
+//    });
+//  }
 
   @Test
   public void serializeEmptyBuffers() throws IOException, SgxException {
@@ -363,7 +372,7 @@ public class DirectoryMapTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void testUuidRequired() {
-    var directoryMap = new DirectoryMap(1000);
+    var directoryMap = new DirectoryMapNative(1000);
     directoryMap.insert(1, null);
   }
   private long[] getLongsFromByteBuffer(ByteBuffer buffer) {

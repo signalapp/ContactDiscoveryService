@@ -32,6 +32,9 @@ public class DirectoryConfiguration {
   private int capacity;
 
   @JsonProperty
+  private boolean useNative = false;
+
+  @JsonProperty
   @NotNull
   private DirectorySqsConfiguration sqs;
 
@@ -56,6 +59,10 @@ public class DirectoryConfiguration {
 
   public int getCapacity() {
     return capacity;
+  }
+
+  public boolean isUseNative() {
+    return useNative;
   }
 
   public DirectorySqsConfiguration getSqsConfiguration() {
