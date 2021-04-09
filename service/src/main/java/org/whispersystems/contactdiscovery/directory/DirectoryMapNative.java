@@ -10,8 +10,8 @@ import java.util.UUID;
 public class DirectoryMapNative implements AutoCloseable {
   private long nativeHandle;
 
-  public DirectoryMapNative(long capacity) {
-    nativeHandle = nativeInit(capacity);
+  public DirectoryMapNative(long startingCapacity, float minLoadFactor, float maxLoadFactor) {
+    nativeHandle = nativeInit(startingCapacity, minLoadFactor, maxLoadFactor);
   }
 
   @Override
@@ -54,7 +54,7 @@ public class DirectoryMapNative implements AutoCloseable {
     return nativeSize(nativeHandle);
   }
 
-  private static native long nativeInit(long capacity);
+  private static native long nativeInit(long startingCapacity, float minLoadFactor, float maxLoadFactor);
   private static native void nativeFree(long nativeHandle);
   private static native boolean nativeInsert(long nativeHandle, long e164, UUID uuid);
   private static native boolean nativeRemove(long nativeHandle, long e164);

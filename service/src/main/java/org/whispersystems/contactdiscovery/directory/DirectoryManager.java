@@ -430,7 +430,7 @@ public class DirectoryManager implements Managed {
       final long directorySize;
       if (userSetBuilt) {
         directorySize = directoryCache.getUserCount(jedis);
-        var directoryMap = directoryMapFactory.create();
+        var directoryMap = directoryMapFactory.create(directorySize);
 
         logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
 

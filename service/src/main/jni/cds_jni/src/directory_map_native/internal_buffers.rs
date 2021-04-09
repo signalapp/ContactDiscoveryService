@@ -1,6 +1,8 @@
 // Copyright 2020 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+use std::cmp::max;
+
 use thiserror::Error as ThisError;
 
 use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
@@ -11,26 +13,30 @@ const FREE_E164: Phone = 0;
 const DELETED_E164: Phone = 0xFFFFFFFFFFFFFFFF;
 const FREE_UUID: SgxsdUuid = SgxsdUuid { data64: [0, 0] };
 
-#[derive(ThisError, Debug, Eq, PartialEq)]
+#[derive(ThisError, Debug, PartialEq)]
 pub(super) enum InternalBuffersError {
     #[error("invalid E164 of {0}")]
     InvalidE164(Phone),
-    #[error("buffer is full with {0} elements")]
-    BufferFull(usize),
-    #[error("our capacity ({0}) does not match rhs capacity ({1})")]
-    CapacityMismatch(usize, usize),
+    #[error("buffer is full with {0} elements and {1} capacity")]
+    BufferFull(usize, usize),
+    #[error("invalid minimum load factor ({0}) must be in range [0, 1]")]
+    InvalidMinimumLoadFactor(f32),
+    #[error("invalid maximum load factor ({0}) must be in range [0, 1]")]
+    InvalidMaximumLoadFactor(f32),
+    #[error("invalid load factors; minimum must not equal or exceed maximum ({0}, {0})")]
+    InvalidLoadFactorTuple(f32, f32),
 }
 
 impl From<InternalBuffersError> for PossibleError {
     fn from(internal_buffers_error: InternalBuffersError) -> Self {
         match internal_buffers_error {
-            InternalBuffersError::InvalidE164(_) => {
+            InternalBuffersError::InvalidE164(_)
+            | InternalBuffersError::InvalidMinimumLoadFactor(_)
+            | InternalBuffersError::InvalidMaximumLoadFactor(_)
+            | InternalBuffersError::InvalidLoadFactorTuple(_, _) => {
                 generic_exception("java/lang/IllegalArgumentException", &format!("{}", internal_buffers_error))
             }
-            InternalBuffersError::BufferFull(_) => {
-                generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
-            }
-            InternalBuffersError::CapacityMismatch(_, _) => {
+            InternalBuffersError::BufferFull(_, _) => {
                 generic_exception("java/lang/IllegalStateException", &format!("{}", internal_buffers_error))
             }
         }
@@ -38,6 +44,8 @@ impl From<InternalBuffersError> for PossibleError {
 }
 
 pub(super) struct InternalBuffers {
+    min_load_factor: f32,
+    max_load_factor: f32,
     element_count: usize,
     used_slot_count: usize,
     e164s_buffer: Vec<Phone>,
@@ -49,8 +57,19 @@ impl InternalBuffers {
     ///
     /// In addition to the fixed overhead of the `InternalBuffers` structure itself, also allocates
     /// 24 bytes per element of capacity requested and zero initializes them.
-    pub(super) fn new(capacity: usize) -> InternalBuffers {
+    pub(super) fn new(capacity: usize, min_load_factor: f32, max_load_factor: f32) -> Result<InternalBuffers, InternalBuffersError> {
+        if min_load_factor > 1.0 || min_load_factor < 0.0 {
+            return Err(InternalBuffersError::InvalidMinimumLoadFactor(min_load_factor));
+        }
+        if max_load_factor > 1.0 || max_load_factor < 0.0 {
+            return Err(InternalBuffersError::InvalidMaximumLoadFactor(max_load_factor));
+        }
+        if min_load_factor >= max_load_factor {
+            return Err(InternalBuffersError::InvalidLoadFactorTuple(min_load_factor, max_load_factor));
+        }
         let mut result = InternalBuffers {
+            min_load_factor,
+            max_load_factor,
             element_count: 0,
             used_slot_count: 0,
             e164s_buffer: Vec::with_capacity(capacity),
@@ -58,7 +77,7 @@ impl InternalBuffers {
         };
         result.e164s_buffer.resize(result.e164s_buffer.capacity(), FREE_E164);
         result.uuids_buffer.resize(result.uuids_buffer.capacity(), FREE_UUID);
-        result
+        Ok(result)
     }
 
     pub(super) fn e164s_slice(&self) -> &[Phone] {
@@ -85,8 +104,11 @@ impl InternalBuffers {
             return Err(InternalBuffersError::InvalidE164(e164));
         }
         let capacity = self.capacity();
-        if self.element_count >= capacity {
-            return Err(InternalBuffersError::BufferFull(capacity));
+        if self.element_count == capacity {
+            self.rehash();
+        }
+        if self.element_count > capacity {
+            return Err(InternalBuffersError::BufferFull(self.element_count, capacity));
         }
 
         let old_e164 = add_to_buffer(self.e164s_buffer.as_mut_slice(), self.uuids_buffer.as_mut_slice(), e164, uuid);
@@ -96,6 +118,9 @@ impl InternalBuffers {
         }
         if added {
             self.element_count += 1;
+        }
+        if self.needs_rehash() {
+            self.rehash();
         }
 
         Ok(added)
@@ -119,14 +144,49 @@ impl InternalBuffers {
     ///
     /// `self` and `src` must have been created with the same capacity or this will return an `Err`.
     pub(super) fn copy_from(&mut self, src: &Self) -> Result<(), InternalBuffersError> {
-        if self.capacity() != src.capacity() {
-            return Err(InternalBuffersError::CapacityMismatch(self.capacity(), src.capacity()));
+        if self.capacity() < src.capacity() {
+            self.e164s_buffer.resize(src.capacity(), FREE_E164);
+            self.uuids_buffer.resize(src.capacity(), FREE_UUID);
         }
+        self.min_load_factor = src.min_load_factor;
+        self.max_load_factor = src.max_load_factor;
         self.element_count = src.element_count;
         self.used_slot_count = src.used_slot_count;
         self.e164s_buffer.copy_from_slice(src.e164s_buffer.as_slice());
         self.uuids_buffer.copy_from_slice(src.uuids_buffer.as_slice());
         Ok(())
+    }
+
+    fn needs_rehash(&self) -> bool {
+        let limit: usize = (self.capacity() as f64 * self.max_load_factor as f64) as usize;
+        self.used_slot_count >= limit
+    }
+
+    fn rehash(&mut self) {
+        let new_slot_count: usize = max((self.element_count as f64 / self.min_load_factor as f64) as usize, self.capacity());
+        let mut new_e164s_buffer = Vec::<Phone>::with_capacity(new_slot_count);
+        let mut new_uuids_buffer = Vec::<SgxsdUuid>::with_capacity(new_slot_count);
+        new_e164s_buffer.resize(new_slot_count, FREE_E164);
+        new_uuids_buffer.resize(new_slot_count, FREE_UUID);
+        let mut new_used_slot_count = 0usize;
+
+        for i in 0..self.capacity() {
+            let e164 = self.e164s_buffer[i];
+            if e164 != FREE_E164 && e164 != DELETED_E164 {
+                let new_buffer_old_e164 = add_to_buffer(
+                    new_e164s_buffer.as_mut_slice(),
+                    new_uuids_buffer.as_mut_slice(),
+                    e164,
+                    self.uuids_buffer[i],
+                );
+                if new_buffer_old_e164 == FREE_E164 {
+                    new_used_slot_count += 1;
+                }
+            }
+        }
+        self.e164s_buffer = new_e164s_buffer;
+        self.uuids_buffer = new_uuids_buffer;
+        self.used_slot_count = new_used_slot_count;
     }
 }
 
@@ -224,7 +284,7 @@ mod test {
             0xDEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
         ]);
 
-        let mut internal_buffers = InternalBuffers::new(1000);
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
         assert_eq!(internal_buffers.capacity(), 1000);
         assert_eq!(internal_buffers.size(), 0);
         assert_eq!(internal_buffers.used_slot_count, 0);
@@ -260,7 +320,7 @@ mod test {
 
     #[test]
     fn bad_insert() {
-        let mut internal_buffers = InternalBuffers::new(1000);
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
 
         let result = internal_buffers.insert(FREE_E164, FREE_UUID);
         assert!(result.is_err());
@@ -273,7 +333,7 @@ mod test {
 
     #[test]
     fn bad_remove() {
-        let mut internal_buffers = InternalBuffers::new(1000);
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
 
         let result = internal_buffers.remove(FREE_E164);
         assert!(result.is_err());
@@ -285,8 +345,9 @@ mod test {
     }
 
     #[test]
-    fn full() {
-        let mut internal_buffers = InternalBuffers::new(1000);
+    fn rehash() {
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
+        assert_eq!(internal_buffers.capacity(), 1000);
 
         let e164: Phone = 1_555_555_0100;
         let uuid = SgxsdUuid::from([42u8; 16]);
@@ -297,9 +358,12 @@ mod test {
         }
         assert_eq!(internal_buffers.size(), 1000);
         assert_eq!(internal_buffers.used_slot_count, 1000);
+        assert_eq!(internal_buffers.capacity(), 1284);
 
         let result = internal_buffers.insert(e164 + 1000 * 17, uuid);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), InternalBuffersError::BufferFull(1000));
+        assert!(result.is_ok());
+        assert_eq!(internal_buffers.size(), 1001);
+        assert_eq!(internal_buffers.used_slot_count, 1001);
+        assert_eq!(internal_buffers.capacity(), 1284);
     }
 }

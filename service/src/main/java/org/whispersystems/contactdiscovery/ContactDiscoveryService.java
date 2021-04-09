@@ -158,7 +158,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryCache           directoryCache           = new DirectoryCache();
-    DirectoryMapFactory      directoryMapFactory      = new DirectoryMapFactory(configuration.getDirectoryConfiguration().getCapacity());
+    DirectoryMapFactory      directoryMapFactory      = new DirectoryMapFactory(configuration.getDirectoryConfiguration().getInitialCapacity(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
     DirectoryPeerManager     directoryPeerManager     = new DirectoryPeerManager(configuration.getDirectoryConfiguration().getMapBuilderUrl(), configuration.getDirectoryConfiguration().getPeerAuthenticationToken(), configuration.getDirectoryConfiguration().isPeerReadEligible(),
                                                                                  configuration.getDirectoryConfiguration().getMaxPeerBuildAttempts(), configuration.getDirectoryConfiguration().isRebuildInPlaceEnabled());
     DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, optDirectorySet, configuration.getDirectoryConfiguration().isReconciliationEnabled());

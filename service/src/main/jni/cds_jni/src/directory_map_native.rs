@@ -4,7 +4,7 @@
 use std::sync::{Mutex, RwLock};
 
 use jni::objects::JClass;
-use jni::sys::{jboolean, jlong, jobject};
+use jni::sys::{jboolean, jfloat, jlong, jobject};
 use jni::JNIEnv;
 
 use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
@@ -30,11 +30,14 @@ pub struct DirectoryMap {
 }
 
 impl DirectoryMap {
-    fn new(capacity: usize) -> Self {
-        Self {
-            building: Mutex::new(DirectoryMapBuilding(false, InternalBuffers::new(capacity))),
-            serving: RwLock::new(InternalBuffers::new(capacity)),
-        }
+    fn new(starting_capacity: usize, min_load_factor: f32, max_load_factor: f32) -> Result<Self, PossibleError> {
+        Ok(Self {
+            building: Mutex::new(DirectoryMapBuilding(
+                false,
+                InternalBuffers::new(starting_capacity, min_load_factor, max_load_factor)?,
+            )),
+            serving: RwLock::new(InternalBuffers::new(starting_capacity, min_load_factor, max_load_factor)?),
+        })
     }
 
     fn insert(&self, e164: Phone, uuid: SgxsdUuid) -> Result<bool, PossibleError> {
@@ -111,9 +114,15 @@ impl DirectoryMap {
 pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeInit(
     _env: JNIEnv,
     _class: JClass,
-    capacity: jlong,
+    starting_capacity: jlong,
+    min_load_factor: jfloat,
+    max_load_factor: jfloat,
 ) -> jlong {
-    Box::into_raw(Box::new(DirectoryMap::new(capacity as usize))) as jlong
+    Box::into_raw(Box::new(DirectoryMap::new(
+        starting_capacity as usize,
+        min_load_factor as f32,
+        max_load_factor as f32,
+    ))) as jlong
 }
 
 #[allow(non_snake_case)]
@@ -202,7 +211,7 @@ mod test {
             0xDEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
         ]);
 
-        let map = DirectoryMap::new(1000);
+        let map = DirectoryMap::new(1000, 0.75, 0.85).expect("DirectoryMap should construct successfully");
         assert_eq!(map.size(), 0);
 
         let result = map.commit();
@@ -238,7 +247,7 @@ mod test {
 
     #[test]
     fn borrow_function_test() {
-        let map = DirectoryMap::new(1000);
+        let map = DirectoryMap::new(1000, 0.75, 0.85).expect("DirectoryMap should construct successfully");
         let mut set = HashSet::new();
 
         let number: u64 = 15555550100;
@@ -267,16 +276,19 @@ mod test {
         assert_eq!(map.size(), 1000);
 
         let result = map.borrow_serving_buffers(|e164s, uuids| {
-            assert_eq!(e164s.len(), 1000);
-            assert_eq!(uuids.len(), 1000);
+            assert_eq!(e164s.len(), 1284);
+            assert_eq!(uuids.len(), 1284);
             assert_eq!(set.len(), 1000);
-            for i in 0..1000usize {
+            for i in 0..1284usize {
                 let test_number = e164s[i];
                 let test_uuid = ((uuids[i].data64[0] as u128) << 64) | (uuids[i].data64[1] as u128);
-                let original_i = ((test_number - number) / number_g) as usize;
-                assert_eq!(original_i, ((test_uuid - uuid) / uuid_g) as usize);
-                assert!(set.contains(&original_i));
-                set.remove(&original_i);
+                assert_ne!(test_number, 0xFFFFFFFFFFFFFFFF);
+                if test_number != 0 {
+                    let original_i = ((test_number - number) / number_g) as usize;
+                    assert_eq!(original_i, ((test_uuid - uuid) / uuid_g) as usize);
+                    assert!(set.contains(&original_i));
+                    set.remove(&original_i);
+                }
             }
             assert_eq!(set.len(), 0);
             Ok(())

@@ -21,16 +21,18 @@ redis:
    - # Redis Sentinel host:port 2
 
 directory:
-  capacity:       # Directory hash table capacity (integer)
-  mapBuilderUrl:  # Url for where to query for peer snapshots
+  initialCapacity:         # Directory hash table initial capacity (integer)
+  minLoadFactor:           # Directory hash table minimum load factor (decimal in range [0, 1])
+  maxLoadFactor:           # Directory hash table maximum load factor (decimal in range [0, 1])
+  mapBuilderUrl:           # Url for where to query for peer snapshots
   peerAuthenticationToken: # Token used to authenticate with a peer
-  peerReadEligible: # boolean on whether you should attempt to load from a peer or redis
-  maxPeerBuildAttempts: # Number of times to try and read from a peer before falling back to redis
-  sqs:            # SQS FIFO queue config for directory event replication from Signal-Server
-    accessKey:    # AWS access key ID for replication SQS FIFO queue
-    accessSecret: # AWS access key secret for replication SQS FIFO queue
-    queueUrl:     # URL for replication SQS FIFO queue
-    queueRegion:  # AWS region for replication SQS FIFO queue
+  peerReadEligible:        # boolean on whether you should attempt to load from a peer or redis
+  maxPeerBuildAttempts:    # Number of times to try and read from a peer before falling back to redis
+  sqs:                     # SQS FIFO queue config for directory event replication from Signal-Server
+    accessKey:             # AWS access key ID for replication SQS FIFO queue
+    accessSecret:          # AWS access key secret for replication SQS FIFO queue
+    queueUrl:              # URL for replication SQS FIFO queue
+    queueRegion:           # AWS region for replication SQS FIFO queue
 
 limits:
   contactQueries:

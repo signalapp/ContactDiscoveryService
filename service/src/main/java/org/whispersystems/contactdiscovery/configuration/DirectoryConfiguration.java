@@ -29,10 +29,15 @@ public class DirectoryConfiguration {
 
   @JsonProperty
   @NotNull
-  private int capacity;
+  private long initialCapacity;
 
   @JsonProperty
-  private boolean useNative = false;
+  @NotNull
+  private float minLoadFactor;
+
+  @JsonProperty
+  @NotNull
+  private float maxLoadFactor;
 
   @JsonProperty
   @NotNull
@@ -57,12 +62,16 @@ public class DirectoryConfiguration {
   @JsonProperty
   private boolean enableReconciliation = true;
 
-  public int getCapacity() {
-    return capacity;
+  public long getInitialCapacity() {
+    return initialCapacity;
   }
 
-  public boolean isUseNative() {
-    return useNative;
+  public float getMinLoadFactor() {
+    return minLoadFactor;
+  }
+
+  public float getMaxLoadFactor() {
+    return maxLoadFactor;
   }
 
   public DirectorySqsConfiguration getSqsConfiguration() {
