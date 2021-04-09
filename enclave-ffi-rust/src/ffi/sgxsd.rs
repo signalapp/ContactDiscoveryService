@@ -42,8 +42,8 @@ pub use super::bindgen_wrapper::{
 };
 
 pub struct MessageReply {
-    pub iv:   SgxsdAesGcmIv,
-    pub mac:  SgxsdAesGcmMac,
+    pub iv: SgxsdAesGcmIv,
+    pub mac: SgxsdAesGcmMac,
     pub data: Vec<u8>,
 }
 
@@ -52,7 +52,7 @@ pub struct MessageTag {
 }
 
 pub struct SgxsdQuote {
-    pub gid:  u32,
+    pub gid: u32,
     pub data: Vec<u8>,
 }
 
@@ -66,9 +66,9 @@ pub enum SgxsdErrorKind {
 
 #[derive(Clone, Copy)]
 pub struct SgxsdError {
-    pub kind:   SgxsdErrorKind,
+    pub kind: SgxsdErrorKind,
     pub status: SgxStatus,
-    pub name:   &'static str,
+    pub name: &'static str,
 }
 
 pub trait SgxResultExt<T> {
@@ -127,7 +127,7 @@ impl fmt::Display for SgxsdError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum CdsError {
-    InvalidRequestSize      = CDS_ERROR_INVALID_REQUEST_SIZE,
+    InvalidRequestSize = CDS_ERROR_INVALID_REQUEST_SIZE,
     QueryCommitmentMismatch = CDS_ERROR_QUERY_COMMITMENT_MISMATCH,
 }
 
@@ -209,10 +209,10 @@ fn pending_request_id_from_u8(value: &[u8]) -> SgxsdPendingRequestId {
 
     SgxsdPendingRequestId {
         data: pending_request_id_data,
-        iv:   SgxsdAesGcmIv {
+        iv: SgxsdAesGcmIv {
             data: pending_request_id_iv,
         },
-        mac:  SgxsdAesGcmMac {
+        mac: SgxsdAesGcmMac {
             data: pending_request_id_mac,
         },
     }
@@ -238,7 +238,9 @@ impl TryFrom<Vec<u8>> for SgxsdPendingRequestId {
 }
 
 pub fn sgxsd_res<F>(ecall: F, name: &'static str) -> SgxsdResult<()>
-where F: FnOnce(&mut sgx_status_t) -> sgx_status_t {
+where
+    F: FnOnce(&mut sgx_status_t) -> sgx_status_t,
+{
     let mut res: sgx_status_t = SgxStatus::Success.into();
     match SgxStatus::from(ecall(&mut res)) {
         SgxStatus::Success => match SgxStatus::from(res) {
@@ -271,8 +273,7 @@ pub fn sgxsd_node_init(enclave_id: SgxEnclaveId, pending_requests_table_order: u
 pub fn sgxsd_negotiate_request(
     enclave_id: SgxEnclaveId,
     request: &SgxsdRequestNegotiationRequest,
-) -> SgxsdResult<SgxsdRequestNegotiationResponse>
-{
+) -> SgxsdResult<SgxsdRequestNegotiationResponse> {
     let mut response: SgxsdRequestNegotiationResponse = Default::default();
     let () = sgxsd_res(
         |res| unsafe { sgxsd_enclave_negotiate_request(enclave_id, res, request, &mut response) },
@@ -314,8 +315,7 @@ pub fn sgxsd_server_call(
     msg_data: &[u8],
     reply_fun: impl FnOnce(SgxsdResult<MessageReply>) + Send + 'static,
     server_handle: SgxsdServerStateHandle,
-) -> SgxsdResult<()>
-{
+) -> SgxsdResult<()> {
     let tag = MessageTag {
         callback: Box::new(reply_fun),
     }

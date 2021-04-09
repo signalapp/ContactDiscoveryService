@@ -57,6 +57,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -279,14 +280,16 @@ public class DirectoryManager implements Managed {
     }
   }
 
-  /**
-   * borrowBuffers passes the currently readable buffers to the given BorrowFunc under a read lock.
-   */
-  public void borrowBuffers(DirectoryMapNative.BorrowFunction func) throws DirectoryUnavailableException, SgxException {
+  @FunctionalInterface
+  public interface Borrow {
+    void accept(DirectoryMapNative directoryMapNative) throws SgxException;
+  }
+
+  public void borrow(Borrow consumer) throws DirectoryUnavailableException, SgxException {
     if (!isBuilt()) {
       throw new DirectoryUnavailableException();
     }
-    getCurrentDirectoryMap().borrow(func);
+    consumer.accept(getCurrentDirectoryMap());
   }
 
   @Override

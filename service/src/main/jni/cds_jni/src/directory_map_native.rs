@@ -3,17 +3,18 @@
 
 use std::sync::{Mutex, RwLock};
 
-use jni::objects::{JClass, JValue};
+use jni::objects::JClass;
 use jni::sys::{jboolean, jlong, jobject};
 use jni::JNIEnv;
 
+use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
 use internal_buffers::InternalBuffers;
 
-use crate::{bool_to_jni_bool, generic_exception, jni_catch, PossibleError, ILLEGAL_STATE_EXCEPTION_CLASS, NULL_POINTER_EXCEPTION_CLASS};
+use crate::{bool_to_jni_bool, generic_exception, jni_catch, PossibleError, NULL_POINTER_EXCEPTION_CLASS};
 
 mod internal_buffers;
 
-fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Result<&'static mut DirectoryMap, PossibleError> {
+pub(crate) fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Result<&'static mut DirectoryMap, PossibleError> {
     if native_handle == 0 {
         Err(generic_exception(NULL_POINTER_EXCEPTION_CLASS, "native_handle is null"))
     } else {
@@ -23,7 +24,7 @@ fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Res
 
 struct DirectoryMapBuilding(bool, InternalBuffers);
 
-struct DirectoryMap {
+pub struct DirectoryMap {
     building: Mutex<DirectoryMapBuilding>,
     serving: RwLock<InternalBuffers>,
 }
@@ -36,7 +37,7 @@ impl DirectoryMap {
         }
     }
 
-    fn insert(&self, e164: [u8; 8], uuid: [u8; 16]) -> Result<bool, PossibleError> {
+    fn insert(&self, e164: Phone, uuid: SgxsdUuid) -> Result<bool, PossibleError> {
         let mut lock = self
             .building
             .lock()
@@ -48,7 +49,7 @@ impl DirectoryMap {
         Ok(added)
     }
 
-    fn remove(&self, e164: [u8; 8]) -> Result<bool, PossibleError> {
+    fn remove(&self, e164: Phone) -> Result<bool, PossibleError> {
         let mut lock = self
             .building
             .lock()
@@ -60,12 +61,15 @@ impl DirectoryMap {
         Ok(removed)
     }
 
-    fn run_borrow_function(&self, borrow_function: impl FnOnce(&[u8], &[u8]) -> Result<(), PossibleError>) -> Result<(), PossibleError> {
+    pub(crate) fn borrow_serving_buffers(
+        &self,
+        borrow: impl FnOnce(&[Phone], &[SgxsdUuid]) -> Result<(), PossibleError>,
+    ) -> Result<(), PossibleError> {
         let read_lock = self
             .serving
             .read()
-            .expect("DirectoryMap serving read lock poisoned while locking during run_borrow_function");
-        borrow_function(read_lock.e164s_slice(), read_lock.uuids_slice())
+            .expect("DirectoryMap serving read lock poisoned while locking during borrow_serving_buffers");
+        borrow(read_lock.e164s_slice(), read_lock.uuids_slice())
     }
 
     fn commit(&self) -> Result<bool, PossibleError> {
@@ -134,12 +138,14 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
 ) -> jboolean {
     bool_to_jni_bool(jni_catch(env.clone(), false, || {
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
-        let uuid_high_bits = env.call_method(uuid, "getMostSignificantBits", "()J", &[])?.j().unwrap();
-        let uuid_low_bits = env.call_method(uuid, "getLeastSignificantBits", "()J", &[])?.j().unwrap();
-        let mut uuid_bytes = [0; 16];
-        uuid_bytes[..8].copy_from_slice(&uuid_high_bits.to_be_bytes());
-        uuid_bytes[8..].copy_from_slice(&uuid_low_bits.to_be_bytes());
-        Ok(directory_map.insert(e164.to_be_bytes(), uuid_bytes)?)
+        let uuid_high_bits = env.call_method(uuid, "getMostSignificantBits", "()J", &[])?.j().unwrap() as u64;
+        let uuid_low_bits = env.call_method(uuid, "getLeastSignificantBits", "()J", &[])?.j().unwrap() as u64;
+        Ok(directory_map.insert(
+            e164 as Phone,
+            SgxsdUuid {
+                data64: [uuid_high_bits, uuid_low_bits],
+            },
+        )?)
     }))
 }
 
@@ -153,56 +159,8 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
 ) -> jboolean {
     bool_to_jni_bool(jni_catch(env.clone(), false, || {
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
-        Ok(directory_map.remove(e164.to_be_bytes())?)
+        Ok(directory_map.remove(e164 as Phone)?)
     }))
-}
-
-#[allow(non_snake_case)]
-#[no_mangle]
-pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeBorrow(
-    env: JNIEnv,
-    _class: JClass,
-    native_handle: jlong,
-    borrow_function: jobject,
-) {
-    jni_catch(env.clone(), (), || {
-        let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
-        directory_map.run_borrow_function(|e164s, uuids| {
-            if e164s.len() * 2 != uuids.len() {
-                return Err(generic_exception(
-                    ILLEGAL_STATE_EXCEPTION_CLASS,
-                    "e164 slice should be half as long as uuids slice",
-                ));
-            }
-            if e164s.len() % 8 != 0 {
-                return Err(generic_exception(
-                    ILLEGAL_STATE_EXCEPTION_CLASS,
-                    "e164 slice should be a multiple of 8 bytes long",
-                ));
-            }
-            if uuids.len() % 16 != 0 {
-                // this isn't theoretically possible given the above two checks, but included for
-                // completeness
-                return Err(generic_exception(
-                    ILLEGAL_STATE_EXCEPTION_CLASS,
-                    "uuid slice should be a multiple of 16 bytes long",
-                ));
-            }
-            env.call_method(
-                borrow_function,
-                "consume",
-                "(JJJJ)V",
-                &[
-                    JValue::from(e164s.as_ptr() as jlong),
-                    JValue::from(e164s.len() as jlong),
-                    JValue::from(uuids.as_ptr() as jlong),
-                    JValue::from(uuids.len() as jlong),
-                ],
-            )?;
-            Ok(())
-        })?;
-        Ok(())
-    })
 }
 
 #[allow(non_snake_case)]
@@ -233,16 +191,16 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::collections::HashSet;
-    use std::convert::TryInto;
+
+    use super::*;
 
     #[test]
     fn single_element_test() {
-        let e164 = [0u8, 0, 0, 0x03, 0x9F, 0x5E, 0x8B, 0x6D];
-        let uuid = [
+        let e164 = 0x000000039F5E8B6D;
+        let uuid = SgxsdUuid::from([
             0xDEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
-        ];
+        ]);
 
         let map = DirectoryMap::new(1000);
         assert_eq!(map.size(), 0);
@@ -283,19 +241,20 @@ mod test {
         let map = DirectoryMap::new(1000);
         let mut set = HashSet::new();
 
-        let number = 15555550100i64;
-        let uuid = u128::from_be_bytes([
-            0xd9, 0x03, 0xcd, 0x9e, 0xab, 0x77, 0x6f, 0xf5, 0x66, 0x65, 0x98, 0x89, 0x39, 0xb4, 0xe3, 0x51,
-        ]);
+        let number: u64 = 15555550100;
+        let uuid: u128 = 0xd903cd9eab776ff56665988939b4e351;
 
-        let number_g = 31i64;
-        let uuid_g = 414094729u128;
+        let number_g: u64 = 31;
+        let uuid_g: u128 = 414094729;
 
         for i in 0..1000usize {
             set.insert(i);
+            let uuid_i = uuid + uuid_g * (i as u128);
             let result = map.insert(
-                (number + number_g * (i as i64)).to_be_bytes(),
-                (uuid + uuid_g * (i as u128)).to_be_bytes(),
+                (number + number_g * (i as u64)) as Phone,
+                SgxsdUuid {
+                    data64: [(uuid_i >> 64) as u64, uuid_i as u64],
+                },
             );
             assert!(result.is_ok());
             assert!(result.unwrap());
@@ -307,13 +266,13 @@ mod test {
         assert!(result.unwrap());
         assert_eq!(map.size(), 1000);
 
-        let result = map.run_borrow_function(|e164s, uuids| {
-            assert_eq!(e164s.len(), 8000);
-            assert_eq!(uuids.len(), 16000);
+        let result = map.borrow_serving_buffers(|e164s, uuids| {
+            assert_eq!(e164s.len(), 1000);
+            assert_eq!(uuids.len(), 1000);
             assert_eq!(set.len(), 1000);
             for i in 0..1000usize {
-                let test_number = i64::from_be_bytes(e164s[(8 * i)..(8 * (i + 1))].try_into().unwrap());
-                let test_uuid = u128::from_be_bytes(uuids[(16 * i)..(16 * (i + 1))].try_into().unwrap());
+                let test_number = e164s[i];
+                let test_uuid = ((uuids[i].data64[0] as u128) << 64) | (uuids[i].data64[1] as u128);
                 let original_i = ((test_number - number) / number_g) as usize;
                 assert_eq!(original_i, ((test_uuid - uuid) / uuid_g) as usize);
                 assert!(set.contains(&original_i));

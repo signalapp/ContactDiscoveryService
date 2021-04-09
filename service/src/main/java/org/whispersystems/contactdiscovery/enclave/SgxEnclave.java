@@ -23,6 +23,7 @@ import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.directory.DirectoryMapNative;
 import org.whispersystems.contactdiscovery.util.Constants;
 
 import javax.crypto.AEADBadTagException;
@@ -324,11 +325,11 @@ public class SgxEnclave implements Runnable {
     public synchronized void close() throws SgxException {
       if (!processed) {
         batchFuture.completeExceptionally(new SgxException("batch_closed"));
-        process(0, 0, 0, 0);
+        process(null);
       }
     }
 
-    public synchronized void process(long e164sHandle, long e164sCapacityBytes, long uuidsHandle, long uuidsCapacityBytes) throws SgxException {
+    public synchronized void process(DirectoryMapNative directoryMapNative) throws SgxException {
       if (processed) {
         throw new IllegalStateException("batch_already_processed");
       }
@@ -337,7 +338,7 @@ public class SgxEnclave implements Runnable {
 
       try (Timer.Context ctx = NATIVE_LOOKUP_TIMER.time(); Timer.Context perEnclaveCtx = perEnclaveTimer.time()) {
         try {
-          nativeServerStop(getEnclaveState().id, stateHandle, e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes);
+          nativeServerStop(getEnclaveState().id, stateHandle, directoryMapNative != null ? directoryMapNative.getNativeHandle() : 0);
         } catch (SgxException ex) {
           batchFuture.completeExceptionally(convertSgxException(ex));
           NATIVE_LOOKUP_ERROR_METER.mark();
@@ -378,6 +379,6 @@ public class SgxEnclave implements Runnable {
 
   private static native void nativeServerStart(long enclaveId, long stateHandle, int maxQueryPhones) throws SgxException;
   private static native void nativeServerCall(long enclaveId, long stateHandle, NativeServerCallArgs args, CompletableFuture<SgxsdMessage> callbackFut) throws SgxException;
-  private static native void nativeServerStop(long enclaveId, long stateHandle, long e164sHandle, long e164sCapacityBytes, long uuidsHandle, long uuidsCapacityBytes) throws SgxException;
+  private static native void nativeServerStop(long enclaveId, long stateHandle, long directoryMapHandle) throws SgxException;
   private static native int nativeReportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccessful);
 }

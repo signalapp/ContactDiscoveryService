@@ -10,6 +10,7 @@ use sgx_sdk_ffi::SgxStatus;
 use thiserror::Error as ThisError;
 
 use cds_enclave_ffi::sgxsd;
+use directory_map_native::{convert_native_handle_to_directory_map_reference, DirectoryMap};
 
 mod directory_map_native;
 mod sgx_enclave;
@@ -17,7 +18,6 @@ mod sgx_enclave;
 const SGX_EXCEPTION_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxException";
 const SGX_EXCEPTION_CSTOR: &'static str = "(Ljava/lang/String;J)V";
 
-const ILLEGAL_STATE_EXCEPTION_CLASS: &'static str = "java/lang/IllegalStateException";
 const NULL_POINTER_EXCEPTION_CLASS: &'static str = "java/lang/NullPointerException";
 const RUNTIME_EXCEPTION_CLASS: &'static str = "java/lang/RuntimeException";
 

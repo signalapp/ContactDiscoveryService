@@ -57,9 +57,9 @@ typedef struct sgxsd_server_handle_call_args {
 _Static_assert(sizeof(cds_call_args_t) == sizeof(uint32_t) + sizeof(uint32_t) + sizeof(cds_encrypted_msg_t) + SGXSD_SHA256_HASH_SIZE + sizeof(uuid_t) + sizeof(uint8_t *), "Enclave ABI compatibility");
 
 typedef struct sgxsd_server_terminate_args {
-    phone_t *in_phones;
-    size_t  in_phone_count;
-    uuid_t  *in_uuids;
+    const phone_t* in_phones;
+    size_t in_phone_count;
+    const uuid_t* in_uuids;
 } sgxsd_server_terminate_args_t, cds_stop_args_t;
 _Static_assert(sizeof(cds_stop_args_t) == sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t), "Enclave ABI compatibility");
 

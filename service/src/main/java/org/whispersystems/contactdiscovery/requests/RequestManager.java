@@ -243,7 +243,7 @@ public class RequestManager implements Managed {
 
           try (Timer.Context ignored1 = updatePerEnclaveMetrics(enclaveId, batchSize);
                Timer.Context ignored2 = processBatchTimer.time()) {
-            directoryManager.borrowBuffers(batch::process);
+            directoryManager.borrow(batch::process);
           }
         }
       } catch (Throwable t) {

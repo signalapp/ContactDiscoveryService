@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::mem::size_of;
-use std::slice;
 use std::sync::Arc;
 
 use jni::objects::*;
@@ -13,7 +12,8 @@ use sgx_sdk_ffi::{SgxEnclaveId, SgxStatus};
 use cds_enclave_ffi::sgxsd::{self, MessageReply, SgxsdError};
 
 use crate::{
-    generic_exception, jni_catch, sgx_name_code_to_exception, PossibleError, NULL_POINTER_EXCEPTION_CLASS, RUNTIME_EXCEPTION_CLASS,
+    convert_native_handle_to_directory_map_reference, generic_exception, jni_catch, sgx_name_code_to_exception, DirectoryMap,
+    PossibleError, NULL_POINTER_EXCEPTION_CLASS, RUNTIME_EXCEPTION_CLASS,
 };
 
 const SGX_NEGOTIATION_RESPONSE_CLASS: &'static str = "org/whispersystems/contactdiscovery/enclave/SgxRequestNegotiationResponse";
@@ -446,64 +446,29 @@ pub extern "C" fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_na
     _class: JClass,
     enclave_id: jlong,
     state_handle: jlong,
-    e164s_handle: jlong,
-    e164s_capacity_bytes: jlong,
-    uuids_handle: jlong,
-    uuids_capacity_bytes: jlong,
+    directory_map_handle: jlong,
 ) {
     return jni_catch(env.clone(), (), || {
-        server_stop(
-            enclave_id,
-            state_handle,
-            e164s_handle,
-            e164s_capacity_bytes,
-            uuids_handle,
-            uuids_capacity_bytes,
-        )
+        let directory_map = convert_native_handle_to_directory_map_reference(directory_map_handle)?;
+        server_stop(enclave_id, state_handle, directory_map)
     });
 }
 
-fn server_stop(
-    enclave_id: i64,
-    state_handle: i64,
-    e164s_handle: i64,
-    e164s_capacity_bytes: i64,
-    uuids_handle: i64,
-    uuids_capacity_bytes: i64,
-) -> Result<(), PossibleError> {
-    let e164s = convert_handle_and_capacity_to_slice(&e164s_handle, e164s_capacity_bytes);
-    let uuids = convert_handle_and_capacity_to_slice(&uuids_handle, uuids_capacity_bytes);
-    if e164s.len() / size_of::<sgxsd::Phone>() != uuids.len() / size_of::<sgxsd::SgxsdUuid>() {
-        return Err(PossibleError::SgxError {
-            name: "e164s_and_uuids_buffer_length_mismatch",
-            code: 0,
-        });
-    }
-
-    // We are abusing the memory layout here because this code is about to be promptly deleted when
-    // the DirectoryMap BorrowFunction implementation is pushed from Java into Rust. Delete these
-    // unsafe calls when that occurs.
-    let in_phones = unsafe { slice::from_raw_parts_mut(e164s.as_mut_ptr() as *mut u64, e164s.len() / size_of::<u64>()) };
-    let in_uuids = unsafe {
-        slice::from_raw_parts_mut(
-            uuids.as_mut_ptr() as *mut sgxsd::SgxsdUuid,
-            uuids.len() / size_of::<sgxsd::SgxsdUuid>(),
-        )
-    };
-    let args = sgxsd::ServerStopArgs {
-        in_phones: &mut in_phones[0],
-        in_uuids: &mut in_uuids[0],
-        in_phone_count: in_phones.len() as u64,
-    };
-    Ok(sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)?)
-}
-
-fn convert_handle_and_capacity_to_slice(handle: &i64, capacity: i64) -> &mut [u8] {
-    if *handle == 0 {
-        &mut []
-    } else {
-        unsafe { slice::from_raw_parts_mut((*handle) as *mut u8, capacity as usize) }
-    }
+fn server_stop(enclave_id: i64, state_handle: i64, directory_map: &DirectoryMap) -> Result<(), PossibleError> {
+    directory_map.borrow_serving_buffers(|e164s, uuids| {
+        if e164s.len() != uuids.len() {
+            return Err(PossibleError::SgxError {
+                name: "e164s_and_uuids_buffer_length_mismatch",
+                code: 0,
+            });
+        }
+        let args = sgxsd::ServerStopArgs {
+            in_phones: &e164s[0],
+            in_uuids: &uuids[0],
+            in_phone_count: e164s.len() as u64,
+        };
+        Ok(sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)?)
+    })
 }
 
 #[allow(non_snake_case)]
