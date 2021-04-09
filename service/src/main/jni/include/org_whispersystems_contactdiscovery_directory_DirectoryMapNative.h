@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
  * Method:    nativeInit
- * Signature: (J)J
+ * Signature: (JFF)J
  */
 JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeInit
-  (JNIEnv *, jclass, jlong);
+  (JNIEnv *, jclass, jlong, jfloat, jfloat);
 
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
@@ -41,14 +41,6 @@ JNIEXPORT jboolean JNICALL Java_org_whispersystems_contactdiscovery_directory_Di
 
 /*
  * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
- * Method:    nativeBorrow
- * Signature: (JLorg/whispersystems/contactdiscovery/directory/DirectoryMapNative/BorrowFunction;)V
- */
-JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeBorrow
-  (JNIEnv *, jclass, jlong, jobject);
-
-/*
- * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
  * Method:    nativeCommit
  * Signature: (J)Z
  */
@@ -61,6 +53,14 @@ JNIEXPORT jboolean JNICALL Java_org_whispersystems_contactdiscovery_directory_Di
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeSize
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
+ * Method:    nativeCapacity
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeCapacity
   (JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus

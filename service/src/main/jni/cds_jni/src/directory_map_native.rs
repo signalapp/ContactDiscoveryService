@@ -102,33 +102,45 @@ impl DirectoryMap {
             .expect("DirectoryMap serving read lock poisoned while locking during size")
             .size()
     }
+
+    fn capacity(&self) -> usize {
+        self.serving
+            .read()
+            .expect("DirectoryMap serving read lock poisoned while locking during capacity")
+            .capacity()
+    }
 }
 
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeInit(
-    _env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
     starting_capacity: jlong,
     min_load_factor: jfloat,
     max_load_factor: jfloat,
 ) -> jlong {
-    Box::into_raw(Box::new(DirectoryMap::new(
-        starting_capacity as usize,
-        min_load_factor as f32,
-        max_load_factor as f32,
-    ))) as jlong
+    jni_catch(env.clone(), 0, || {
+        Ok(Box::into_raw(Box::new(DirectoryMap::new(
+            starting_capacity as usize,
+            min_load_factor as f32,
+            max_load_factor as f32,
+        )?)) as jlong)
+    })
 }
 
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeFree(
-    _env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
     native_handle: jlong,
 ) {
-    // recapture ownership of native_handle into a Box and let end of scope free it
-    let _box = unsafe { Box::from_raw(native_handle as *mut DirectoryMap) };
+    jni_catch(env.clone(), (), || {
+        // recapture ownership of native_handle into a Box and let end of scope free it
+        let _box = unsafe { Box::from_raw(native_handle as *mut DirectoryMap) };
+        Ok(())
+    });
 }
 
 #[allow(non_snake_case)]
@@ -190,6 +202,19 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
     jni_catch(env.clone(), 0, || {
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
         Ok(directory_map.size() as jlong)
+    })
+}
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeCapacity(
+    env: JNIEnv,
+    _class: JClass,
+    native_handle: jlong,
+) -> jlong {
+    jni_catch(env.clone(), 0, || {
+        let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
+        Ok(directory_map.capacity() as jlong)
     })
 }
 

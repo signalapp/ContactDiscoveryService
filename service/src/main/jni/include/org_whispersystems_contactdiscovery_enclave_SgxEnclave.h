@@ -60,10 +60,10 @@ JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_enclave_SgxEncla
 /*
  * Class:     org_whispersystems_contactdiscovery_enclave_SgxEnclave
  * Method:    nativeServerStop
- * Signature: (JJJJJJ)V
+ * Signature: (JJJ)V
  */
 JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_nativeServerStop
-  (JNIEnv *, jclass, jlong, jlong, jlong, jlong, jlong, jlong);
+  (JNIEnv *, jclass, jlong, jlong, jlong);
 
 /*
  * Class:     org_whispersystems_contactdiscovery_enclave_SgxEnclave

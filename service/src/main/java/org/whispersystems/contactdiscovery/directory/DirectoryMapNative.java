@@ -54,10 +54,15 @@ public class DirectoryMapNative implements AutoCloseable {
     return nativeSize(nativeHandle);
   }
 
+  public long capacity() {
+    return nativeCapacity(nativeHandle);
+  }
+
   private static native long nativeInit(long startingCapacity, float minLoadFactor, float maxLoadFactor);
   private static native void nativeFree(long nativeHandle);
   private static native boolean nativeInsert(long nativeHandle, long e164, UUID uuid);
   private static native boolean nativeRemove(long nativeHandle, long e164);
   private static native boolean nativeCommit(long nativeHandle);
   private static native long nativeSize(long nativeHandle);
+  private static native long nativeCapacity(long nativeHandle);
 }

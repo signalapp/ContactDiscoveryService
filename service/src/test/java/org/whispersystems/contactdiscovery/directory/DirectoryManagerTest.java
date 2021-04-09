@@ -3,10 +3,12 @@ package org.whispersystems.contactdiscovery.directory;
 import com.google.protobuf.ByteString;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
+import org.whispersystems.contactdiscovery.util.NativeUtils;
 import org.whispersystems.dispatch.redis.PubSubConnection;
 import org.whispersystems.dispatch.redis.PubSubReply;
 import redis.clients.jedis.Jedis;
@@ -25,6 +27,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -36,6 +39,10 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class DirectoryManagerTest {
+  @BeforeClass
+  public static void setupClass() throws Exception {
+    NativeUtils.loadNativeResource("/enclave-jni.so");
+  }
 
   private final RedisClientFactory      redisClientFactory      = mock(RedisClientFactory.class);
   private final PubSubConnection        pubSubConnection        = mock(PubSubConnection.class);
@@ -65,7 +72,7 @@ public class DirectoryManagerTest {
     when(jedis.scriptLoad(anyString())).thenReturn("fakesha");
     when(redisClientFactory.connect()).thenReturn(pubSubConnection);
 
-    when(directoryMapFactory.create()).thenReturn(directoryMap);
+    when(directoryMapFactory.create(anyLong())).thenReturn(directoryMap);
 
     when(directoryCache.isUserSetBuilt(any())).thenReturn(true);
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(new ScanResult<>("0", Collections.emptyList()));
@@ -89,7 +96,7 @@ public class DirectoryManagerTest {
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
-    directoryManager.borrowBuffers((e164sHandle, e164sCapacityBytes, uuidsHandle, uuidsCapacityBytes) -> {
+    directoryManager.borrow((map) -> {
       // Never called.
     });
   }
@@ -99,6 +106,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
     DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager , new AtomicReference<>(Optional.empty()), true);
+    assertThat(directoryManager).isNotNull();
     directoryManager.start();
 
     verify(directoryMap).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));

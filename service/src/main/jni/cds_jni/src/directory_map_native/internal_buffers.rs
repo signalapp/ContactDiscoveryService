@@ -93,7 +93,19 @@ impl InternalBuffers {
     }
 
     pub(super) fn capacity(&self) -> usize {
-        self.e164s_buffer.capacity()
+        // it is our intention throughout that len==capacity for each buffer and that the two
+        // buffer's capacities match
+        //
+        // however, this is not enforceable using reserve_exact as, despite the name, you are not
+        // guaranteed to get exactly the intended amount of capacity; this could result in the two
+        // buffers having non-matching capacity; additionally this could result in both being longer
+        // than the desired length
+        //
+        // we can control the length exactly though, so we will return length here as that can be
+        // guaranteed to be equivalent between the two buffers and we will treat the part of the
+        // Vec between len and capacity as non-existent for the purpose of the 'capacity' of the
+        // combined internal buffer
+        self.e164s_buffer.len()
     }
 
     /// Inserts a mapping from `e164` to `uuid` into the internal buffer.
@@ -146,9 +158,17 @@ impl InternalBuffers {
     /// Increases the size of `self`'s buffers to have enough space for `src`'s elements and then
     /// performs a deep copy.
     pub(super) fn copy_from(&mut self, src: &Self) -> Result<(), InternalBuffersError> {
-        if self.capacity() < src.capacity() {
-            self.e164s_buffer.resize(src.capacity(), FREE_E164);
-            self.uuids_buffer.resize(src.capacity(), FREE_UUID);
+        let src_capacity = src.capacity();
+        let self_capacity = self.capacity();
+        if self_capacity < src_capacity {
+            // resize alone might increase the space far more than we want, so let's manually
+            // reserve exactly the amount of space we want
+            self.e164s_buffer.reserve_exact(src_capacity - self_capacity);
+            self.uuids_buffer.reserve_exact(src_capacity - self_capacity);
+        }
+        if self_capacity != src_capacity {
+            self.e164s_buffer.resize(src_capacity, FREE_E164);
+            self.uuids_buffer.resize(src_capacity, FREE_UUID);
         }
         self.min_load_factor = src.min_load_factor;
         self.max_load_factor = src.max_load_factor;

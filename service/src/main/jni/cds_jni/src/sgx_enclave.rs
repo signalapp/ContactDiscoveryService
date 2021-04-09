@@ -449,8 +449,12 @@ pub extern "C" fn Java_org_whispersystems_contactdiscovery_enclave_SgxEnclave_na
     directory_map_handle: jlong,
 ) {
     return jni_catch(env.clone(), (), || {
-        let directory_map = convert_native_handle_to_directory_map_reference(directory_map_handle)?;
-        server_stop(enclave_id, state_handle, directory_map)
+        if directory_map_handle != 0 {
+            let directory_map = convert_native_handle_to_directory_map_reference(directory_map_handle)?;
+            server_stop(enclave_id, state_handle, directory_map)
+        } else {
+            server_stop_no_directory_map(enclave_id, state_handle)
+        }
     });
 }
 
@@ -469,6 +473,15 @@ fn server_stop(enclave_id: i64, state_handle: i64, directory_map: &DirectoryMap)
         };
         Ok(sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)?)
     })
+}
+
+fn server_stop_no_directory_map(enclave_id: i64, state_handle: i64) -> Result<(), PossibleError> {
+    let args = sgxsd::ServerStopArgs {
+        in_phones: std::ptr::null(),
+        in_uuids: std::ptr::null(),
+        in_phone_count: 0,
+    };
+    Ok(sgxsd::sgxsd_server_stop(enclave_id as u64, &args, state_handle as u64)?)
 }
 
 #[allow(non_snake_case)]
