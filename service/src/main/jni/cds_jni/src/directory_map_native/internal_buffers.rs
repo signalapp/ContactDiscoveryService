@@ -248,7 +248,7 @@ fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e16
 fn remove_from_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e164: Phone) -> bool {
     let slot_count = e164s_buffer.len();
     if slot_count != uuids_buffer.len() {
-        panic!("add_to_buffer used incorrectly with mismatching buffer sizes");
+        panic!("remove_from_buffer used incorrectly with mismatching buffer sizes");
     }
     let mut slot_index = hash_element(slot_count, e164);
 
