@@ -142,7 +142,8 @@ impl InternalBuffers {
 
     /// Copies every field from the `src` internal buffer.
     ///
-    /// `self` and `src` must have been created with the same capacity or this will return an `Err`.
+    /// Increases the size of `self`'s buffers to have enough space for `src`'s elements and then
+    /// performs a deep copy.
     pub(super) fn copy_from(&mut self, src: &Self) -> Result<(), InternalBuffersError> {
         if self.capacity() < src.capacity() {
             self.e164s_buffer.resize(src.capacity(), FREE_E164);
