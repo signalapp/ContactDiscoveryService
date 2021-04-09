@@ -119,7 +119,8 @@ impl InternalBuffers {
         if added {
             self.element_count += 1;
         }
-        if self.needs_rehash() {
+        let max_load_factor_slot_count: usize = (self.capacity() as f64 * self.max_load_factor as f64) as usize;
+        if self.used_slot_count >= max_load_factor_slot_count {
             self.rehash();
         }
 
@@ -156,11 +157,6 @@ impl InternalBuffers {
         self.e164s_buffer.copy_from_slice(src.e164s_buffer.as_slice());
         self.uuids_buffer.copy_from_slice(src.uuids_buffer.as_slice());
         Ok(())
-    }
-
-    fn needs_rehash(&self) -> bool {
-        let limit: usize = (self.capacity() as f64 * self.max_load_factor as f64) as usize;
-        self.used_slot_count >= limit
     }
 
     fn rehash(&mut self) {
