@@ -22,20 +22,15 @@ pub(crate) fn convert_native_handle_to_directory_map_reference(native_handle: jl
     }
 }
 
-struct DirectoryMapBuilding(bool, InternalBuffers);
-
 pub struct DirectoryMap {
-    building: Mutex<DirectoryMapBuilding>,
+    building: Mutex<(bool, InternalBuffers)>,
     serving: RwLock<InternalBuffers>,
 }
 
 impl DirectoryMap {
     fn new(starting_capacity: usize, min_load_factor: f32, max_load_factor: f32) -> Result<Self, PossibleError> {
         Ok(Self {
-            building: Mutex::new(DirectoryMapBuilding(
-                false,
-                InternalBuffers::new(starting_capacity, min_load_factor, max_load_factor)?,
-            )),
+            building: Mutex::new((false, InternalBuffers::new(starting_capacity, min_load_factor, max_load_factor)?)),
             serving: RwLock::new(InternalBuffers::new(starting_capacity, min_load_factor, max_load_factor)?),
         })
     }
