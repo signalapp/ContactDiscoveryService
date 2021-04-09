@@ -239,8 +239,8 @@ fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e16
     let e164_at_free_slot_index = e164s_buffer[free_slot_index];
 
     // insert the new data
-    e164s_buffer[slot_index] = e164;
-    uuids_buffer[slot_index] = uuid;
+    e164s_buffer[free_slot_index] = e164;
+    uuids_buffer[free_slot_index] = uuid;
 
     return e164_at_free_slot_index;
 }
@@ -362,5 +362,59 @@ mod test {
         assert_eq!(internal_buffers.size(), 1001);
         assert_eq!(internal_buffers.used_slot_count, 1001);
         assert_eq!(internal_buffers.capacity(), 1284);
+    }
+
+    #[test]
+    fn fill_in_the_gaps() {
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
+        let mut phone = [500, 1500, 2500, 3500];
+        let mut uuid = [
+            SgxsdUuid::from([0x80; 16]),
+            SgxsdUuid::from([0x81; 16]),
+            SgxsdUuid::from([0x82; 16]),
+            SgxsdUuid::from([0x83; 16]),
+        ];
+
+        assert_eq!(phone.len(), uuid.len());
+        assert!(phone.len() >= 3);
+        let capacity = internal_buffers.capacity();
+        let hash = hash_element(capacity, phone[0]);
+        let mut inserts_done: usize = 0;
+        for i in 0..phone.len() - 1 {
+            assert_eq!(capacity, internal_buffers.capacity());
+            let new_hash = hash_element(capacity, phone[i]);
+            assert_eq!(hash, new_hash);
+            internal_buffers.insert(phone[i], uuid[i]).expect("insert should succeed");
+            inserts_done += 1;
+            assert_eq!(internal_buffers.used_slot_count, inserts_done);
+        }
+        internal_buffers.remove(phone[phone.len() - 3]).expect("remove should succeed");
+        assert_eq!(internal_buffers.used_slot_count, inserts_done);
+        assert_eq!(internal_buffers.element_count, inserts_done - 1);
+        internal_buffers
+            .insert(phone[phone.len() - 1], uuid[uuid.len() - 1])
+            .expect("insert should succeed");
+        inserts_done += 1;
+        assert_eq!(internal_buffers.used_slot_count, inserts_done - 1);
+        assert_eq!(internal_buffers.element_count, inserts_done - 1);
+
+        // the order in the table should now be 0 -> 3 -> 2 because we inserted the first three,
+        // then removed the second one, then added the fourth.
+        assert!(capacity > hash + inserts_done - 1);
+        let len = phone.len();
+        let tmp = phone[len - 3];
+        phone[len - 3] = phone[len - 1];
+        phone[len - 1] = tmp;
+        let len = uuid.len();
+        let tmp = uuid[len - 3];
+        uuid[len - 3] = uuid[len - 1];
+        uuid[len - 1] = tmp;
+        for i in hash..hash + inserts_done - 1 {
+            assert_eq!(internal_buffers.e164s_buffer[i], phone[i - hash]);
+            assert_eq!(internal_buffers.uuids_buffer[i].data64, uuid[i - hash].data64);
+        }
+        for i in 0..internal_buffers.e164s_buffer.len() {
+            assert_ne!(internal_buffers.e164s_buffer[i], DELETED_E164);
+        }
     }
 }
