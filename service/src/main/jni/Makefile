@@ -55,3 +55,15 @@ docker:
 		--env MAKEFLAGS="$(MAKEFLAGS)" \
 		cds-jni-builder \
 		sh -c "cd src/service/src/main/jni/; make $(MAKETARGET)"
+
+.PHONY: run-jvm-tests
+run-jvm-tests: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
+run-jvm-tests:
+	$(DOCKER) run --rm --user $$(id -u):$$(id -g) --cap-add SYS_PTRACE \
+		-v `pwd`/$(projectdir)/../sgx_common:/home/cds/sgx_common \
+		-v `pwd`/$(projectdir):/home/cds/src \
+		-v $(HOME)/.m2:/home/cds/.m2 \
+		$(DOCKER_EXTRA) \
+		--env MAKEFLAGS="$(MAKEFLAGS)" \
+		cds-jni-builder \
+		sh -c "cd src; mvn verify -pl service -B -e -X"
