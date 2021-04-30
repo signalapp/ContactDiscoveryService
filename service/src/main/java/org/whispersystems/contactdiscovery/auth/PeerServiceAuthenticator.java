@@ -1,19 +1,8 @@
 /**
- * Copyright (C) 2021 Open Whisper Systems
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright 2021 Signal Messenger, LLC
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
+
 package org.whispersystems.contactdiscovery.auth;
 
 import com.codahale.metrics.Meter;
@@ -24,6 +13,7 @@ import io.dropwizard.auth.Authenticator;
 import io.dropwizard.auth.basic.BasicCredentials;
 import org.whispersystems.contactdiscovery.util.Constants;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Optional;
 
@@ -48,7 +38,7 @@ public class PeerServiceAuthenticator implements Authenticator<BasicCredentials,
   public Optional<PeerService> authenticate(BasicCredentials basicCredentials)
       throws AuthenticationException
   {
-    if (MessageDigest.isEqual(basicCredentials.getPassword().getBytes(), peerAuthenticationToken)) {
+    if (MessageDigest.isEqual(basicCredentials.getPassword().getBytes(StandardCharsets.UTF_8), peerAuthenticationToken)) {
       authenticationSucceededMeter.mark();
       return Optional.of(new PeerService());
     }
