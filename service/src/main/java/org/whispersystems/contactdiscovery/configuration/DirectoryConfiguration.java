@@ -36,6 +36,22 @@ public class DirectoryConfiguration {
   private DirectorySqsConfiguration sqs;
 
   @JsonProperty
+  @NotNull
+  private String peerAuthenticationToken;
+
+  @JsonProperty
+  private String mapBuilderUrl;
+
+  @JsonProperty
+  private boolean peerReadEligible = false;
+
+  @JsonProperty
+  private int maxPeerBuildAttempts = 2;
+
+  @JsonProperty
+  private boolean rebuildInPlaceEnabled = true;
+
+  @JsonProperty
   private boolean enableReconciliation = true;
 
   public int getCapacity() {
@@ -46,5 +62,17 @@ public class DirectoryConfiguration {
     return sqs;
   }
 
+  public String getPeerAuthenticationToken() {
+    return peerAuthenticationToken;
+  }
+
+  public String getMapBuilderUrl() { return mapBuilderUrl; }
+
   public boolean isReconciliationEnabled() { return enableReconciliation; }
+
+  public boolean isPeerReadEligible() { return peerReadEligible; }
+
+  public int getMaxPeerBuildAttempts() { return this.maxPeerBuildAttempts; }
+
+  public boolean isRebuildInPlaceEnabled() { return this.rebuildInPlaceEnabled; }
 }

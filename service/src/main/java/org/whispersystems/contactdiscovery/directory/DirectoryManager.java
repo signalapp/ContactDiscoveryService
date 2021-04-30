@@ -39,11 +39,19 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanResult;
 import redis.clients.util.Pool;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -66,12 +74,14 @@ public class DirectoryManager implements Managed {
   private static final Timer          getAllUsersTimer      = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
   private static final Timer          reconcileGetUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getUsersInRange"));
   private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
+  private static final Timer          rebuildFromPeerTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildfromPeer"));
   private static final Counter        rebuildLocalDataNullUUID = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "rebuildLocalData", "nullUUIDs"));
   private static final Counter        obsoluteTypeAdded = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "sqsMessages", "obsoleteTypeAdded"));
 
   private static final String CHANNEL = "signal_address_update";
 
   private static final int SCAN_CHUNK_SIZE = 5_000;
+  private static final int PUBSUB_SYNC_TIMEOUT_MILLIS = 30_000;
 
   private final RedisClientFactory      redisFactory;
   private final DirectoryMapFactory     directoryMapFactory;
@@ -86,13 +96,15 @@ public class DirectoryManager implements Managed {
   private PubSubConnection pubSubConnection;
   private PubSubConsumer   pubSubConsumer;
   private KeepAliveSender  keepAliveSender;
+  private DirectoryPeerManager directoryPeerManager;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap, boolean isReconciliationEnabled) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, DirectoryPeerManager directoryPeerManager, AtomicReference<Optional<DirectoryMap>> currentDirectoryMap, boolean isReconciliationEnabled) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
     this.directoryMapFactory     = directoryMapFactory;
     this.currentDirectoryMap     = currentDirectoryMap;
     this.isReconciliationEnabled = isReconciliationEnabled;
+    this.directoryPeerManager = directoryPeerManager;
   }
 
   public boolean isConnected() {
@@ -118,6 +130,40 @@ public class DirectoryManager implements Managed {
          Timer.Context timer = removeUserTimer.time()) {
       removeUser(jedis, uuid, address);
     }
+  }
+
+  public void generateSnapshot(OutputStream stream) throws IOException, DirectoryUnavailableException {
+    DirectoryMap directoryMap = getCurrentDirectoryMap();
+
+    try (Jedis jedis = jedisPool.getResource();
+         Timer.Context timer = rebuildFromPeerTimer.time()) {
+      String syncToken = UUID.randomUUID().toString();
+      logger.info("generateSnapshot with syncToken: {}", syncToken);
+
+      // Register the "message received" event
+      Future<Void> redisSyncComplete = this.pubSubConsumer.waitForSyncComplete(syncToken);
+
+      // Publish the sync message
+      PubSubMessage message = PubSubMessage.newBuilder()
+              .setContent(ByteString.copyFrom(syncToken.getBytes(StandardCharsets.UTF_8)))
+              .setType(PubSubMessage.Type.KEEPALIVE)
+              .build();
+
+      long publishResult = jedis.publish(CHANNEL.getBytes(), message.toByteArray());
+      if (publishResult == -1) {
+        logger.error("Failed to publish syncToken message");
+        throw new DirectoryUnavailableException();
+      }
+
+      // wait for the sync message to be received
+      try {
+        redisSyncComplete.get(PUBSUB_SYNC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+      } catch (Exception e) {
+        throw new DirectoryUnavailableException();
+      }
+    }
+    logger.info("writing directory out. size=" + directoryMap.size());
+    directoryMap.write(stream);
   }
 
   public boolean reconcile(Optional<UUID> fromUuid, Optional<UUID> toUuid, List<Pair<UUID, String>> users)
@@ -261,19 +307,72 @@ public class DirectoryManager implements Managed {
   }
 
   private void rebuildLocalData() {
+    if (directoryPeerManager.loadFromPeer()) {
+      try {
+        logger.info("building from peer service");
+        directoryPeerManager.startPeerLoadAttempt();
+        rebuildLocalDataFromPeer(directoryPeerManager.isRebuildInPlaceEnabled());
+        directoryPeerManager.markPeerLoadSuccessful();
+      } catch (Exception e) {
+        logger.info("peer build failed with error=" + e);
+        Util.sleep(directoryPeerManager.getBackoffTime().toMillis());
+        rebuildLocalData();
+      }
+    } else {
+      logger.info("building from redis");
+      rebuildLocalDataFromRedis();
+    }
+  }
+
+  private void rebuildLocalDataFromPeer(boolean inplace) throws Exception {
+    try (Timer.Context timer = rebuildFromPeerTimer.time()) {
+      String fullUrl = String.format("%s/v1/snapshot/", directoryPeerManager.getPeerBuildRequestUrl());
+      HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+      HttpRequest request = HttpRequest.newBuilder()
+              .GET()
+              .uri(URI.create(fullUrl))
+              .header("Authorization", directoryPeerManager.getAuthHeader())
+              .build();
+      HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+      if (response.statusCode() != 200) {
+        throw new IOException(String.format("unexpected peer build response code: %d  %s", response.statusCode(), response.toString()));
+      };
+      long startTime = timer.stop();
+
+      DirectoryMap directoryMap;
+      if (inplace && currentDirectoryMap.get().isPresent()) {
+        directoryMap = currentDirectoryMap.get().get();
+        directoryMap.rebuild(response.body());
+      } else {
+        directoryMap = new DirectoryMap(1);
+        directoryMap.rebuild(response.body());
+        this.currentDirectoryMap.set(Optional.of(directoryMap));
+      }
+      long elapsedReadTime = timer.stop() - startTime;
+      logger.info("finished directory build from peer, users=" + directoryMap.size()
+              + " elapsed time=" + Duration.ofNanos(elapsedReadTime).toMillis());
+    }
+  }
+
+  private void rebuildLocalDataFromRedis() {
     try (Jedis         jedis = jedisPool.getResource();
          Timer.Context timer = rebuildLocalDataTimer.time()) {
       boolean userSetBuilt    = directoryCache.isUserSetBuilt(jedis);
       built.set(userSetBuilt);
 
       final long directorySize;
+      long start = 0;
       if (userSetBuilt) {
         directorySize = directoryCache.getUserCount(jedis);
         var directoryMap = directoryMapFactory.create();
 
         logger.warn("starting directory cache rebuild of " + directorySize + " users, built=" + userSetBuilt);
 
-        rebuildLocalUsers(jedis, directoryMap);
+        start = timer.stop();
+        rebuildLocalUsersFromRedis(jedis, directoryMap);
         directoryMap.commit();
         this.currentDirectoryMap.set(Optional.of(directoryMap));
         logger.info("finished directory cache rebuild");
@@ -283,7 +382,7 @@ public class DirectoryManager implements Managed {
     }
   }
 
-  private void rebuildLocalUsers(Jedis jedis, DirectoryMap directoryMap) {
+  private void rebuildLocalUsersFromRedis(Jedis jedis, DirectoryMap directoryMap) {
     String cursor = "0";
     do {
       ScanResult<Pair<UUID, String>> result;
@@ -320,6 +419,8 @@ public class DirectoryManager implements Managed {
   private class PubSubConsumer extends Thread {
 
     private AtomicBoolean running = new AtomicBoolean(true);
+
+    private Dictionary<String, List<CompletableFuture<Void>>> syncTokens = new Hashtable<>();
 
     @Override
     public void run() {
@@ -383,12 +484,45 @@ public class DirectoryManager implements Managed {
             getCurrentDirectoryMap().insert(parseAddress(addedUser.getRight()), addedUser.getLeft());
           } else if (update.getType() == PubSubMessage.Type.REMOVED) {
             getCurrentDirectoryMap().remove(parseAddress(new String(update.getContent().toByteArray())));
+          } else if (update.getType() == PubSubMessage.Type.KEEPALIVE) {
+            if (update.getContent() != null) {
+              try {
+                String syncToken = new String(update.getContent().toByteArray(), StandardCharsets.UTF_8);
+                synchronized (syncTokens) {
+                  List<CompletableFuture<Void>> waiters = syncTokens.get(syncToken);
+                  syncTokens.remove(syncToken);
+                  if (waiters != null) {
+                    logger.info("Sync token received - notifying waiter threads");
+                    for (CompletableFuture<Void> waiter : waiters) {
+                      waiter.complete(null);
+                    }
+                  }
+                }
+              } catch (Exception ex) {
+                logger.warn("Bad KeepAlive content", ex);
+                return;
+              }
+            }
           }
         }
       } catch (InvalidProtocolBufferException e) {
         logger.warn("Bad protobuf!", e);
       } catch (InvalidAddressException e) {
         logger.warn("Badly formatted address", e);
+      }
+    }
+
+    public Future<Void> waitForSyncComplete(String syncToken) {
+      synchronized (syncTokens) {
+        List<CompletableFuture<Void>> tokenWaiters = syncTokens.get(syncToken);
+        if (tokenWaiters == null) {
+          tokenWaiters = new ArrayList<>();
+          syncTokens.put(syncToken, tokenWaiters);
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        tokenWaiters.add(future);
+        return future;
       }
     }
   }

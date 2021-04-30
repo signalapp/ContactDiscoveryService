@@ -23,6 +23,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.util.Constants;
 
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +59,26 @@ public class DirectoryMap {
     metricRegistry.gauge(name(getClass(), "publishedSize"), () -> publishedBufferSize::get);
   }
 
+  private DirectoryMap(InternalBuffers snapshot) {
+    this.workingBuffers = snapshot;
+    this.publishedBuffers = new InternalBuffers(1);
+    this.publishedBuffers.copyFrom(this.workingBuffers);
+    this.publishedBufferSize.set(this.publishedBuffers.size());
+  }
+
+  public void write(OutputStream stream) throws IOException {
+    publishedBufferReadWriteLock.readLock().lock();
+    try {
+      this.publishedBuffers.write(stream);
+    } finally {
+      publishedBufferReadWriteLock.readLock().unlock();
+    }
+  }
+
+  public static DirectoryMap read(InputStream stream) throws IOException {
+    return new DirectoryMap(InternalBuffers.read(stream));
+  }
+
   public boolean insert(long element, UUID value) {
     if (value == null) {
       throw new IllegalArgumentException("no users without UUIDs allowed in the directory map");
@@ -81,6 +102,20 @@ public class DirectoryMap {
       }
     }
     return success;
+  }
+
+  public void rebuild(InputStream input) throws IOException {
+    synchronized (workingBufferMonitor) {
+      workingBuffers.rebuild(input);
+
+      publishedBufferReadWriteLock.writeLock().lock();
+      try {
+        publishedBuffers.copyFrom(workingBuffers);
+        publishedBufferSize.set(publishedBuffers.size());
+      } finally {
+        publishedBufferReadWriteLock.writeLock().unlock();
+      }
+    }
   }
 
   @FunctionalInterface
@@ -231,6 +266,58 @@ public class DirectoryMap {
 
       this.elementCount = 0;
       this.usedSlotCount = 0;
+    }
+
+    public void write(OutputStream stream) throws IOException {
+      DataOutputStream dataStream = new DataOutputStream(stream);
+      dataStream.writeInt(capacity());
+      dataStream.writeInt(elementCount);
+      dataStream.writeInt(usedSlotCount);
+      writeByteBuffer(phonesBuffer, dataStream);
+      writeByteBuffer(uuidsBuffer, dataStream);
+      dataStream.flush();
+    }
+
+    private static void writeByteBuffer(ByteBuffer buffer, OutputStream stream) throws IOException {
+      buffer.rewind();
+      final int MAX_CHUNK_SIZE = 100_000;
+      byte[] chunk_buffer = new byte[MAX_CHUNK_SIZE];
+      while (buffer.remaining() > 0) {
+        int chunk_size = Math.min(MAX_CHUNK_SIZE, buffer.remaining());
+        buffer.get(chunk_buffer, 0, chunk_size);
+        stream.write(chunk_buffer, 0, chunk_size);
+      }
+    }
+
+    public static InternalBuffers read(InputStream stream) throws IOException {
+      InternalBuffers buffers = new InternalBuffers(1);
+      buffers.rebuild(stream);
+      return buffers;
+    }
+
+    public void rebuild(InputStream stream) throws IOException {
+      DataInputStream dataStream = new DataInputStream(stream);
+      int newCapacity = dataStream.readInt();
+      if (capacity() != newCapacity) {
+        phonesBuffer = allocateBuffer(newCapacity, KEY_SIZE);
+        uuidsBuffer = allocateBuffer(newCapacity, VALUE_SIZE);
+      }
+      elementCount = dataStream.readInt();
+      usedSlotCount = dataStream.readInt();
+      readByteBuffer(dataStream, phonesBuffer);
+      readByteBuffer(dataStream, uuidsBuffer);
+    }
+
+    private static void readByteBuffer(InputStream stream, ByteBuffer buffer) throws IOException {
+      buffer.rewind();
+      final int MAX_CHUNK_SIZE = 100_000;
+      byte[] chunk_buffer = new byte[MAX_CHUNK_SIZE];
+      while (buffer.remaining() > 0) {
+        int chunk_size = Math.min(MAX_CHUNK_SIZE, buffer.remaining());
+        int read_length = stream.read(chunk_buffer, 0, chunk_size);
+        if (read_length == -1) throw new EOFException();
+        buffer.put(chunk_buffer, 0, read_length);
+      }
     }
 
     @VisibleForTesting

@@ -44,6 +44,7 @@ public class DirectoryManagerTest {
   private final DirectoryCache          directoryCache          = mock(DirectoryCache.class);
   private final DirectoryMap directoryMap = mock(DirectoryMap.class);
   private final DirectoryMapFactory directoryMapFactory = mock(DirectoryMapFactory.class);
+  private final DirectoryPeerManager directoryPeerManager = mock(DirectoryPeerManager.class);
 
   private final Pair<UUID, String> validUserOne   = Pair.of(UUID.fromString("1447ea61-f636-42b2-b6d2-97aa73760a60"), "+14151111111");
   private final Pair<UUID, String> validUserTwo   = Pair.of(UUID.fromString("37ef986f-ee35-454c-97a3-9d16855d4ebc"), "+14152222222");
@@ -86,7 +87,7 @@ public class DirectoryManagerTest {
   @Test(expected = DirectoryUnavailableException.class)
   public void testGetAddressListDirectoryUnavailable() throws Exception {
     when(directoryCache.isUserSetBuilt(any())).thenReturn(false);
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
     directoryManager.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
       // Never called.
@@ -97,7 +98,7 @@ public class DirectoryManagerTest {
   public void testAdd() throws Exception {
     when(directoryCache.getAllUsers(any(), any(), anyInt())).thenReturn(usersScanResult);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager , new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
 
     verify(directoryMap).insert(eq(Long.parseLong("14152222222")), eq(validUserTwo.getLeft()));
@@ -138,7 +139,7 @@ public class DirectoryManagerTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void testAddNullUUID() throws Exception {
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
     directoryManager.addUser(null, "+14155555555");
   }
@@ -149,7 +150,7 @@ public class DirectoryManagerTest {
     List<Pair<UUID, String>> addressList = Arrays.asList(validUserOne, validUserTwo);
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.empty()))).thenReturn(addressList);
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), enableReconciliation);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), enableReconciliation);
     directoryManager.start();
     boolean reconciled = directoryManager.reconcile(Optional.empty(), Optional.empty(), Arrays.asList(validUserOne));
 
@@ -183,7 +184,7 @@ public class DirectoryManagerTest {
     when(directoryCache.getUsersInRange(any(), eq(Optional.empty()), eq(Optional.of(validUserOne.getLeft())))).thenReturn(Arrays.asList(validUserOne));
     when(directoryCache.getUsersInRange(any(), eq(Optional.of(validUserOne.getLeft())), eq(Optional.empty()))).thenReturn(Arrays.asList(validUserTwo));
 
-    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, new AtomicReference<>(Optional.empty()), true);
+    DirectoryManager directoryManager = new DirectoryManager(redisClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, new AtomicReference<>(Optional.empty()), true);
     directoryManager.start();
     boolean reconciledOne = directoryManager.reconcile(Optional.empty(), Optional.of(validUserOne.getLeft()), Arrays.asList(validUserOne));
 

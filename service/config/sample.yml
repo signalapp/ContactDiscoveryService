@@ -22,6 +22,10 @@ redis:
 
 directory:
   capacity:       # Directory hash table capacity (integer)
+  mapBuilderUrl:  # Url for where to query for peer snapshots
+  peerAuthenticationToken: # Token used to authenticate with a peer
+  peerReadEligible: # boolean on whether you should attempt to load from a peer or redis
+  maxPeerBuildAttempts: # Number of times to try and read from a peer before falling back to redis
   sqs:            # SQS FIFO queue config for directory event replication from Signal-Server
     accessKey:    # AWS access key ID for replication SQS FIFO queue
     accessSecret: # AWS access key secret for replication SQS FIFO queue

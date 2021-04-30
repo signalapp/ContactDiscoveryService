@@ -20,6 +20,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -270,6 +274,91 @@ public class DirectoryMapTest {
       assertThat(uuidsLongs[14]).isEqualTo(8);
       assertThat(uuidsLongs[15]).isEqualTo(2);
     });
+  }
+
+  @Test
+  public void serializeEmptyBuffers() throws IOException, SgxException {
+    var originalMap = new DirectoryMap(1000);
+    var outputStream = new ByteArrayOutputStream();
+    originalMap.write(outputStream);
+    var inputStream = new ByteArrayInputStream(outputStream.toByteArray());
+    var deserializedMap = DirectoryMap.read(inputStream);
+
+    deserializedMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      assertThat(capacity).isEqualTo(1000);
+
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[0]).isEqualTo(0);
+      assertThat(phoneLongs[1]).isEqualTo(0);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[0]).isEqualTo(0);
+      assertThat(uuidsLongs[1]).isEqualTo(0);
+    });
+
+    // Confirm that the deserialized map can still add numbers and read them back
+    deserializedMap.insert(5, new UUID(6, 1));
+    deserializedMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(0);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(0);
+      assertThat(uuidsLongs[11]).isEqualTo(0);
+    });
+
+    deserializedMap.commit();
+    deserializedMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(5);
+
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(6);
+      assertThat(uuidsLongs[11]).isEqualTo(1);
+      assertThat(capacity).isEqualTo(1000);
+    });
+  }
+
+  @Test
+  public void serializeBuffersWithData() throws IOException, SgxException {
+    var originalMap = new DirectoryMap(1000);
+    originalMap.insert(5, new UUID(6, 1));
+    originalMap.commit();
+
+    var outputStream = new ByteArrayOutputStream();
+    originalMap.write(outputStream);
+    var inputStream = new ByteArrayInputStream(outputStream.toByteArray());
+    var deserializedMap = DirectoryMap.read(inputStream);
+    deserializedMap.borrowBuffers((phonesBuffer, uuidsBuffer, capacity) -> {
+      assertThat(phonesBuffer.capacity()).isEqualTo(8000);
+      long[] phoneLongs = getLongsFromByteBuffer(phonesBuffer);
+      assertThat(phoneLongs[5]).isEqualTo(5);
+
+      assertThat(uuidsBuffer.capacity()).isEqualTo(16000);
+      var uuidsLongs = getLongsFromByteBuffer(uuidsBuffer);
+      assertThat(uuidsLongs[10]).isEqualTo(6);
+      assertThat(uuidsLongs[11]).isEqualTo(1);
+      assertThat(capacity).isEqualTo(1000);
+    });
+  }
+
+  @Test(expected = EOFException.class)
+  public void deserializeEmptyBuffers() throws IOException {
+    DirectoryMap.read(new ByteArrayInputStream(new byte[0]));
+  }
+
+  @Test(expected = EOFException.class)
+  public void deserializeTruncatedBuffers() throws IOException {
+    var originalMap = new DirectoryMap(1000);
+    originalMap.insert(5, new UUID(6, 1));
+
+    var outputStream = new ByteArrayOutputStream();
+    originalMap.write(outputStream);
+    var serializedData = outputStream.toByteArray();
+    var inputStream = new ByteArrayInputStream(serializedData, 0, serializedData.length - 1);
+    var deserializedMap = DirectoryMap.read(inputStream);
   }
 
   @Test(expected = IllegalArgumentException.class)
