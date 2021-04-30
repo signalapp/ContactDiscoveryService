@@ -65,8 +65,13 @@ public class RequestManager implements Managed {
    * will go away when we work out the routing code to the new rate limiter service.
    */
   public static final String LOCAL_ENCLAVE_HOST_ID = UUID.randomUUID().toString();
-  private static final long MIN_BACKLOG_SIZE = 60_000;
-  private static final Duration MAX_BACKLOG_TIME = Duration.ofSeconds(20);
+  private static final long MIN_BACKLOG_SIZE_DEFAULT = 10_000;
+  private static final long MIN_BACKLOG_SIZE_PRIORITY = 12_000;
+  private static final Duration MAX_BACKLOG_TIME = Duration.ofSeconds(15);
+  private static final Duration MAX_BACKLOG_TIME_PRIORITY = Duration.ofSeconds(20);
+
+  private static final String REQUEST_CONTEXT_INITIAL = "Initial";
+  private static final String REQUEST_CONTEXT_INTERACTIVE = "Interactive";
 
   private final Logger logger = LoggerFactory.getLogger(RequestManager.class);
 
@@ -116,8 +121,8 @@ public class RequestManager implements Managed {
   public CompletableFuture<DiscoveryResponse> submit(String enclaveId, DiscoveryRequest request)
       throws NoSuchEnclaveException, RequestManagerFullException {
     final var addressCount = request.getAddressCount();
-    final var backlog = addressCount + pendingPhoneNumbers.getCount();
-    if (backlog >= MIN_BACKLOG_SIZE && estimateTimeToProcessBacklog(backlog).compareTo(MAX_BACKLOG_TIME) >= 0) {
+
+    if (shouldLoadShedRequest(request)) {
       throw new RequestManagerFullException();
     }
     pendingRequests.inc();
@@ -165,6 +170,14 @@ public class RequestManager implements Managed {
     for (Map.Entry<String, Histogram> entry : perEnclaveBatchSizeHistogram.entrySet()) {
       metricRegistry.remove(name(RequestManager.class, "batchSize", entry.getKey()));
     }
+  }
+
+  private boolean shouldLoadShedRequest(DiscoveryRequest request) {
+    boolean priorityContext = REQUEST_CONTEXT_INITIAL.equals(request.getContext()) || REQUEST_CONTEXT_INTERACTIVE.equals(request.getContext());
+    long backlogSizeThreshold  = priorityContext ? MIN_BACKLOG_SIZE_PRIORITY : MIN_BACKLOG_SIZE_DEFAULT;
+    Duration maxBacklogDuration = priorityContext ? MAX_BACKLOG_TIME_PRIORITY : MAX_BACKLOG_TIME;
+    final long backlog = request.getAddressCount() + pendingPhoneNumbers.getCount();
+    return backlog >= backlogSizeThreshold && estimateTimeToProcessBacklog(backlog).compareTo(maxBacklogDuration) >= 0;
   }
 
   private Duration estimateTimeToProcessBacklog(long backlog) {

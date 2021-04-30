@@ -75,6 +75,9 @@ public class DiscoveryRequest {
   @Size(min = 1, max = 3)
   private Map<String, @Valid DiscoveryRequestEnvelope> envelopes;
 
+  @JsonProperty
+  private String context = "Default";
+
   public DiscoveryRequest() {
 
   }
@@ -112,8 +115,10 @@ public class DiscoveryRequest {
     return envelopes;
   }
 
+  public String getContext() { return context; }
+
   public String toString() {
-    return "{ addressCount: " + addressCount + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + ", commitment: " + Hex.encodeHexString(commitment) + ", envelopes: " + envelopes + " }";
+    return "{ addressCount: " + addressCount + ", iv: " + Hex.encodeHexString(iv) + ", data: " + Hex.encodeHexString(data) + ", mac: " + Hex.encodeHexString(mac) + ", commitment: " + Hex.encodeHexString(commitment) + ", envelopes: " + envelopes + ", context: " + context + "   }";
   }
 
   @Override
@@ -126,12 +131,13 @@ public class DiscoveryRequest {
            Arrays.equals(data, that.data) &&
            Arrays.equals(mac, that.mac) &&
            Arrays.equals(commitment, that.commitment) &&
-           Objects.equals(envelopes, that.envelopes);
+           Objects.equals(envelopes, that.envelopes) &&
+           Objects.equals(context, that.context);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(addressCount, envelopes);
+    int result = Objects.hash(addressCount, envelopes, context);
     result = 31 * result + Arrays.hashCode(iv);
     result = 31 * result + Arrays.hashCode(data);
     result = 31 * result + Arrays.hashCode(mac);
