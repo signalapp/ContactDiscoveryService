@@ -354,6 +354,7 @@ public class DirectoryManager implements Managed {
       long elapsedReadTime = timer.stop() - startTime;
       logger.info("finished directory build from peer, users=" + directoryMap.size()
               + " elapsed time=" + Duration.ofNanos(elapsedReadTime).toMillis());
+      built.set(true);
     }
   }
 
