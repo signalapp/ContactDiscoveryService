@@ -29,6 +29,7 @@ import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Tuple;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -52,6 +53,10 @@ public class DirectoryCache {
 
   public boolean isUserSetBuilt(Jedis jedis) {
     return jedis.exists(USER_SET_BUILT);
+  }
+
+  public void markUserSetBuild(Jedis jedis) {
+    jedis.set(USER_SET_BUILT, "1");
   }
 
   public ScanResult<Pair<UUID, String>> getAllUsers(Jedis jedis, String cursor, int count) {
@@ -91,6 +96,17 @@ public class DirectoryCache {
     return users;
   }
 
+  public Set<Pair<UUID, String>> getKnownUsers(Jedis jedis, List<Pair<UUID, String>> users) {
+    Set<Pair<UUID, String>> knownUsers = new HashSet<>();
+    for (Pair<UUID, String> user : users) {
+      if (jedis.zscore(USER_SET, encodeUser(user.getLeft(), user.getRight())) != null) {
+        knownUsers.add(user);
+      }
+    }
+
+    return knownUsers;
+  }
+  
   public boolean addUser(Jedis jedis, UUID uuid, String address) {
     return (1L == jedis.zadd(USER_SET, 0, encodeUser(uuid, address)));
   }

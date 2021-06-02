@@ -77,6 +77,8 @@ public class DirectoryManager implements Managed {
   private static final Timer          rebuildFromPeerTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildfromPeer"));
   private static final Counter        rebuildLocalDataNullUUID = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "rebuildLocalData", "nullUUIDs"));
   private static final Counter        obsoluteTypeAdded = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "sqsMessages", "obsoleteTypeAdded"));
+  private static final Timer reconcileExistsUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getExistingUsers"));
+
 
   private static final String CHANNEL = "signal_address_update";
 
@@ -217,6 +219,44 @@ public class DirectoryManager implements Managed {
       directoryCache.setUuidLastReconciled(jedis, toUuid);
 
       return true;
+    }
+  }
+
+  public void existsReconcile(List<Pair<UUID, String>> users)
+      throws InvalidAddressException, DirectoryUnavailableException
+  {
+    try (Jedis jedis = jedisPool.getResource()) {
+      Set<Pair<UUID, String>> newUsers = new HashSet<>(users);
+      Set<Pair<UUID, String>> knownUsers;
+      try (final Timer.Context timer = reconcileExistsUsersTimer.time()) {
+        knownUsers = directoryCache.getKnownUsers(jedis, users);
+      }
+
+      newUsers.removeAll(knownUsers);
+      for (Pair<UUID, String> newUser : newUsers) {
+        addUser(jedis, newUser.getLeft(), newUser.getRight());
+      }
+    }
+  }
+
+  public void deletesReconcile(List<Pair<UUID, String>> users)
+      throws InvalidAddressException, DirectoryUnavailableException
+  {
+    try (Jedis jedis = jedisPool.getResource()) {
+      Set<Pair<UUID, String>> knownUsers;
+      try (final Timer.Context timer = reconcileExistsUsersTimer.time()) {
+        knownUsers = directoryCache.getKnownUsers(jedis, users);
+      }
+
+      for (Pair<UUID, String> knownUser : knownUsers) {
+        removeUser(jedis, knownUser.getLeft(), knownUser.getRight());
+      }
+    }
+  }
+
+  public void markReconcileComplete() {
+    try (Jedis jedis = jedisPool.getResource()) {
+      directoryCache.markUserSetBuild(jedis);
     }
   }
 

@@ -184,6 +184,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
     DirectorySnapshotResource         directorySnapshotResource         = new DirectorySnapshotResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
+    DirectoryManagementV3Resource directoryManagementV3Resource = new DirectoryManagementV3Resource(directoryManager);
 
     RequestLimiterFilter requestLimiterFilter = new RequestLimiterFilter();
 
@@ -231,6 +232,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.jersey().register(directorySnapshotResource);
     environment.jersey().register(legacyDirectoryManagementResource);
     environment.jersey().register(pingResource);
+    environment.jersey().register(directoryManagementV3Resource);
 
     environment.jersey().register(new IOExceptionMapper());
     environment.jersey().register(new NoSuchEnclaveExceptionMapper());
