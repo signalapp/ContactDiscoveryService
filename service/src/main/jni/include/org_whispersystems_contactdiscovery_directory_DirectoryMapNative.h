@@ -63,6 +63,22 @@ JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_Direc
 JNIEXPORT jlong JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeCapacity
   (JNIEnv *, jclass, jlong);
 
+/*
+ * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
+ * Method:    nativeRead
+ * Signature: (JLjava/io/InputStream;)V
+ */
+JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeRead
+  (JNIEnv *, jclass, jlong, jobject);
+
+/*
+ * Class:     org_whispersystems_contactdiscovery_directory_DirectoryMapNative
+ * Method:    nativeWrite
+ * Signature: (JLjava/io/OutputStream;)V
+ */
+JNIEXPORT void JNICALL Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeWrite
+  (JNIEnv *, jclass, jlong, jobject);
+
 #ifdef __cplusplus
 }
 #endif

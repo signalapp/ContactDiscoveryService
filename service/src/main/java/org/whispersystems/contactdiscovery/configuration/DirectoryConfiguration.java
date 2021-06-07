@@ -57,9 +57,6 @@ public class DirectoryConfiguration {
   private int maxPeerBuildAttempts = 2;
 
   @JsonProperty
-  private boolean rebuildInPlaceEnabled = true;
-
-  @JsonProperty
   private boolean enableReconciliation = true;
 
   public long getInitialCapacity() {
@@ -89,6 +86,4 @@ public class DirectoryConfiguration {
   public boolean isPeerReadEligible() { return peerReadEligible; }
 
   public int getMaxPeerBuildAttempts() { return this.maxPeerBuildAttempts; }
-
-  public boolean isRebuildInPlaceEnabled() { return this.rebuildInPlaceEnabled; }
 }

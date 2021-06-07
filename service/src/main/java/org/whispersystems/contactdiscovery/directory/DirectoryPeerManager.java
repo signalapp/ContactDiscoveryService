@@ -34,19 +34,15 @@ public class DirectoryPeerManager {
     private final String peerAuthToken;
     private boolean peerLoadEligible;
     private int maxPeerBuildAttempts;
-    private boolean rebuildInPlaceEnabled;
 
     private int peerBuildAttempts = 0;
 
-    public DirectoryPeerManager(String mapBuilderUrl, String peerAuthToken, boolean peerLoadEligible, int maxPeerBuildAttempts, boolean rebuildInPlaceEnabled) {
+    public DirectoryPeerManager(String mapBuilderUrl, String peerAuthToken, boolean peerLoadEligible, int maxPeerBuildAttempts) {
         this.mapBuilderUrl = mapBuilderUrl;
         this.peerAuthToken = peerAuthToken;
         this.peerLoadEligible = peerLoadEligible;
         this.maxPeerBuildAttempts = maxPeerBuildAttempts;
-        this.rebuildInPlaceEnabled = rebuildInPlaceEnabled;
     }
-
-    public boolean isRebuildInPlaceEnabled() { return this.rebuildInPlaceEnabled; }
 
     public boolean loadFromPeer() {
         logger.info(String.format("determining peer eligibility. url=%s; token=%s; elligible=%s; attempts=%s; maxAttempts=%s",

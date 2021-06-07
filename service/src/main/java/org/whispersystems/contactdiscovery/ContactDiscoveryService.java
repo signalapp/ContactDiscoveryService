@@ -35,15 +35,18 @@ import org.apache.commons.codec.DecoderException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.contactdiscovery.auth.PeerService;
+import org.whispersystems.contactdiscovery.auth.PeerServiceAuthenticator;
 import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.auth.SignalServiceAuthenticator;
 import org.whispersystems.contactdiscovery.auth.User;
 import org.whispersystems.contactdiscovery.auth.UserAuthenticator;
 import org.whispersystems.contactdiscovery.client.IntelClient;
+import org.whispersystems.contactdiscovery.configuration.EnclaveInstanceConfiguration;
 import org.whispersystems.contactdiscovery.directory.DirectoryCache;
 import org.whispersystems.contactdiscovery.directory.DirectoryManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryMapFactory;
-import org.whispersystems.contactdiscovery.directory.DirectoryMapNative;
+import org.whispersystems.contactdiscovery.directory.DirectoryPeerManager;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueue;
 import org.whispersystems.contactdiscovery.directory.DirectoryQueueManager;
 import org.whispersystems.contactdiscovery.enclave.SgxEnclaveManager;
@@ -77,6 +80,7 @@ import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.DirectorySnapshotResource;
 import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
 import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
 import org.whispersystems.contactdiscovery.resources.PendingRequestsFlushTask;
@@ -91,19 +95,16 @@ import org.whispersystems.contactdiscovery.util.NativeUtils;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.security.cert.CertificateException;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -151,17 +152,14 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
-    AtomicReference<Optional<DirectoryMapNative>> optDirectorySet = new AtomicReference<>(Optional.empty());
-
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
     SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
     SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
     DirectoryCache           directoryCache           = new DirectoryCache();
     DirectoryMapFactory      directoryMapFactory      = new DirectoryMapFactory(configuration.getDirectoryConfiguration().getInitialCapacity(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
-    DirectoryPeerManager     directoryPeerManager     = new DirectoryPeerManager(configuration.getDirectoryConfiguration().getMapBuilderUrl(), configuration.getDirectoryConfiguration().getPeerAuthenticationToken(), configuration.getDirectoryConfiguration().isPeerReadEligible(),
-                                                                                 configuration.getDirectoryConfiguration().getMaxPeerBuildAttempts(), configuration.getDirectoryConfiguration().isRebuildInPlaceEnabled());
-    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, optDirectorySet, configuration.getDirectoryConfiguration().isReconciliationEnabled());
+    DirectoryPeerManager     directoryPeerManager     = new DirectoryPeerManager(configuration.getDirectoryConfiguration().getMapBuilderUrl(), configuration.getDirectoryConfiguration().getPeerAuthenticationToken(), configuration.getDirectoryConfiguration().isPeerReadEligible(), configuration.getDirectoryConfiguration().getMaxPeerBuildAttempts());
+    DirectoryManager         directoryManager         = new DirectoryManager(cacheClientFactory, directoryCache, directoryMapFactory, directoryPeerManager, configuration.getDirectoryConfiguration().isReconciliationEnabled());
     RequestManager           requestManager           = new RequestManager(directoryManager, sgxEnclaveManager, configuration.getEnclaveConfiguration().getTargetBatchSize());
     DirectoryQueue           directoryQueue           = new DirectoryQueue(configuration.getDirectoryConfiguration().getSqsConfiguration());
     DirectoryQueueManager    directoryQueueManager    = new DirectoryQueueManager(directoryQueue, directoryManager);
@@ -191,15 +189,15 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
       phoneLimiter = new RateLimitServiceClient(parter, client, requestTimeout);
     }
 
-    Set<String>                       enclaves                          = configuration.getEnclaveConfiguration()
-                                                                                       .getInstances().stream()
-                                                                                       .map((it) -> it.getMrenclave())
-                                                                                        .collect(Collectors.toSet());
+    Set<String> enclaves = configuration.getEnclaveConfiguration()
+                                        .getInstances().stream()
+                                        .map(EnclaveInstanceConfiguration::getMrenclave)
+                                        .collect(Collectors.toSet());
 
-    RemoteAttestationResource         remoteAttestationResource         = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter, phoneLimiter);
-    ContactDiscoveryResource          contactDiscoveryResource          = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, phoneLimiter, enclaves);
-    DirectoryManagementResource       directoryManagementResource       = new DirectoryManagementResource(directoryManager);
-    DirectorySnapshotResource         directorySnapshotResource         = new DirectorySnapshotResource(directoryManager);
+    RemoteAttestationResource remoteAttestationResource = new RemoteAttestationResource(sgxHandshakeManager, attestationRateLimiter, phoneLimiter);
+    ContactDiscoveryResource contactDiscoveryResource = new ContactDiscoveryResource(discoveryRateLimiter, requestManager, phoneLimiter, enclaves);
+    DirectoryManagementResource directoryManagementResource = new DirectoryManagementResource(directoryManager);
+    DirectorySnapshotResource directorySnapshotResource = new DirectorySnapshotResource(directoryManager);
     LegacyDirectoryManagementResource legacyDirectoryManagementResource = new LegacyDirectoryManagementResource();
     DirectoryManagementV3Resource directoryManagementV3Resource = new DirectoryManagementV3Resource(directoryManager);
 
@@ -219,12 +217,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     environment.lifecycle().manage(directoryManager);
     environment.lifecycle().manage(directoryQueueManager);
     var updaterExec = environment.lifecycle().scheduledExecutorService("DirectoryHashMapUpdater").threads(1).build();
-    updaterExec.scheduleAtFixedRate((Runnable)()->{
-        var optSet = optDirectorySet.get();
-        if (optSet.isPresent()) {
-          optSet.get().commit();
-        }
-    }, 30, 30, TimeUnit.SECONDS);
+    updaterExec.scheduleAtFixedRate(directoryManager::commitIfIsConnected, 30, 30, TimeUnit.SECONDS);
 
     AuthFilter<BasicCredentials, User> userAuthFilter = new BasicCredentialAuthFilter.Builder<User>()
         .setAuthenticator(userAuthenticator)

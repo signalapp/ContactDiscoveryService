@@ -8,12 +8,13 @@ use thiserror::Error as ThisError;
 use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
 
 use crate::{generic_exception, PossibleError};
+use std::io::{Read, Write};
 
 const FREE_E164: Phone = 0;
 const DELETED_E164: Phone = 0xFFFFFFFFFFFFFFFF;
 const FREE_UUID: SgxsdUuid = SgxsdUuid { data64: [0, 0] };
 
-#[derive(ThisError, Debug, PartialEq)]
+#[derive(ThisError, Debug)]
 pub(super) enum InternalBuffersError {
     #[error("invalid E164 of {0}")]
     InvalidE164(Phone),
@@ -25,11 +26,29 @@ pub(super) enum InternalBuffersError {
     InvalidMaximumLoadFactor(f32),
     #[error("invalid load factors; minimum must not equal or exceed maximum ({0}, {0})")]
     InvalidLoadFactorTuple(f32, f32),
+    #[error("io error inside internal buffers ({0})")]
+    IoError(#[from] std::io::Error),
+}
+
+impl PartialEq for InternalBuffersError {
+    fn eq(&self, other: &Self) -> bool {
+        use InternalBuffersError::*;
+        match (self, other) {
+            (&InvalidE164(ref a), &InvalidE164(ref b)) => a == b,
+            (&BufferFull(ref a, ref b), &BufferFull(ref c, ref d)) => a == c && b == d,
+            (&InvalidMinimumLoadFactor(ref a), &InvalidMinimumLoadFactor(ref b)) => a == b,
+            (&InvalidMaximumLoadFactor(ref a), &InvalidMaximumLoadFactor(ref b)) => a == b,
+            (&InvalidLoadFactorTuple(ref a, ref b), &InvalidLoadFactorTuple(ref c, ref d)) => a == c && b == d,
+            (&IoError(ref a), &IoError(ref b)) => a.kind() == b.kind(),
+            _ => false,
+        }
+    }
 }
 
 impl From<InternalBuffersError> for PossibleError {
     fn from(internal_buffers_error: InternalBuffersError) -> Self {
         match internal_buffers_error {
+            InternalBuffersError::IoError(_) => generic_exception("java/io/IOException", &format!("{}", internal_buffers_error)),
             InternalBuffersError::InvalidE164(_)
             | InternalBuffersError::InvalidMinimumLoadFactor(_)
             | InternalBuffersError::InvalidMaximumLoadFactor(_)
@@ -179,6 +198,43 @@ impl InternalBuffers {
         Ok(())
     }
 
+    /// Reads from the given `Read` implementation to overwrite the state of this buffer. All local
+    /// state will be overwritten.
+    pub(super) fn read_from(&mut self, read: &mut impl Read) -> Result<(), InternalBuffersError> {
+        let mut buf4 = [0u8; 4];
+        read.read_exact(&mut buf4)?;
+        let capacity = u32::from_be_bytes(buf4) as usize;
+        read.read_exact(&mut buf4)?;
+        let element_count = u32::from_be_bytes(buf4) as usize;
+        read.read_exact(&mut buf4)?;
+        let used_slot_count = u32::from_be_bytes(buf4) as usize;
+        self.clear_to_capacity(capacity);
+        self.element_count = element_count;
+        self.used_slot_count = used_slot_count;
+        let e164_byte_slice =
+            unsafe { std::slice::from_raw_parts_mut(self.e164s_buffer.as_ptr() as *mut u8, capacity * std::mem::size_of::<Phone>()) };
+        let uuid_byte_slice =
+            unsafe { std::slice::from_raw_parts_mut(self.uuids_buffer.as_ptr() as *mut u8, capacity * std::mem::size_of::<SgxsdUuid>()) };
+        read.read_exact(e164_byte_slice)?;
+        read.read_exact(uuid_byte_slice)?;
+        Ok(())
+    }
+
+    /// Writes the state of this buffer to the given `Write` implementation.
+    pub(super) fn write_to(&self, write: &mut impl Write) -> Result<(), InternalBuffersError> {
+        let capacity = self.capacity();
+        write.write_all(&(capacity as u32).to_be_bytes())?;
+        write.write_all(&(self.element_count as u32).to_be_bytes())?;
+        write.write_all(&(self.used_slot_count as u32).to_be_bytes())?;
+        let e164_byte_slice =
+            unsafe { std::slice::from_raw_parts(self.e164s_buffer.as_ptr() as *const u8, capacity * std::mem::size_of::<Phone>()) };
+        let uuid_byte_slice =
+            unsafe { std::slice::from_raw_parts(self.uuids_buffer.as_ptr() as *const u8, capacity * std::mem::size_of::<SgxsdUuid>()) };
+        write.write_all(e164_byte_slice)?;
+        write.write_all(uuid_byte_slice)?;
+        Ok(())
+    }
+
     fn rehash(&mut self) {
         let new_slot_count: usize = max((self.element_count as f64 / self.min_load_factor as f64) as usize, self.capacity());
         let mut new_e164s_buffer = Vec::<Phone>::with_capacity(new_slot_count);
@@ -204,6 +260,17 @@ impl InternalBuffers {
         self.e164s_buffer = new_e164s_buffer;
         self.uuids_buffer = new_uuids_buffer;
         self.used_slot_count = new_used_slot_count;
+    }
+
+    /// Clears the internal buffer state and allocates free storage space for `capacity` elements
+    /// in the resulting state.
+    fn clear_to_capacity(&mut self, capacity: usize) {
+        self.e164s_buffer.truncate(0);
+        self.uuids_buffer.truncate(0);
+        // this is not efficient given we're about to overwrite all this memory, but don't
+        // really need the unsafe version at the moment
+        self.e164s_buffer.resize(capacity, FREE_E164);
+        self.uuids_buffer.resize(capacity, FREE_UUID);
     }
 }
 

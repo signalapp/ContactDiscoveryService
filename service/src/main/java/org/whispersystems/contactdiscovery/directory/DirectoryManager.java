@@ -47,7 +47,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Dictionary;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -104,17 +107,30 @@ public class DirectoryManager implements Managed {
   private KeepAliveSender  keepAliveSender;
   private DirectoryPeerManager directoryPeerManager;
 
-  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, DirectoryPeerManager directoryPeerManager, AtomicReference<Optional<DirectoryMapNative>> currentDirectoryMap, boolean isReconciliationEnabled) {
+  public DirectoryManager(RedisClientFactory redisFactory, DirectoryCache directoryCache, DirectoryMapFactory directoryMapFactory, DirectoryPeerManager directoryPeerManager, boolean isReconciliationEnabled) {
     this.redisFactory            = redisFactory;
     this.directoryCache          = directoryCache;
     this.directoryMapFactory     = directoryMapFactory;
-    this.currentDirectoryMap     = currentDirectoryMap;
+    this.currentDirectoryMap     = new AtomicReference<>(Optional.empty());
     this.isReconciliationEnabled = isReconciliationEnabled;
     this.directoryPeerManager = directoryPeerManager;
   }
 
   public boolean isConnected() {
     return currentDirectoryMap.get().isPresent();
+  }
+
+  /**
+   * Returns {@code true} iff the directory map is connected. Return value of
+   * {@link DirectoryMapNative#commit()} is NOT returned.
+   */
+  public boolean commitIfIsConnected() {
+    final Optional<DirectoryMapNative> directoryMapOptional = currentDirectoryMap.get();
+    if (directoryMapOptional.isEmpty()) {
+      return false;
+    }
+    directoryMapOptional.get().commit();
+    return true;
   }
 
   public void addUser(UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
@@ -145,7 +161,7 @@ public class DirectoryManager implements Managed {
   public void generateSnapshot(OutputStream stream) throws IOException, DirectoryUnavailableException {
     try {
       bootstrapping.set(true);
-      DirectoryMap directoryMap = getCurrentDirectoryMap();
+    DirectoryMapNative directoryMap = getCurrentDirectoryMap();
 
       try (Jedis jedis = jedisPool.getResource();
            Timer.Context timer = rebuildFromPeerTimer.time()) {
@@ -371,7 +387,7 @@ public class DirectoryManager implements Managed {
       try {
         logger.info("building from peer service");
         directoryPeerManager.startPeerLoadAttempt();
-        rebuildLocalDataFromPeer(directoryPeerManager.isRebuildInPlaceEnabled());
+        rebuildLocalDataFromPeer();
         directoryPeerManager.markPeerLoadSuccessful();
       } catch (Exception e) {
         logger.info("peer build failed with error=" + e);
@@ -384,7 +400,7 @@ public class DirectoryManager implements Managed {
     }
   }
 
-  private void rebuildLocalDataFromPeer(boolean inplace) throws Exception {
+  private void rebuildLocalDataFromPeer() throws Exception {
     try (Timer.Context timer = rebuildFromPeerTimer.time()) {
       String fullUrl = String.format("%s/v1/snapshot/", directoryPeerManager.getPeerBuildRequestUrl());
       HttpClient client = HttpClient.newBuilder()
@@ -404,14 +420,12 @@ public class DirectoryManager implements Managed {
       };
       long startTime = timer.stop();
 
-      DirectoryMap directoryMap;
-      if (inplace && currentDirectoryMap.get().isPresent()) {
-        directoryMap = currentDirectoryMap.get().get();
-        directoryMap.rebuild(response.body());
-      } else {
-        directoryMap = new DirectoryMap(1);
-        directoryMap.rebuild(response.body());
-        this.currentDirectoryMap.set(Optional.of(directoryMap));
+      final Optional<DirectoryMapNative> optionalDirectoryMap = currentDirectoryMap.get();
+      final DirectoryMapNative directoryMap = optionalDirectoryMap.orElseGet(() -> directoryMapFactory.create(0));
+      directoryMap.read(response.body());
+      directoryMap.commit();
+      if (optionalDirectoryMap.isEmpty()) {
+        currentDirectoryMap.compareAndSet(optionalDirectoryMap, Optional.of(directoryMap));
       }
       long elapsedReadTime = timer.stop() - startTime;
       logger.info("finished directory build from peer, users=" + directoryMap.size()

@@ -3,7 +3,7 @@
 
 use std::sync::{Mutex, RwLock};
 
-use jni::objects::JClass;
+use jni::objects::{JClass, JObject};
 use jni::sys::{jboolean, jfloat, jlong, jobject};
 use jni::JNIEnv;
 
@@ -11,8 +11,10 @@ use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
 use internal_buffers::InternalBuffers;
 
 use crate::{bool_to_jni_bool, generic_exception, jni_catch, PossibleError, NULL_POINTER_EXCEPTION_CLASS};
+use std::io::{Read, Write};
 
 mod internal_buffers;
+mod io;
 
 pub(crate) fn convert_native_handle_to_directory_map_reference(native_handle: jlong) -> Result<&'static mut DirectoryMap, PossibleError> {
     if native_handle == 0 {
@@ -108,6 +110,24 @@ impl DirectoryMap {
             .read()
             .expect("DirectoryMap serving read lock poisoned while locking during capacity")
             .capacity()
+    }
+
+    fn read_from(&self, read: &mut impl Read) -> Result<(), PossibleError> {
+        let mut lock = self
+            .building
+            .lock()
+            .expect("DirectoryMap building lock poisoned while locking during read_from");
+        lock.1.read_from(read)?;
+        lock.0 = true;
+        Ok(())
+    }
+
+    fn write_to(&self, write: &mut impl Write) -> Result<(), PossibleError> {
+        self.serving
+            .read()
+            .expect("DirectoryMap serving read lock poisoned while locking during write_to")
+            .write_to(write)?;
+        Ok(())
     }
 }
 
@@ -216,6 +236,38 @@ pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_Direct
         let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
         Ok(directory_map.capacity() as jlong)
     })
+}
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeRead<'a>(
+    env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    native_handle: jlong,
+    input_stream: JObject<'a>,
+) {
+    jni_catch(env.clone(), (), || {
+        let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
+        let mut read = io::convert_jni_input_stream_to_read_impl(&env, input_stream);
+        directory_map.read_from(&mut read)?;
+        Ok(())
+    });
+}
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "system" fn Java_org_whispersystems_contactdiscovery_directory_DirectoryMapNative_nativeWrite<'a>(
+    env: JNIEnv<'a>,
+    _class: JClass<'a>,
+    native_handle: jlong,
+    output_stream: JObject<'a>,
+) {
+    jni_catch(env.clone(), (), || {
+        let directory_map = convert_native_handle_to_directory_map_reference(native_handle)?;
+        let mut write = io::convert_jni_output_stream_to_write_impl(&env, output_stream);
+        directory_map.write_to(&mut write)?;
+        Ok(())
+    });
 }
 
 #[cfg(test)]
