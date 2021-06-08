@@ -236,6 +236,7 @@ public class DirectoryManager implements Managed {
       for (Pair<UUID, String> newUser : newUsers) {
         addUser(jedis, newUser.getLeft(), newUser.getRight());
       }
+      logReconcileSet(newUsers, "Exists Reconcile Adding");
     }
   }
 
@@ -251,7 +252,12 @@ public class DirectoryManager implements Managed {
       for (Pair<UUID, String> knownUser : knownUsers) {
         removeUser(jedis, knownUser.getLeft(), knownUser.getRight());
       }
+      logReconcileSet(knownUsers, "Delete Reconcile Removing");
     }
+  }
+
+  private void logReconcileSet(Set<Pair<UUID, String>> users, String prefix) {
+    logger.info(prefix +": size={}", users.size());
   }
 
   public void markReconcileComplete() {
