@@ -57,6 +57,10 @@ public class DirectorySnapshotResource {
     @Path("/")
     public Response streamDirectorySnapshot(@Auth PeerService peerService)
     {
+        if (directoryManager.isBootstrapping()) {
+            return Response.status(503).build();
+        }
+
         return Response.ok(new StreamingOutput() {
             @Override
             public void write(OutputStream outputStream) throws IOException, WebApplicationException {

@@ -90,6 +90,7 @@ public class DirectoryManager implements Managed {
   private final boolean                 isReconciliationEnabled;
 
   private final AtomicBoolean built = new AtomicBoolean(false);
+  private final AtomicBoolean bootstrapping = new AtomicBoolean(false);
 
   private final AtomicReference<Optional<DirectoryMap>> currentDirectoryMap;
 
@@ -134,38 +135,47 @@ public class DirectoryManager implements Managed {
     }
   }
 
+  public boolean isBootstrapping() {
+    return bootstrapping.get();
+  }
+
   public void generateSnapshot(OutputStream stream) throws IOException, DirectoryUnavailableException {
-    DirectoryMap directoryMap = getCurrentDirectoryMap();
+    try {
+      bootstrapping.set(true);
+      DirectoryMap directoryMap = getCurrentDirectoryMap();
 
-    try (Jedis jedis = jedisPool.getResource();
-         Timer.Context timer = rebuildFromPeerTimer.time()) {
-      String syncToken = UUID.randomUUID().toString();
-      logger.info("generateSnapshot with syncToken: {}", syncToken);
+      try (Jedis jedis = jedisPool.getResource();
+           Timer.Context timer = rebuildFromPeerTimer.time()) {
+        String syncToken = UUID.randomUUID().toString();
+        logger.info("generateSnapshot with syncToken: {}", syncToken);
 
-      // Register the "message received" event
-      Future<Void> redisSyncComplete = this.pubSubConsumer.waitForSyncComplete(syncToken);
+        // Register the "message received" event
+        Future<Void> redisSyncComplete = this.pubSubConsumer.waitForSyncComplete(syncToken);
 
-      // Publish the sync message
-      PubSubMessage message = PubSubMessage.newBuilder()
-              .setContent(ByteString.copyFrom(syncToken.getBytes(StandardCharsets.UTF_8)))
-              .setType(PubSubMessage.Type.KEEPALIVE)
-              .build();
+        // Publish the sync message
+        PubSubMessage message = PubSubMessage.newBuilder()
+                .setContent(ByteString.copyFrom(syncToken.getBytes(StandardCharsets.UTF_8)))
+                .setType(PubSubMessage.Type.KEEPALIVE)
+                .build();
 
-      long publishResult = jedis.publish(CHANNEL.getBytes(), message.toByteArray());
-      if (publishResult == -1) {
-        logger.error("Failed to publish syncToken message");
-        throw new DirectoryUnavailableException();
+        long publishResult = jedis.publish(CHANNEL.getBytes(), message.toByteArray());
+        if (publishResult == -1) {
+          logger.error("Failed to publish syncToken message");
+          throw new DirectoryUnavailableException();
+        }
+
+        // wait for the sync message to be received
+        try {
+          redisSyncComplete.get(PUBSUB_SYNC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+          throw new DirectoryUnavailableException();
+        }
       }
-
-      // wait for the sync message to be received
-      try {
-        redisSyncComplete.get(PUBSUB_SYNC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-      } catch (Exception e) {
-        throw new DirectoryUnavailableException();
-      }
+      logger.info("writing directory out. size=" + directoryMap.size());
+      directoryMap.write(stream);
+    } finally {
+      bootstrapping.set(false);
     }
-    logger.info("writing directory out. size=" + directoryMap.size());
-    directoryMap.write(stream);
   }
 
   public boolean reconcile(Optional<UUID> fromUuid, Optional<UUID> toUuid, List<Pair<UUID, String>> users)
@@ -383,7 +393,9 @@ public class DirectoryManager implements Managed {
               .header("Authorization", directoryPeerManager.getAuthHeader())
               .build();
       HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-      if (response.statusCode() != 200) {
+      if (response.statusCode() == 503) {
+        throw new IOException("map node is busy trying again");
+      } else if (response.statusCode() != 200) {
         throw new IOException(String.format("unexpected peer build response code: %d  %s", response.statusCode(), response.toString()));
       };
       long startTime = timer.stop();
