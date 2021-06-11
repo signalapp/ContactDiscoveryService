@@ -275,6 +275,8 @@ mod test {
     use std::collections::HashSet;
 
     use super::*;
+    use std::error::Error;
+    use std::ops::Deref;
 
     #[test]
     fn single_element_test() {
@@ -366,5 +368,73 @@ mod test {
             Ok(())
         });
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn serialize_empty_buffers() -> Result<(), Box<dyn Error>> {
+        let original_map = DirectoryMap::new(1000, 0.75, 0.85)?;
+        let mut output_stream = Vec::<u8>::new();
+        original_map.write_to(&mut output_stream)?;
+        let mut input_stream = &*output_stream;
+        let deserialized_map = DirectoryMap::new(1, 0.75, 0.85)?;
+        deserialized_map.read_from(&mut input_stream)?;
+        deserialized_map.commit()?;
+
+        deserialized_map.borrow_serving_buffers(|e164s, uuids| {
+            assert_eq!(1000, e164s.len());
+            assert_eq!(1000, uuids.len());
+
+            for i in 0..1000 {
+                assert_eq!(0, e164s[i]);
+                assert_eq!([0, 0], uuids[i].data64);
+            }
+
+            Ok(())
+        })?;
+
+        deserialized_map.insert(5, SgxsdUuid { data64: [6, 1] })?;
+        deserialized_map.borrow_serving_buffers(|e164s, uuids| {
+            assert_eq!(1000, e164s.len());
+            assert_eq!(1000, uuids.len());
+
+            assert_eq!(0, u64::from_be(e164s[5]));
+            assert_eq!([0, 0], uuids[5].data64);
+            Ok(())
+        })?;
+
+        deserialized_map.commit()?;
+        deserialized_map.borrow_serving_buffers(|e164s, uuids| {
+            assert_eq!(1000, e164s.len());
+            assert_eq!(1000, uuids.len());
+
+            assert_eq!(5, u64::from_be(e164s[5]));
+            assert_eq!([6u64.to_be(), 1u64.to_be()], uuids[5].data64);
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    #[test]
+    fn serialize_buffers_with_data() -> Result<(), Box<dyn Error>> {
+        let original_map = DirectoryMap::new(1000, 0.75, 0.85)?;
+        original_map.insert(5, SgxsdUuid { data64: [6, 1] })?;
+        original_map.commit()?;
+
+        let mut output_stream = Vec::<u8>::new();
+        original_map.write_to(&mut output_stream)?;
+        let mut input_stream = &*output_stream;
+        let deserialized_map = DirectoryMap::new(1, 0.75, 0.85)?;
+        deserialized_map.read_from(&mut input_stream)?;
+        deserialized_map.commit()?;
+
+        deserialized_map.borrow_serving_buffers(|e164s, uuids| {
+            assert_eq!(1000, e164s.len());
+            assert_eq!(1000, uuids.len());
+
+            assert_eq!(5, u64::from_be(e164s[5]));
+            assert_eq!([6u64.to_be(), 1u64.to_be()], uuids[5].data64);
+            Ok(())
+        })?;
+        Ok(())
     }
 }
