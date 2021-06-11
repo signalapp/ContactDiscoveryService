@@ -352,8 +352,8 @@ mod test {
             assert_eq!(uuids.len(), 1284);
             assert_eq!(set.len(), 1000);
             for i in 0..1284usize {
-                let test_number = e164s[i];
-                let test_uuid = ((uuids[i].data64[0] as u128) << 64) | (uuids[i].data64[1] as u128);
+                let test_number = u64::from_be(e164s[i]);
+                let test_uuid = ((u64::from_be(uuids[i].data64[0]) as u128) << 64) | (u64::from_be(uuids[i].data64[1]) as u128);
                 assert_ne!(test_number, 0xFFFFFFFFFFFFFFFF);
                 if test_number != 0 {
                     let original_i = ((test_number - number) / number_g) as usize;

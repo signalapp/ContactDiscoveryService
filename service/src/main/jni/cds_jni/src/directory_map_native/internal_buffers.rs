@@ -142,7 +142,7 @@ impl InternalBuffers {
             return Err(InternalBuffersError::BufferFull(self.element_count, capacity));
         }
 
-        let old_e164 = add_to_buffer(self.e164s_buffer.as_mut_slice(), self.uuids_buffer.as_mut_slice(), e164, uuid);
+        let old_e164 = add_to_buffer(self.e164s_buffer.as_mut_slice(), self.uuids_buffer.as_mut_slice(), e164, uuid, true);
         let added = old_e164 != e164;
         if old_e164 == FREE_E164 {
             self.used_slot_count += 1;
@@ -244,13 +244,14 @@ impl InternalBuffers {
         let mut new_used_slot_count = 0usize;
 
         for i in 0..self.capacity() {
-            let e164 = self.e164s_buffer[i];
+            let e164: Phone = u64::from_be(self.e164s_buffer[i]);
             if e164 != FREE_E164 && e164 != DELETED_E164 {
                 let new_buffer_old_e164 = add_to_buffer(
                     new_e164s_buffer.as_mut_slice(),
                     new_uuids_buffer.as_mut_slice(),
                     e164,
                     self.uuids_buffer[i],
+                    false,
                 );
                 if new_buffer_old_e164 == FREE_E164 {
                     new_used_slot_count += 1;
@@ -279,19 +280,28 @@ fn hash_element(slot_count: usize, e164: Phone) -> usize {
 }
 
 /// Adds a mapping from e164 to uuid to the buffers and returns the old key in the assigned slot.
-fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e164: Phone, uuid: SgxsdUuid) -> Phone {
+fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e164: Phone, uuid: SgxsdUuid, convert_uuid: bool) -> Phone {
     let slot_count = e164s_buffer.len();
     if slot_count != uuids_buffer.len() {
         panic!("add_to_buffer used incorrectly with mismatching buffer sizes");
     }
     let mut slot_index = hash_element(slot_count, e164);
 
+    let e164: Phone = (e164 as u64).to_be();
+    let uuid = if convert_uuid {
+        SgxsdUuid {
+            data64: [uuid.data64[0].to_be(), uuid.data64[1].to_be()],
+        }
+    } else {
+        uuid
+    };
+
     // search for a free slot starting at the hash position
     let start_slot_index = slot_index;
     while e164s_buffer[slot_index] != FREE_E164 && e164s_buffer[slot_index] != DELETED_E164 {
         if e164s_buffer[slot_index] == e164 {
             uuids_buffer[slot_index] = uuid;
-            return e164;
+            return u64::from_be(e164);
         }
         slot_index += 1;
         if slot_index == slot_count {
@@ -308,7 +318,7 @@ fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e16
     while e164s_buffer[slot_index] != FREE_E164 {
         if e164s_buffer[slot_index] == e164 {
             uuids_buffer[slot_index] = uuid;
-            return e164;
+            return u64::from_be(e164);
         }
         slot_index += 1;
         if slot_index == slot_count {
@@ -329,7 +339,7 @@ fn add_to_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e16
     e164s_buffer[free_slot_index] = e164;
     uuids_buffer[free_slot_index] = uuid;
 
-    return e164_at_free_slot_index;
+    return u64::from_be(e164_at_free_slot_index);
 }
 
 fn remove_from_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid], e164: Phone) -> bool {
@@ -338,6 +348,7 @@ fn remove_from_buffer(e164s_buffer: &mut [Phone], uuids_buffer: &mut [SgxsdUuid]
         panic!("remove_from_buffer used incorrectly with mismatching buffer sizes");
     }
     let mut slot_index = hash_element(slot_count, e164);
+    let e164: Phone = (e164 as u64).to_be();
 
     let start_slot_index = slot_index;
     while e164s_buffer[slot_index] != FREE_E164 {
@@ -497,8 +508,9 @@ mod test {
         uuid[len - 3] = uuid[len - 1];
         uuid[len - 1] = tmp;
         for i in hash..hash + inserts_done - 1 {
-            assert_eq!(internal_buffers.e164s_buffer[i], phone[i - hash]);
-            assert_eq!(internal_buffers.uuids_buffer[i].data64, uuid[i - hash].data64);
+            assert_eq!(internal_buffers.e164s_buffer[i], phone[i - hash].to_be());
+            let test_uuid = [uuid[i - hash].data64[0].to_be(), uuid[i - hash].data64[1].to_be()];
+            assert_eq!(internal_buffers.uuids_buffer[i].data64, test_uuid);
         }
         for i in 0..internal_buffers.e164s_buffer.len() {
             assert_ne!(internal_buffers.e164s_buffer[i], DELETED_E164);
