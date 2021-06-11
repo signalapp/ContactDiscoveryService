@@ -170,6 +170,9 @@
                     <excludes>
                         <exclude>**/*IntegrationTest.java</exclude>
                     </excludes>
+                    <environmentVariables>
+                        <RUST_BACKTRACE>1</RUST_BACKTRACE>
+                    </environmentVariables>
                 </configuration>
             </plugin>
             <plugin>
