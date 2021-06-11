@@ -21,17 +21,18 @@ export CARGO_HOME = $(CURDIR)/$(builddir)/cargo
 
 TARGET = $(builddir)/target/release/libcds_jni.so
 
-.PHONY: all install clean docker genjni
-.PHONY: FORCE
-
+.PHONY: default
 default: docker install
 
+.PHONY: all
 all: $(TARGET)
 
+.PHONY: FORCE
 $(builddir)/target/release/lib%.so: FORCE
 	env -u CFLAGS $(CARGO) test -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 	env -u CFLAGS $(CARGO) build -vv --release --package=$* --lib $(if $(FEATURES),--features $(FEATURES))
 
+.PHONY: install
 install:
 	$(INSTALL_DATA) $(TARGET) $(resourcedir)/enclave-jni.so
 
@@ -45,6 +46,7 @@ clean:
 
 MAKETARGET ?= all
 
+.PHONY: docker
 docker: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 docker:
 	$(DOCKER) build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) \
