@@ -48,6 +48,9 @@ impl PartialEq for InternalBuffersError {
 impl From<InternalBuffersError> for PossibleError {
     fn from(internal_buffers_error: InternalBuffersError) -> Self {
         match internal_buffers_error {
+            InternalBuffersError::IoError(ref error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                generic_exception("java/io/EOFException", &format!("{}", internal_buffers_error))
+            }
             InternalBuffersError::IoError(_) => generic_exception("java/io/IOException", &format!("{}", internal_buffers_error)),
             InternalBuffersError::InvalidE164(_)
             | InternalBuffersError::InvalidMinimumLoadFactor(_)

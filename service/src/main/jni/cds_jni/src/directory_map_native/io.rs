@@ -83,6 +83,9 @@ impl<'a> Read for JNIRead<'a> {
             .map_err(|x| IoError::from(x))?
             .i()
             .unwrap();
+        if result == -1 {
+            return Ok(0);
+        }
         self.env
             .get_byte_array_region(*self.buffer.buffer.as_ref().unwrap().as_obj(), 0, transmute_mut_byte_slice(buf))
             .map_err(|x| IoError::from(x))?;
