@@ -120,17 +120,8 @@ public class DirectoryManager implements Managed {
     return currentDirectoryMap.get().isPresent();
   }
 
-  /**
-   * Returns {@code true} iff the directory map is connected. Return value of
-   * {@link DirectoryMapNative#commit()} is NOT returned.
-   */
-  public boolean commitIfIsConnected() {
-    final Optional<DirectoryMapNative> directoryMapOptional = currentDirectoryMap.get();
-    if (directoryMapOptional.isEmpty()) {
-      return false;
-    }
-    directoryMapOptional.get().commit();
-    return true;
+  public void commitIfIsConnected() {
+    currentDirectoryMap.get().ifPresent(DirectoryMapNative::commit);
   }
 
   public void addUser(UUID uuid, String address) throws InvalidAddressException, DirectoryUnavailableException {
