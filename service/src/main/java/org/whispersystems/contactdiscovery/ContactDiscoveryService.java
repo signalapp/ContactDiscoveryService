@@ -80,6 +80,7 @@ import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 import org.whispersystems.contactdiscovery.resources.ContactDiscoveryResource;
 import org.whispersystems.contactdiscovery.resources.DirectoryManagementResource;
+import org.whispersystems.contactdiscovery.resources.DirectoryManagementV3Resource;
 import org.whispersystems.contactdiscovery.resources.DirectorySnapshotResource;
 import org.whispersystems.contactdiscovery.resources.HealthCheckOverride;
 import org.whispersystems.contactdiscovery.resources.LegacyDirectoryManagementResource;
