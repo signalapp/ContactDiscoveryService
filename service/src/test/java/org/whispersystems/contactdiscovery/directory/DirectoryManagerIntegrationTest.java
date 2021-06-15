@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-public class DirectoryManagerTest {
+public class DirectoryManagerIntegrationTest {
   @BeforeClass
   public static void setupClass() throws Exception {
     NativeUtils.loadNativeResource("/enclave-jni.so");

@@ -36,7 +36,7 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class DirectoryMapTest {
+public class DirectoryMapIntegrationTest {
 
   @BeforeClass
   public static void setupClass() throws Exception {
