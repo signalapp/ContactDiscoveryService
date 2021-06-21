@@ -276,7 +276,6 @@ mod test {
 
     use super::*;
     use std::error::Error;
-    use std::ops::Deref;
 
     #[test]
     fn single_element_test() {
