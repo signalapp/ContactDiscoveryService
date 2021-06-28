@@ -89,25 +89,27 @@ impl<'a> Read for JNIRead<'a> {
 
         self.buffer.ensure_buffer_capacity(max_to_read)?;
 
-        // Java can return 0 without meaning EOF so we need to keep asking because returning 0 in
-        // Rust will be interpreted as EOF
-        let mut read = 0 as jint;
-        while read == 0 {
-            read = self
-                .env
-                .call_method(
-                    self.input_stream,
-                    "read",
-                    "([BII)I",
-                    &[
-                        JValue::from(self.buffer.as_obj()),
-                        JValue::from(0 as jint),
-                        JValue::from(max_to_read as jint),
-                    ],
-                )
-                .map_err(|x| IoError::from(x))?
-                .i()
-                .unwrap();
+        let read = self
+            .env
+            .call_method(
+                self.input_stream,
+                "read",
+                "([BII)I",
+                &[
+                    JValue::from(self.buffer.as_obj()),
+                    JValue::from(0 as jint),
+                    JValue::from(max_to_read as jint),
+                ],
+            )
+            .map_err(|x| IoError::from(x))?
+            .i()
+            .unwrap();
+
+        // Java can return 0 but returning 0 from Rust means EOF or input buf was 0 size so we abuse
+        // ErrorKind::Interrupted to reflect when the underlying call returned no data for a
+        // non-empty buffer.
+        if read == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::Interrupted));
         }
 
         // Java says we're at EOF so return the Rust equivalent
