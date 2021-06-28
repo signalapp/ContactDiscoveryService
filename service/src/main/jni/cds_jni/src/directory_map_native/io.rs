@@ -48,7 +48,7 @@ impl<'a> JNIByteArray<'a> {
     /// Will panic if [`ensure_buffer_capacity`] has not been called yet.
     fn as_obj<'b>(&self) -> JObject<'b>
     where
-        'b: 'a,
+        'a: 'b,
     {
         self.buffer.as_ref().unwrap().as_obj()
     }
