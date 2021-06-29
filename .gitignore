@@ -25,3 +25,7 @@ dependency-reduced-pom.xml
 /ratelimiter/config/staging.ratelimiter.yml
 /ratelimiter/config/testing.ratelimiter.yml
 /ratelimiter/config/local.ratelimiter.yml
+
+.classpath
+.project
+.settings
