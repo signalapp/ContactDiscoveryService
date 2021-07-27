@@ -1,1 +1,2 @@
 org.whispersystems.contactdiscovery.metrics.JsonMetricsReporterFactory
+org.whispersystems.contactdiscovery.metrics.SignalDatadogReporterFactory
