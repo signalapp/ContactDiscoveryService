@@ -92,6 +92,7 @@ import org.whispersystems.contactdiscovery.resources.RequestLimiterFilter;
 import org.whispersystems.contactdiscovery.resources.RequestLimiterTask;
 import org.whispersystems.contactdiscovery.util.Constants;
 import org.whispersystems.contactdiscovery.util.NativeUtils;
+import org.whispersystems.contactdiscovery.util.UncaughtExceptionHandler;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -136,6 +137,9 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
   {
     NativeUtils.loadNativeResource("/enclave-jni.so");
     Security.addProvider(new BouncyCastleProvider());
+
+    UncaughtExceptionHandler.register();
+
     SharedMetricRegistries.add(Constants.METRICS_NAME, environment.metrics());
 
     environment.getObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
