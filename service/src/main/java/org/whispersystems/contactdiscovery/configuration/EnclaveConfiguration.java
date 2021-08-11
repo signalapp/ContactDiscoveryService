@@ -19,7 +19,6 @@ package org.whispersystems.contactdiscovery.configuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.glassfish.jersey.server.JSONP;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.Valid;
@@ -39,11 +38,7 @@ public class EnclaveConfiguration {
 
   @JsonProperty
   @NotEmpty
-  private String certificate;
-
-  @JsonProperty
-  @NotEmpty
-  private String key;
+  private String apiKey;
 
   @JsonProperty
   @NotEmpty
@@ -72,8 +67,8 @@ public class EnclaveConfiguration {
     return targetBatchSize;
   }
 
-  public String getCertificate() {
-    return certificate;
+  public String getApiKey() {
+    return apiKey;
   }
 
   public List<EnclaveInstanceConfiguration> getInstances() {
@@ -84,15 +79,7 @@ public class EnclaveConfiguration {
     return iasHost;
   }
 
-  public String getKey() {
-    return key;
-  }
-
   public boolean getAcceptGroupOutOfDate() {
     return acceptGroupOutOfDate;
-  }
-
-  public void setCertificate(String certificate) {
-    this.certificate = certificate;
   }
 }
