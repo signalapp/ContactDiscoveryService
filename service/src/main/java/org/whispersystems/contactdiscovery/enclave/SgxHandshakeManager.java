@@ -29,6 +29,7 @@ import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.util.Constants;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -205,7 +206,13 @@ public class SgxHandshakeManager implements Managed, Runnable {
         getQuoteSignatureErrorMeter.mark();
 
         logger.warn("Stale or missing revocation list, refetching...", e);
-        sgxRevocationListManager.refreshRevocationList(enclave.getGid());
+
+        try {
+          sgxRevocationListManager.refreshRevocationList(enclave.getGid());
+        } catch (IOException | InterruptedException ioException) {
+          logger.warn("Failed to refresh revocation list", e);
+        }
+
         delayMs = 1_000L;
       }
     }

@@ -18,7 +18,6 @@ package org.whispersystems.contactdiscovery.client;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.glassfish.jersey.SslConfigurator;
@@ -42,6 +41,7 @@ import java.time.Period;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 
 /**
  * Client interface for communication with IAS
@@ -91,9 +91,13 @@ public class IntelClient {
       throw new IOException("Failed to get signature revocation list (HTTP/" + response.statusCode() + ")");
     }
 
-    final String encodedRevocationList = response.body();
+    final String encodedRevocationList = StringUtils.strip(response.body());
 
-    return StringUtils.isNotBlank(encodedRevocationList) ? Base64.decodeBase64(encodedRevocationList) : new byte[0];
+    try {
+      return StringUtils.isNotBlank(encodedRevocationList) ? Base64.getDecoder().decode(encodedRevocationList) : new byte[0];
+    } catch (IllegalArgumentException e) {
+      throw new IOException("Could not decode revocation list", e);
+    }
   }
 
   public QuoteSignatureResponse getQuoteSignature(byte[] quote) throws QuoteVerificationException, StaleRevocationListException {

@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.binaryEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
@@ -50,9 +49,21 @@ public class IntelClientTest {
     }
 
     @Test
-    public void getSignatureRevocationListBadResponse() {
+    public void getSignatureRevocationListBadStatus() {
         wireMockRule.stubFor(get(urlMatching("/attestation/sgx/v3/sigrl/.*"))
                 .willReturn(aResponse().withStatus(401).withBody("")));
+
+        assertThatExceptionOfType(IOException.class)
+                .isThrownBy(() -> intelClient.getSignatureRevocationList(0x00000077));
+
+        verify(getRequestedFor(urlEqualTo("/attestation/sgx/v3/sigrl/00000077"))
+                .withHeader(IntelClient.SUBSCRIPTION_KEY_HEADER, equalTo(API_KEY)));
+    }
+
+    @Test
+    public void getSignatureRevocationListBadResponse() throws Exception {
+        wireMockRule.stubFor(get(urlMatching("/attestation/sgx/v3/sigrl/.*"))
+                .willReturn(aResponse().withStatus(200).withBody("This is not valid base64 data")));
 
         assertThatExceptionOfType(IOException.class)
                 .isThrownBy(() -> intelClient.getSignatureRevocationList(0x00000077));

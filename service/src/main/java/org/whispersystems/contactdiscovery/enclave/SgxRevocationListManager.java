@@ -50,17 +50,11 @@ public class SgxRevocationListManager implements Managed {
     else                        return revocationList;
   }
 
-  public byte[] refreshRevocationList(long groupId) {
-    try {
-      byte[] refreshedList = intelClient.getSignatureRevocationList(groupId);
-      revocationLists.put(groupId, refreshedList);
+  public byte[] refreshRevocationList(long groupId) throws IOException, InterruptedException {
+    byte[] refreshedList = intelClient.getSignatureRevocationList(groupId);
+    revocationLists.put(groupId, refreshedList);
 
-      return refreshedList;
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    }
+    return refreshedList;
   }
 
   @Override

@@ -20,7 +20,7 @@ import static org.mockito.Mockito.*;
 public class SgxHandshakeManagerTest {
 
   @Test
-  public void testGetQuote() throws SgxException, NoSuchRevocationListException, NoSuchEnclaveException, SignedQuoteUnavailableException, StaleRevocationListException, QuoteVerificationException {
+  public void testGetQuote() throws Exception {
     SgxEnclaveManager             enclaveManager        = mock(SgxEnclaveManager.class                 );
     SgxRevocationListManager      revocationListManager = mock(SgxRevocationListManager.class          );
     IntelClient                   intelClient           = mock(IntelClient.class                       );
