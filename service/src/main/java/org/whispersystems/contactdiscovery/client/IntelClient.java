@@ -16,9 +16,11 @@
  */
 package org.whispersystems.contactdiscovery.client;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang3.StringUtils;
 import org.glassfish.jersey.SslConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,13 +28,14 @@ import org.whispersystems.contactdiscovery.enclave.StaleRevocationListException;
 import org.whispersystems.contactdiscovery.util.ByteUtils;
 import org.whispersystems.contactdiscovery.util.SystemMapper;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -49,55 +52,73 @@ public class IntelClient {
 
   private final Logger logger = LoggerFactory.getLogger(IntelClient.class);
 
-  private final Client client;
-  private final String host;
+  private final HttpClient client;
   private final String apiKey;
   private final boolean acceptGroupOutOfDate;
 
-  private static final String SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
+  private final URI signatureRevocationListBaseUri;
+  private final URI quoteSignatureUri;
 
-  public IntelClient(String host, String apiKey, boolean acceptGroupOutOfDate) {
-    this.client = ClientBuilder.newBuilder()
+  @VisibleForTesting
+  static final String SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
+
+  public IntelClient(String baseUri, String apiKey, boolean acceptGroupOutOfDate) {
+    this.client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .version(HttpClient.Version.HTTP_1_1)
             .sslContext(SslConfigurator.newInstance()
                     .securityProtocol("TLSv1.2")
                     .createSSLContext())
             .build();
 
-    this.host = host;
     this.apiKey = apiKey;
     this.acceptGroupOutOfDate = acceptGroupOutOfDate;
+
+    this.signatureRevocationListBaseUri = URI.create(baseUri).resolve("/attestation/sgx/v3/sigrl/");
+    this.quoteSignatureUri = URI.create(baseUri).resolve("/attestation/sgx/v3/report");
   }
 
-  public byte[] getSignatureRevocationList(long gid) {
-    String encodedRevocationList = client.target(host)
-                                         .path(String.format("/attestation/sgx/v3/sigrl/%08x", gid))
-                                         .request()
-                                         .header(SUBSCRIPTION_KEY_HEADER, apiKey)
-                                         .get(String.class);
+  public byte[] getSignatureRevocationList(long gid) throws IOException, InterruptedException {
+    final HttpRequest request = HttpRequest.newBuilder(signatureRevocationListBaseUri.resolve(String.format("%08x", gid)))
+            .timeout(Duration.ofSeconds(10))
+            .header(SUBSCRIPTION_KEY_HEADER, apiKey)
+            .GET()
+            .build();
 
-    if (encodedRevocationList != null && encodedRevocationList.trim().length() != 0) {
-      return Base64.decodeBase64(encodedRevocationList);
-    } else {
-      return new byte[0];
+    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new IOException("Failed to get signature revocation list (HTTP/" + response.statusCode() + ")");
     }
+
+    final String encodedRevocationList = response.body();
+
+    return StringUtils.isNotBlank(encodedRevocationList) ? Base64.decodeBase64(encodedRevocationList) : new byte[0];
   }
 
   public QuoteSignatureResponse getQuoteSignature(byte[] quote) throws QuoteVerificationException, StaleRevocationListException {
     try {
-      Response response = client.target(host)
-                                .path("/attestation/sgx/v3/report")
-                                .request(MediaType.APPLICATION_JSON)
-                                .header(SUBSCRIPTION_KEY_HEADER, apiKey)
-                                .post(Entity.json(new QuoteSignatureRequest(quote)));
+      final HttpRequest request = HttpRequest.newBuilder(quoteSignatureUri)
+              .timeout(Duration.ofSeconds(10))
+              .header("Content-Type", MediaType.APPLICATION_JSON)
+              .header(SUBSCRIPTION_KEY_HEADER, apiKey)
+              .POST(HttpRequest.BodyPublishers.ofString(SystemMapper.getMapper().writeValueAsString(new QuoteSignatureRequest(quote))))
+              .build();
 
-      String responseBodyString = response.readEntity(String.class);
-      String signature          = response.getHeaderString("X-IASReport-Signature");
-      String raw_certificate    = response.getHeaderString("X-IASReport-Signing-Certificate");
-      String certificate        = java.net.URLDecoder.decode(raw_certificate, java.nio.charset.StandardCharsets.UTF_8);
+      final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-      if (response.getStatus() != 200) {
+      String responseBodyString = response.body();
+      String signature = response.headers().firstValue("X-IASReport-Signature")
+              .orElseThrow(() -> new IOException("Missing X-IASReport-Signature header"));
+
+      String rawCertificate = response.headers().firstValue("X-IASReport-Signing-Certificate")
+              .orElseThrow(() -> new IOException("Missing X-IASReport-Signing-Certificate header"));
+
+      String certificate = java.net.URLDecoder.decode(rawCertificate, java.nio.charset.StandardCharsets.UTF_8);
+
+      if (response.statusCode() != 200) {
         throw new QuoteVerificationException("Non-successful quote verification response: " +
-                                             response.getStatus() + " " + response.getStatusInfo().getReasonPhrase());
+                                             response.statusCode() + " " + response.body());
       }
 
       if (responseBodyString == null || responseBodyString.trim().length() == 0) {
@@ -135,7 +156,7 @@ public class IntelClient {
       }
 
       return new QuoteSignatureResponse(signature, responseBodyString, certificate, responseBody.getPlatformInfoBlob());
-    } catch (IOException e) {
+    } catch (IOException | InterruptedException e) {
       throw new QuoteVerificationException(e);
     }
   }

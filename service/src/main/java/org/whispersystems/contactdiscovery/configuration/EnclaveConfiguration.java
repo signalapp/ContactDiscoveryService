@@ -42,7 +42,7 @@ public class EnclaveConfiguration {
 
   @JsonProperty
   @NotEmpty
-  private String iasHost;
+  private String iasBaseUri;
 
   @JsonProperty
   @Min(1024)
@@ -75,8 +75,8 @@ public class EnclaveConfiguration {
     return instances;
   }
 
-  public String getIasHost() {
-    return iasHost;
+  public String getIasBaseUri() {
+    return iasBaseUri;
   }
 
   public boolean getAcceptGroupOutOfDate() {

@@ -152,7 +152,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     SignalServiceAuthenticator signalServiceAuthenticator = new SignalServiceAuthenticator(configuration.getSignalServiceConfiguration().getServerAuthenticationToken());
     PeerServiceAuthenticator   peerServiceAuthenticator   = new PeerServiceAuthenticator(configuration.getDirectoryConfiguration().getPeerAuthenticationToken());
 
-    IntelClient intelClient = new IntelClient(configuration.getEnclaveConfiguration().getIasHost(),
+    IntelClient intelClient = new IntelClient(configuration.getEnclaveConfiguration().getIasBaseUri(),
                                               configuration.getEnclaveConfiguration().getApiKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 

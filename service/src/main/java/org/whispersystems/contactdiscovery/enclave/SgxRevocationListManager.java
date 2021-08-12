@@ -18,7 +18,8 @@ package org.whispersystems.contactdiscovery.enclave;
 
 import org.whispersystems.contactdiscovery.client.IntelClient;
 
-import java.util.Arrays;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -50,10 +51,16 @@ public class SgxRevocationListManager implements Managed {
   }
 
   public byte[] refreshRevocationList(long groupId) {
-    byte[] refreshedList = intelClient.getSignatureRevocationList(groupId);
-    revocationLists.put(groupId, refreshedList);
+    try {
+      byte[] refreshedList = intelClient.getSignatureRevocationList(groupId);
+      revocationLists.put(groupId, refreshedList);
 
-    return refreshedList;
+      return refreshedList;
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
