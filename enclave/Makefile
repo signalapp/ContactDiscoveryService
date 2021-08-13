@@ -204,7 +204,7 @@ bindgen: $(BINDGEN) | $(SGX_INCLUDEDIR)
 		$(filter-out -fvisibility=hidden,$(filter-out -std=%,$(CFLAGS) $(ENCLAVE_CFLAGS)))
 
 $(builddir)/bin/bindgen-%:
-	$(CARGO) install --force --version $* --bin bindgen bindgen
+	$(CARGO) install --locked --force --version $* --bin bindgen bindgen
 	mkdir -p $(builddir)/bin
 	cp $(builddir)/cargo/bin/bindgen $@
 
