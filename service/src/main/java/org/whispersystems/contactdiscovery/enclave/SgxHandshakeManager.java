@@ -19,6 +19,7 @@ package org.whispersystems.contactdiscovery.enclave;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
+import io.dropwizard.lifecycle.Managed;
 import org.assertj.core.util.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,11 +34,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-
-import io.dropwizard.lifecycle.Managed;
-import org.whispersystems.contactdiscovery.util.Util;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -47,7 +46,7 @@ import static com.codahale.metrics.MetricRegistry.name;
  *
  * @author Moxie Marlinspike
  */
-public class SgxHandshakeManager implements Managed, Runnable {
+public class SgxHandshakeManager implements Managed {
 
   private final Logger logger = LoggerFactory.getLogger(SgxHandshakeManager.class);
 
@@ -65,18 +64,18 @@ public class SgxHandshakeManager implements Managed, Runnable {
   private final SgxRevocationListManager sgxRevocationListManager;
   private final IntelClient              client;
 
-  private boolean running;
-
-  private ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+  private final ScheduledExecutorService executorService;
+  private ScheduledFuture<?> refreshQuotesFuture;
 
   public SgxHandshakeManager(SgxEnclaveManager sgxEnclaveManager,
                              SgxRevocationListManager sgxRevocationListManager,
-                             IntelClient client)
+                             IntelClient client,
+                             ScheduledExecutorService executorService)
   {
     this.sgxEnclaveManager        = sgxEnclaveManager;
     this.sgxRevocationListManager = sgxRevocationListManager;
     this.client                   = client;
-    this.running                  = false;
+    this.executorService          = executorService;
   }
 
   public RemoteAttestationResponse getHandshake(String enclaveId, byte[] clientPublic)
@@ -107,39 +106,29 @@ public class SgxHandshakeManager implements Managed, Runnable {
   }
 
   @Override
-  public void start() throws Exception {
-    setRunning(true);
+  public synchronized void start() throws Exception {
     for (Map.Entry<String, SgxEnclave> enclaveMapEntry : sgxEnclaveManager.getEnclaves().entrySet()) {
       refreshQuote(enclaveMapEntry.getKey(), enclaveMapEntry.getValue());
     }
-    new Thread(this).start();
-  }
 
-  @Override
-  public void stop() throws Exception {
-    setRunning(false);
-  }
-
-  @Override
-  public void run() {
-    long elapsedTimeMs = 0L;
-    while (sleepWhileRunning(REFRESH_INTERVAL_MS - elapsedTimeMs)) {
-      long startTimeMs = System.currentTimeMillis();
-
-      refreshAllQuotes();
-
-      elapsedTimeMs = Math.max(System.currentTimeMillis() - startTimeMs, 0L);
+    if (this.refreshQuotesFuture != null) {
+      refreshQuotesFuture.cancel(false);
     }
+
+    refreshQuotesFuture = executorService.scheduleAtFixedRate(
+            this::refreshAllQuotes, REFRESH_INTERVAL_MS, REFRESH_INTERVAL_MS, TimeUnit.MILLISECONDS);
   }
 
-  @VisibleForTesting
-  public synchronized void setRunning(boolean running) {
-    this.running = running;
+  @Override
+  public synchronized void stop() throws Exception {
+    if (this.refreshQuotesFuture != null) {
+      refreshQuotesFuture.cancel(false);
+    }
+
+    refreshQuotesFuture = null;
   }
 
-  private void handleGroupOutOfDataException(GroupOutOfDateException e) {
-    getQuoteSignatureErrorMeter.mark();
-
+  private void handleGroupOutOfDateException(GroupOutOfDateException e) {
     try {
       byte[] platformInfoBlob = e.getPlatformInfoBlob();
       if (platformInfoBlob != null) {
@@ -154,79 +143,61 @@ public class SgxHandshakeManager implements Managed, Runnable {
 
   @VisibleForTesting
   public void refreshAllQuotes() {
-    for (Map.Entry<String, SgxEnclave> enclaveMapEntry : sgxEnclaveManager.getEnclaves().entrySet()) {
-      try {
-        refreshQuote(enclaveMapEntry.getKey(), enclaveMapEntry.getValue());
-      } catch (SgxException e) {
-        getQuoteSignatureErrorMeter.mark();
+    try {
+      for (Map.Entry<String, SgxEnclave> enclaveMapEntry : sgxEnclaveManager.getEnclaves().entrySet()) {
+        try {
+          refreshQuote(enclaveMapEntry.getKey(), enclaveMapEntry.getValue());
+        } catch (SgxException e) {
+          getQuoteSignatureErrorMeter.mark();
 
-        logger.warn("Problem calling enclave", e);
-      } catch (GroupOutOfDateException e) {
-        handleGroupOutOfDataException(e);
-      } catch (Throwable t) {
-        getQuoteSignatureErrorMeter.mark();
+          logger.warn("Problem calling enclave", e);
+        } catch (GroupOutOfDateException e) {
+          getQuoteSignatureErrorMeter.mark();
 
-        logger.warn("Problem retrieving quote", t);
+          handleGroupOutOfDateException(e);
+        } catch (StaleRevocationListException e) {
+          getQuoteSignatureErrorMeter.mark();
+
+          // Refresh the list; we'll miss refreshing the quote this time, but we'll come back to it on the next pass
+          logger.warn("Stale revocation list; will refresh on next pass", e);
+          sgxRevocationListManager.expireRevocationList(enclaveMapEntry.getValue().getGid());
+        } catch (Throwable t) {
+          getQuoteSignatureErrorMeter.mark();
+
+          logger.warn("Problem retrieving quote", t);
+        }
       }
+    } catch (Throwable t) {
+      logger.error("Unexpected exception while refreshing quotes", t);
     }
   }
 
   private void refreshQuote(String enclaveId, SgxEnclave enclave)
-      throws QuoteVerificationException, SgxException
-  {
-    long delayMs = 0L;
-    while (sleepWhileRunning(delayMs)) {
-      try {
-        byte[]                 revocationList = sgxRevocationListManager.getRevocationList(enclave.getGid());
-        byte[]                 quote          = enclave.getNextQuote(revocationList);
-        QuoteSignatureResponse signature;
+          throws QuoteVerificationException, SgxException, StaleRevocationListException, IOException, InterruptedException {
 
-        try {
-          signature = client.getQuoteSignature(quote);
-        } catch (GroupOutOfDateException e) {
-          handleGroupOutOfDataException(e);
-          throw e;
-        }
+    byte[]                 revocationList = sgxRevocationListManager.getRevocationList(enclave.getGid());
+    byte[]                 quote          = enclave.getNextQuote(revocationList);
+    QuoteSignatureResponse signature;
 
-        synchronized (quotes) {
-          quotes.put(enclaveId, new SgxSignedQuote(quote, signature));
-          enclave.setCurrentQuote();
-        }
-
-        getQuoteSignatureMeter.mark();
-
-        try {
-          reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
-        } catch (QuoteVerificationException | SgxException | IllegalArgumentException e) {
-          logger.warn("Problems decoding platform info blob", e);
-        }
-
-        break;
-      } catch (NoSuchRevocationListException | StaleRevocationListException e) {
-        getQuoteSignatureErrorMeter.mark();
-
-        logger.warn("Stale or missing revocation list, refetching...", e);
-
-        try {
-          sgxRevocationListManager.refreshRevocationList(enclave.getGid());
-        } catch (IOException | InterruptedException ioException) {
-          logger.warn("Failed to refresh revocation list", e);
-        }
-
-        delayMs = 1_000L;
-      }
+    try {
+      signature = client.getQuoteSignature(quote);
+    } catch (GroupOutOfDateException e) {
+      handleGroupOutOfDateException(e);
+      throw e;
     }
-  }
 
-  private synchronized boolean sleepWhileRunning(long delayMs) {
-    long startTimeMs = System.currentTimeMillis();
-    while (running && delayMs > 0) {
-      Util.wait(this, delayMs);
-
-      long nowMs = System.currentTimeMillis();
-      delayMs -= Math.abs(nowMs - startTimeMs);
+    synchronized (quotes) {
+      quotes.put(enclaveId, new SgxSignedQuote(quote, signature));
+      enclave.setCurrentQuote();
     }
-    return running;
+
+    getQuoteSignatureMeter.mark();
+
+    try {
+      reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
+    } catch (QuoteVerificationException | SgxException | IllegalArgumentException e) {
+      logger.warn("Problems decoding platform info blob", e);
+    }
   }
 
   private void reportPlatformAttestationStatus(byte[] platformInfoBlob, boolean attestationSuccess)
@@ -269,5 +240,4 @@ public class SgxHandshakeManager implements Managed, Runnable {
     }
 
   }
-
 }

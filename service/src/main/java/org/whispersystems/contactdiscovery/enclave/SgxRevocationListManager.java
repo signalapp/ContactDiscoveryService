@@ -16,14 +16,13 @@
  */
 package org.whispersystems.contactdiscovery.enclave;
 
+import io.dropwizard.lifecycle.Managed;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.dropwizard.lifecycle.Managed;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Maintains and refreshes the sigRL value for each enclave in the
@@ -31,43 +30,42 @@ import io.dropwizard.lifecycle.Managed;
  *
  * @author Moxie Marlinspike
  */
-public class SgxRevocationListManager implements Managed {
+public class SgxRevocationListManager {
 
   private final Map<Long, byte[]> revocationLists = new ConcurrentHashMap<>();
 
-  private final IntelClient       intelClient;
-  private final SgxEnclaveManager enclaveManager;
+  private final IntelClient intelClient;
 
-  public SgxRevocationListManager(SgxEnclaveManager enclaveManager, IntelClient intelClient) {
-    this.intelClient    = intelClient;
-    this.enclaveManager = enclaveManager;
+  public SgxRevocationListManager(IntelClient intelClient) {
+    this.intelClient = intelClient;
   }
 
-  public byte[] getRevocationList(long groupId) throws NoSuchRevocationListException {
-    byte[] revocationList = revocationLists.get(groupId);
+  public byte[] getRevocationList(long groupId) throws IOException, InterruptedException {
+    final AtomicReference<Exception> cause = new AtomicReference<>();
 
-    if (revocationList == null) throw new NoSuchRevocationListException(String.valueOf(groupId));
-    else                        return revocationList;
-  }
+    final byte[] revocationList = revocationLists.computeIfAbsent(groupId, gid -> {
+      try {
+        return intelClient.getSignatureRevocationList(gid);
+      } catch (IOException | InterruptedException e) {
+        cause.set(e);
+        return null;
+      }
+    });
 
-  public byte[] refreshRevocationList(long groupId) throws IOException, InterruptedException {
-    byte[] refreshedList = intelClient.getSignatureRevocationList(groupId);
-    revocationLists.put(groupId, refreshedList);
-
-    return refreshedList;
-  }
-
-  @Override
-  public void start() throws Exception {
-    for (SgxEnclave enclave : enclaveManager.getEnclaves().values()) {
-      if (!revocationLists.containsKey(enclave.getGid())) {
-        revocationLists.put(enclave.getGid(), intelClient.getSignatureRevocationList(enclave.getGid()));
+    if (revocationList == null) {
+      if (cause.get() instanceof IOException) {
+        throw (IOException) cause.get();
+      } else if (cause.get() instanceof InterruptedException) {
+        throw (InterruptedException) cause.get();
+      } else {
+        throw new RuntimeException("Failed to retrieve revocation list");
       }
     }
+
+    return revocationList;
   }
 
-  @Override
-  public void stop() throws Exception {
-
+  public void expireRevocationList(long groupId) {
+    revocationLists.remove(groupId);
   }
 }

@@ -105,6 +105,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -156,10 +157,12 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
                                               configuration.getEnclaveConfiguration().getApiKey(),
                                               configuration.getEnclaveConfiguration().getAcceptGroupOutOfDate());
 
+    ScheduledExecutorService refreshQuoteExecutor = environment.lifecycle().scheduledExecutorService("RefreshQuote").threads(1).build();
+
     RedisClientFactory       cacheClientFactory       = new RedisClientFactory(configuration.getRedisConfiguration());
     SgxEnclaveManager        sgxEnclaveManager        = new SgxEnclaveManager(configuration.getEnclaveConfiguration());
-    SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(sgxEnclaveManager, intelClient);
-    SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient);
+    SgxRevocationListManager sgxRevocationListManager = new SgxRevocationListManager(intelClient);
+    SgxHandshakeManager      sgxHandshakeManager      = new SgxHandshakeManager(sgxEnclaveManager, sgxRevocationListManager, intelClient, refreshQuoteExecutor);
     DirectoryCache           directoryCache           = new DirectoryCache();
     DirectoryMapFactory      directoryMapFactory      = new DirectoryMapFactory(configuration.getDirectoryConfiguration().getInitialCapacity(), configuration.getDirectoryConfiguration().getMinLoadFactor(), configuration.getDirectoryConfiguration().getMaxLoadFactor());
     DirectoryPeerManager     directoryPeerManager     = new DirectoryPeerManager(configuration.getDirectoryConfiguration().getMapBuilderUrl(), configuration.getDirectoryConfiguration().getPeerAuthenticationToken(), configuration.getDirectoryConfiguration().isPeerReadEligible(), configuration.getDirectoryConfiguration().getMaxPeerBuildAttempts());
@@ -215,7 +218,6 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     var flushRequestsTask   = new PendingRequestsFlushTask(requestManager);
 
     environment.lifecycle().manage(sgxEnclaveManager);
-    environment.lifecycle().manage(sgxRevocationListManager);
     environment.lifecycle().manage(sgxHandshakeManager);
     environment.lifecycle().manage(requestManager);
     environment.lifecycle().manage(directoryManager);

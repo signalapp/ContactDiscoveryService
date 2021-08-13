@@ -9,13 +9,8 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.auth.User;
-import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
-import org.whispersystems.contactdiscovery.enclave.NoSuchRevocationListException;
-import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
-import org.whispersystems.contactdiscovery.enclave.SignedQuoteUnavailableException;
-import org.whispersystems.contactdiscovery.enclave.StaleRevocationListException;
 import org.whispersystems.contactdiscovery.entities.MultipleRemoteAttestationResponse;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationRequest;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
@@ -73,7 +68,7 @@ public class RemoteAttestationResourceTest {
                                                             .build();
 
   @Before
-  public void setup() throws NoSuchEnclaveException, SgxException, NoSuchRevocationListException, SignedQuoteUnavailableException, StaleRevocationListException, QuoteVerificationException {
+  public void setup() throws Exception {
     this.serverEphemeral = new byte[32];
     this.serverPublic = new byte[32];
     this.quote = new byte[16];
