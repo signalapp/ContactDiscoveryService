@@ -74,8 +74,8 @@ public class IntelClient {
     this.apiKey = apiKey;
     this.acceptGroupOutOfDate = acceptGroupOutOfDate;
 
-    this.signatureRevocationListBaseUri = URI.create(baseUri).resolve("/attestation/sgx/v3/sigrl/");
-    this.quoteSignatureUri = URI.create(baseUri).resolve("/attestation/sgx/v3/report");
+    this.signatureRevocationListBaseUri = URI.create(baseUri).resolve("attestation/v3/sigrl/");
+    this.quoteSignatureUri = URI.create(baseUri).resolve("attestation/v3/report");
   }
 
   public byte[] getSignatureRevocationList(long gid) throws IOException, InterruptedException {
