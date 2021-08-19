@@ -75,6 +75,7 @@ public class DirectoryManager implements Managed {
 
   private static final String DIRECTORY_SIZE_GAUGE_NAME = name(DirectoryManager.class, "directorySize");
   private static final String DIRECTORY_CAPACITY_GAUGE_NAME = name(DirectoryManager.class, "directoryCapactiy");
+  private static final String REDIS_USER_COUNT_GAUGE_NAME = name(DirectoryManager.class, "redisUserCount");
 
   private static final MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
   private static final Meter reconcileAddsMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileAdds"));
@@ -320,6 +321,12 @@ public class DirectoryManager implements Managed {
     rebuildLocalData();
 
     this.pubSubConsumer.start();
+
+    metricRegistry.gauge(REDIS_USER_COUNT_GAUGE_NAME, () -> () -> {
+      try (Jedis jedis = jedisPool.getResource()) {
+        return directoryCache.getUserCount(jedis);
+      }
+    });
   }
 
   @Override
