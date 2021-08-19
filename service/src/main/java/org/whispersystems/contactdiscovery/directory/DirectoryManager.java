@@ -72,19 +72,22 @@ public class DirectoryManager implements Managed {
 
   private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
 
-  private static final MetricRegistry metricRegistry        = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
-  private static final Meter          reconcileAddsMeter    = metricRegistry.meter(name(DirectoryManager.class, "reconcileAdds"));
-  private static final Meter          reconcileRemovesMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileRemoves"));
-  private static final Timer          addUserTimer          = metricRegistry.timer(name(DirectoryManager.class, "addUser"));
-  private static final Timer          removeUserTimer       = metricRegistry.timer(name(DirectoryManager.class, "removeUser"));
-  private static final Timer          getAllUsersTimer      = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
-  private static final Timer          reconcileGetUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getUsersInRange"));
-  private static final Timer          rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
-  private static final Timer          rebuildFromPeerTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildfromPeer"));
-  private static final Counter        rebuildLocalDataNullUUID = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "rebuildLocalData", "nullUUIDs"));
-  private static final Counter        obsoluteTypeAdded = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "sqsMessages", "obsoleteTypeAdded"));
-  private static final Timer reconcileExistsUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getExistingUsers"));
 
+  private static final String DIRECTORY_SIZE_GAUGE_NAME = name(DirectoryManager.class, "directorySize");
+  private static final String DIRECTORY_CAPACITY_GAUGE_NAME = name(DirectoryManager.class, "directoryCapactiy");
+
+  private static final MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
+  private static final Meter reconcileAddsMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileAdds"));
+  private static final Meter reconcileRemovesMeter = metricRegistry.meter(name(DirectoryManager.class, "reconcileRemoves"));
+  private static final Timer addUserTimer = metricRegistry.timer(name(DirectoryManager.class, "addUser"));
+  private static final Timer removeUserTimer = metricRegistry.timer(name(DirectoryManager.class, "removeUser"));
+  private static final Timer getAllUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "getAllUsers"));
+  private static final Timer reconcileGetUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getUsersInRange"));
+  private static final Timer rebuildLocalDataTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildLocalData"));
+  private static final Timer rebuildFromPeerTimer = metricRegistry.timer(name(DirectoryManager.class, "rebuildfromPeer"));
+  private static final Counter rebuildLocalDataNullUUID = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "rebuildLocalData", "nullUUIDs"));
+  private static final Counter obsoluteTypeAdded = metricRegistry.counter(name(DirectoryManager.class, "obsolesence", "sqsMessages", "obsoleteTypeAdded"));
+  private static final Timer reconcileExistsUsersTimer = metricRegistry.timer(name(DirectoryManager.class, "reconcile", "getExistingUsers"));
 
   private static final String CHANNEL = "signal_address_update";
 
@@ -114,6 +117,12 @@ public class DirectoryManager implements Managed {
     this.currentDirectoryMap     = new AtomicReference<>(Optional.empty());
     this.isReconciliationEnabled = isReconciliationEnabled;
     this.directoryPeerManager = directoryPeerManager;
+
+    metricRegistry.gauge(DIRECTORY_SIZE_GAUGE_NAME, () -> () ->
+            currentDirectoryMap.get().map(DirectoryMapNative::size).orElse(0L));
+
+    metricRegistry.gauge(DIRECTORY_CAPACITY_GAUGE_NAME, () -> () ->
+      currentDirectoryMap.get().map(DirectoryMapNative::capacity).orElse(0L));
   }
 
   public boolean isConnected() {
