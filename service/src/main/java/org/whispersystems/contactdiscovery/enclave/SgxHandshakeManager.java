@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.enclave;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SharedMetricRegistries;
@@ -117,6 +118,15 @@ public class SgxHandshakeManager implements Managed {
 
     refreshQuotesFuture = executorService.scheduleAtFixedRate(
             this::refreshAllQuotes, REFRESH_INTERVAL_MS, REFRESH_INTERVAL_MS, TimeUnit.MILLISECONDS);
+
+    metricRegistry.register(name(getClass(), "oldestSignedQuoteAge"), (Gauge<Long>)() -> {
+      final long oldestSignedQuoteTimestamp = quotes.values().stream()
+              .mapToLong(SgxSignedQuote::getTimestamp)
+              .min()
+              .orElse(0);
+
+      return System.currentTimeMillis() - oldestSignedQuoteTimestamp;
+    });
   }
 
   @Override
@@ -187,7 +197,7 @@ public class SgxHandshakeManager implements Managed {
     }
 
     synchronized (quotes) {
-      quotes.put(enclaveId, new SgxSignedQuote(quote, signature));
+      quotes.put(enclaveId, new SgxSignedQuote(quote, signature, System.currentTimeMillis()));
       enclave.setCurrentQuote();
     }
 
@@ -223,12 +233,14 @@ public class SgxHandshakeManager implements Managed {
 
   private static class SgxSignedQuote {
 
-    private final byte[]                 quote;
+    private final byte[] quote;
     private final QuoteSignatureResponse signature;
+    private final long timestamp;
 
-    private SgxSignedQuote(byte[] quote, QuoteSignatureResponse signature) {
-      this.quote     = quote;
+    private SgxSignedQuote(byte[] quote, QuoteSignatureResponse signature, final long timestamp) {
+      this.quote = quote;
       this.signature = signature;
+      this.timestamp = timestamp;
     }
 
     public byte[] getQuote() {
@@ -239,5 +251,8 @@ public class SgxHandshakeManager implements Managed {
       return signature;
     }
 
+    public long getTimestamp() {
+      return timestamp;
+    }
   }
 }
