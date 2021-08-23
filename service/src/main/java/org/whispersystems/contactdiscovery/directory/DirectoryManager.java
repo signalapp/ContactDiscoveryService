@@ -74,7 +74,7 @@ public class DirectoryManager implements Managed {
 
 
   private static final String DIRECTORY_SIZE_GAUGE_NAME = name(DirectoryManager.class, "directorySize");
-  private static final String DIRECTORY_CAPACITY_GAUGE_NAME = name(DirectoryManager.class, "directoryCapactiy");
+  private static final String DIRECTORY_CAPACITY_GAUGE_NAME = name(DirectoryManager.class, "directoryCapacity");
   private static final String REDIS_USER_COUNT_GAUGE_NAME = name(DirectoryManager.class, "redisUserCount");
 
   private static final MetricRegistry metricRegistry = SharedMetricRegistries.getOrCreate(Constants.METRICS_NAME);
