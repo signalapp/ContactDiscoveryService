@@ -304,6 +304,24 @@ impl InternalBuffers {
         self.e164s_buffer.resize(capacity, FREE_E164);
         self.uuids_buffer.resize(capacity, FREE_UUID);
     }
+
+    #[cfg(test)]
+    fn get(&self, e164: Phone) -> Option<SgxsdUuid> {
+        let e164: Phone = (e164 as u64).to_be();
+
+        self.e164s_buffer
+            .iter()
+            .zip(self.uuids_buffer.iter())
+            .find_map(|(candidate_e164, uuid)| {
+                if candidate_e164 == &e164 {
+                    Some(SgxsdUuid {
+                        data64: [u64::from_be(uuid.data64[0]), u64::from_be(uuid.data64[1])],
+                    })
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 fn hash_element(slot_count: usize, e164: Phone) -> usize {
@@ -442,6 +460,44 @@ mod test {
         assert_eq!(internal_buffers.capacity(), 1000);
         assert_eq!(internal_buffers.size(), 0);
         assert_eq!(internal_buffers.used_slot_count, 1);
+    }
+
+    #[test]
+    fn replace() {
+        let e164: Phone = 0x000000039F5E8B6D;
+        let original_uuid = SgxsdUuid::from([
+            0xDEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+        ]);
+
+        let changed_uuid = SgxsdUuid::from([
+            0xFEu8, 0xAD, 0xBE, 0xEF, 0x42, 0x42, 0x42, 0x42, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF,
+        ]);
+
+        let mut internal_buffers = InternalBuffers::new(1000, 0.75, 0.85).expect("InternalBuffers should construct successfully");
+
+        let result = internal_buffers.insert(e164, original_uuid);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+        assert_eq!(internal_buffers.capacity(), 1000);
+        assert_eq!(internal_buffers.size(), 1);
+        assert_eq!(internal_buffers.used_slot_count, 1);
+        assert!(internal_buffers.get(e164).is_some());
+
+        if let Some(uuid) = internal_buffers.get(e164) {
+            assert_eq!(original_uuid.data64, uuid.data64);
+        }
+
+        let result = internal_buffers.insert(e164, changed_uuid);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+        assert_eq!(internal_buffers.capacity(), 1000);
+        assert_eq!(internal_buffers.size(), 1);
+        assert_eq!(internal_buffers.used_slot_count, 1);
+        assert!(internal_buffers.get(e164).is_some());
+
+        if let Some(uuid) = internal_buffers.get(e164) {
+            assert_eq!(changed_uuid.data64, uuid.data64);
+        }
     }
 
     #[test]
