@@ -58,11 +58,11 @@ ENV SHELL /bin/bash
 
 WORKDIR /home/rust
 
-ARG TOOLCHAIN=1.40.0
+ARG TOOLCHAIN=1.54.0
 
 COPY rustup-init.sha256 /tmp/docker/
 
-RUN    curl -f https://static.rust-lang.org/rustup/archive/1.20.2/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
+RUN    curl -f https://static.rust-lang.org/rustup/archive/1.24.3/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init \
     && [ `sha256sum /tmp/rustup-init|cut -d' ' -f1` = `cut -d' ' -f1</tmp/docker/rustup-init.sha256` ] \
     && chmod a+x /tmp/rustup-init \
     && /tmp/rustup-init -y --profile minimal --component rustfmt clippy --default-toolchain "${TOOLCHAIN}" \

@@ -3510,9 +3510,9 @@ pub type cds_call_args_t = sgxsd_server_handle_call_args;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct sgxsd_server_terminate_args {
-    pub in_phones: *mut phone_t,
+    pub in_phones: *const phone_t,
     pub in_phone_count: usize,
-    pub in_uuids: *mut uuid_t,
+    pub in_uuids: *const uuid_t,
 }
 #[test]
 fn bindgen_test_layout_sgxsd_server_terminate_args() {

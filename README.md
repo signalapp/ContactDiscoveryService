@@ -43,20 +43,20 @@ $ make debuild derebuild
 `````
 
 `debuild` is a debian tool used to build debian packages after it sanitizes the
-environment and installs build dependences. The primary advantage of using debian
+environment and installs build dependencies. The primary advantage of using debian
 packaging tools in this case is to leverage the [Reproducible
 Builds](https://wiki.debian.org/ReproducibleBuilds) project. While building a debian
 package, `debuild` will record the names and versions of all detected build dependencies
 into a *.buildinfo file. The Reproducible Builds Project's `derebuild.pl` script can then
 read the buildinfo file to drill down in the [Debian Snapshot
 Archive](http://snapshot.debian.org/) to output the list of packages and generate an apt
-sources.list which should contain all of those packages. The list of packages should then
-be checked in as build-deps in the enclave/docker/ folder, along with sources.list and
+sources. list which should contain all of those packages. The list of packages should then
+be checked in as build-deps in the enclave/docker/ folder, along with sources. list and
 buildinfo, which will then be used to reproduce the build when running `make docker`
 again in the future.
 
 The `debuild` target also builds parts needed from the Intel SGX SDK v2.1.3 after cloning it
-from github.
+from GitHub.
 
 ### Building without Docker or Debian:
 
@@ -73,7 +73,7 @@ The `all` target will probably fail to reproduce the same binary as above, but d
 require Docker or Debian Linux.
 
 If `SGX_SDK_DIR`, or `SGX_INCLUDEDIR` and `SGX_LIBDIR`, are not specified, the Intel SGX SDK
-will be cloned from github and any required libraries will be built. The SDK build
+will be cloned from GitHub and any required libraries will be built. The SDK build
 prerequisites should be present in this case.
 
 The `install` target copies the enclave and jni libraries to service/src/resources/, which
