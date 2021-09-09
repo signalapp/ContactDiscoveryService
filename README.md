@@ -50,7 +50,7 @@ package, `debuild` will record the names and versions of all detected build depe
 into a *.buildinfo file. The Reproducible Builds Project's `derebuild.pl` script can then
 read the buildinfo file to drill down in the [Debian Snapshot
 Archive](http://snapshot.debian.org/) to output the list of packages and generate an apt
-sources. list which should contain all of those packages. The list of packages should then
+`sources.list` which should contain all of those packages. The list of packages should then
 be checked in as build-deps in the enclave/docker/ folder, along with sources. list and
 buildinfo, which will then be used to reproduce the build when running `make docker`
 again in the future.
