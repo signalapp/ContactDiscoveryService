@@ -33,21 +33,19 @@ public class DirectoryPeerManager {
     private final String mapBuilderUrl;
     private final String peerAuthToken;
     private boolean peerLoadEligible;
-    private int maxPeerBuildAttempts;
 
     private int peerBuildAttempts = 0;
 
-    public DirectoryPeerManager(String mapBuilderUrl, String peerAuthToken, boolean peerLoadEligible, int maxPeerBuildAttempts) {
+    public DirectoryPeerManager(String mapBuilderUrl, String peerAuthToken, boolean peerLoadEligible) {
         this.mapBuilderUrl = mapBuilderUrl;
         this.peerAuthToken = peerAuthToken;
         this.peerLoadEligible = peerLoadEligible;
-        this.maxPeerBuildAttempts = maxPeerBuildAttempts;
     }
 
     public boolean loadFromPeer() {
-        logger.info(String.format("determining peer eligibility. url=%s; token=%s; elligible=%s; attempts=%s; maxAttempts=%s",
-                mapBuilderUrl, peerAuthToken, peerLoadEligible, peerBuildAttempts, maxPeerBuildAttempts));
-        if (!peerLoadEligible || peerBuildAttempts > maxPeerBuildAttempts) {
+        logger.info(String.format("determining peer eligibility. url=%s; token=%s; elligible=%s; attempts=%s",
+                mapBuilderUrl, peerAuthToken, peerLoadEligible, peerBuildAttempts));
+        if (!peerLoadEligible) {
             return false;
         }
         return !TextUtils.isEmpty(mapBuilderUrl) && !TextUtils.isEmpty(peerAuthToken);
@@ -75,7 +73,9 @@ public class DirectoryPeerManager {
     }
 
     public Duration getBackoffTime() {
-        return Duration.ofSeconds((long) (5 * Math.pow(2,this.peerBuildAttempts)));
+        return Duration.ofSeconds(
+                Math.min((long) (5 * Math.pow(2,this.peerBuildAttempts)),
+                60));
     }
 
     @VisibleForTesting
