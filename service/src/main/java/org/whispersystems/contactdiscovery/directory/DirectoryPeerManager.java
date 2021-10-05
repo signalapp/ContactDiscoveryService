@@ -23,21 +23,28 @@ import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.util.TextUtils;
 
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Random;
 
 public class DirectoryPeerManager {
     private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
 
+    private static final Random RANDOM = new SecureRandom();
+
     private final String mapBuilderUrl;
+    private final String mapBuilderDns;
     private final String peerAuthToken;
     private boolean peerLoadEligible;
 
     private int peerBuildAttempts = 0;
 
-    public DirectoryPeerManager(String mapBuilderUrl, String peerAuthToken, boolean peerLoadEligible) {
+    public DirectoryPeerManager(String mapBuilderUrl, String mapBuilderDns, String peerAuthToken, boolean peerLoadEligible) {
         this.mapBuilderUrl = mapBuilderUrl;
+        this.mapBuilderDns = mapBuilderDns;
         this.peerAuthToken = peerAuthToken;
         this.peerLoadEligible = peerLoadEligible;
     }
@@ -52,6 +59,18 @@ public class DirectoryPeerManager {
     }
 
     public String getPeerBuildRequestUrl() {
+        try {
+            final InetAddress[] addresses = InetAddress.getAllByName(mapBuilderDns);
+
+            if (addresses.length > 0) {
+                final InetAddress address = addresses[RANDOM.nextInt(addresses.length)];
+                return String.format("http://%s", address.getHostAddress());
+            }
+
+        } catch (final Exception e) {
+            logger.warn("Failed to resolve mapBuilderDns", e);
+        }
+
         return this.mapBuilderUrl;
     }
 
