@@ -68,7 +68,7 @@ public class DirectoryQueueManagerTest {
 
   @Test
   public void testProcessQueue() throws Exception {
-    DirectoryQueueManager queueManager = new DirectoryQueueManager(directoryQueue, directoryManager);
+    DirectoryQueueManager queueManager = new DirectoryQueueManager(directoryQueue, directoryManager, true);
 
     boolean processedQueueOne = queueManager.processQueue();
 
@@ -101,7 +101,7 @@ public class DirectoryQueueManagerTest {
   public void testDirectoryManagerDisconnected() throws Exception {
     when(directoryManager.isConnected()).thenReturn(false);
 
-    DirectoryQueueManager queueManager = new DirectoryQueueManager(directoryQueue, directoryManager);
+    DirectoryQueueManager queueManager = new DirectoryQueueManager(directoryQueue, directoryManager, true);
 
     boolean processedQueue = queueManager.processQueue();
 

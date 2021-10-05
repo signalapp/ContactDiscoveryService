@@ -33,6 +33,7 @@ directory:
     accessSecret:          # AWS access key secret for replication SQS FIFO queue
     queueUrl:              # URL for replication SQS FIFO queue
     queueRegion:           # AWS region for replication SQS FIFO queue
+    queueProcessingEnabled # whether to process the SQS queue
 
 limits:
   contactQueries:

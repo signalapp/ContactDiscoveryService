@@ -53,22 +53,30 @@ public class DirectoryQueueManager implements Managed, Runnable {
   private final DirectoryManager directoryManager;
   private final AtomicBoolean    running;
   private final Set<String>      messageReceipts;
+  private boolean processingEnabled;
 
-  public DirectoryQueueManager(DirectoryQueue directoryQueue, DirectoryManager directoryManager) {
+  public DirectoryQueueManager(DirectoryQueue directoryQueue, DirectoryManager directoryManager, boolean processingEnabled) {
     this.directoryQueue   = directoryQueue;
     this.directoryManager = directoryManager;
     this.running          = new AtomicBoolean(false);
     this.messageReceipts  = new HashSet<>();
+    this.processingEnabled = processingEnabled;
   }
 
   @Override
   public synchronized void start() {
+    if (!processingEnabled) {
+      return;
+    }
     running.set(true);
     new Thread(this).start();
   }
 
   @Override
   public void stop() {
+    if (!processingEnabled) {
+      return;
+    }
     running.set(false);
   }
 

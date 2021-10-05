@@ -37,6 +37,9 @@ public class DirectorySqsConfiguration {
   @JsonProperty
   private String queueRegion;
 
+  @JsonProperty
+  private boolean queueProcessingEnabled = true;
+
   public String getAccessKey() {
     return accessKey;
   }
@@ -53,4 +56,7 @@ public class DirectorySqsConfiguration {
     return queueRegion;
   }
 
+  public boolean isQueueProcessingEnabled() {
+    return queueProcessingEnabled;
+  }
 }
