@@ -7,6 +7,7 @@ use thiserror::Error as ThisError;
 
 use cds_enclave_ffi::sgxsd::{Phone, SgxsdUuid};
 
+use crate::directory_map_native;
 use crate::{generic_exception, PossibleError};
 use std::io::{Read, Write};
 
@@ -51,6 +52,9 @@ impl From<InternalBuffersError> for PossibleError {
             InternalBuffersError::IoError(ref error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
                 generic_exception("java/io/EOFException", &format!("{}", internal_buffers_error))
             }
+            InternalBuffersError::IoError(error) if error.kind() == std::io::ErrorKind::Other && is_jni_ioerror(&error) => {
+                PossibleError::AlreadyThrown(get_jni_error_from_ioerror(error))
+            }
             InternalBuffersError::IoError(_) => generic_exception("java/io/IOException", &format!("{}", internal_buffers_error)),
             InternalBuffersError::InvalidE164(_)
             | InternalBuffersError::InvalidMinimumLoadFactor(_)
@@ -63,6 +67,30 @@ impl From<InternalBuffersError> for PossibleError {
             }
         }
     }
+}
+
+fn get_jni_error_from_ioerror(ioerror: std::io::Error) -> jni::errors::Error {
+    if let Some(e) = ioerror.into_inner() {
+        if let Ok(ie) = e.downcast::<directory_map_native::io::IoError>() {
+            match *ie {
+                directory_map_native::io::IoError::JniError(je) => return je,
+                _ => panic!("unguarded call to get_jni_error_from_ioerror"),
+            }
+        }
+    }
+    panic!("unguarded call to get_jni_error_from_ioerror")
+}
+
+fn is_jni_ioerror(ioerror: &std::io::Error) -> bool {
+    if let Some(e) = ioerror.get_ref() {
+        if let Some(ie) = e.downcast_ref::<directory_map_native::io::IoError>() {
+            return match ie {
+                directory_map_native::io::IoError::JniError(_) => true,
+                _ => false,
+            };
+        }
+    }
+    false
 }
 
 pub(super) struct InternalBuffers {
