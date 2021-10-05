@@ -516,8 +516,6 @@ public class DirectoryManager implements Managed {
             case MESSAGE:     processMessage(reply);
           }
         } catch (Throwable t) {
-          currentDirectoryMap.set(Optional.empty());
-
           logger.warn("PubSub error", t);
           pubSubConnection.close();
 
