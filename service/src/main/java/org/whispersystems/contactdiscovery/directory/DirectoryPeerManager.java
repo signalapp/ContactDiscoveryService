@@ -35,15 +35,15 @@ public class DirectoryPeerManager {
 
     private static final Random RANDOM = new SecureRandom();
 
-    private final String mapBuilderUrl;
+    private final String mapBuilderLoadBalancer;
     private final String mapBuilderDns;
     private final String peerAuthToken;
     private boolean peerLoadEligible;
 
     private int peerBuildAttempts = 0;
 
-    public DirectoryPeerManager(String mapBuilderUrl, String mapBuilderDns, String peerAuthToken, boolean peerLoadEligible) {
-        this.mapBuilderUrl = mapBuilderUrl;
+    public DirectoryPeerManager(String mapBuilderLoadBalancer, String mapBuilderDns, String peerAuthToken, boolean peerLoadEligible) {
+        this.mapBuilderLoadBalancer = mapBuilderLoadBalancer;
         this.mapBuilderDns = mapBuilderDns;
         this.peerAuthToken = peerAuthToken;
         this.peerLoadEligible = peerLoadEligible;
@@ -51,11 +51,11 @@ public class DirectoryPeerManager {
 
     public boolean loadFromPeer() {
         logger.info(String.format("determining peer eligibility. url=%s; token=%s; elligible=%s; attempts=%s",
-                mapBuilderUrl, peerAuthToken, peerLoadEligible, peerBuildAttempts));
+                mapBuilderLoadBalancer, peerAuthToken, peerLoadEligible, peerBuildAttempts));
         if (!peerLoadEligible) {
             return false;
         }
-        return !TextUtils.isEmpty(mapBuilderUrl) && !TextUtils.isEmpty(peerAuthToken);
+        return !TextUtils.isEmpty(mapBuilderLoadBalancer) && !TextUtils.isEmpty(peerAuthToken);
     }
 
     public String getPeerBuildRequestUrl() {
@@ -71,7 +71,7 @@ public class DirectoryPeerManager {
             logger.warn("Failed to resolve mapBuilderDns", e);
         }
 
-        return this.mapBuilderUrl;
+        return this.mapBuilderLoadBalancer;
     }
 
     public void setPeerLoadEligible(boolean isEligible) {

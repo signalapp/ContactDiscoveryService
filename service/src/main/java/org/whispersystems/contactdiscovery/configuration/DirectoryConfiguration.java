@@ -51,7 +51,7 @@ public class DirectoryConfiguration {
   private String mapBuilderDns;
 
   @JsonProperty
-  private String mapBuilderUrl;
+  private String mapBuilderLoadBalancer;
 
   @JsonProperty
   private boolean peerReadEligible = false;
@@ -79,7 +79,7 @@ public class DirectoryConfiguration {
     return peerAuthenticationToken;
   }
 
-  public String getMapBuilderUrl() { return mapBuilderUrl; }
+  public String getMapBuilderLoadBalancer() { return mapBuilderLoadBalancer; }
 
   public boolean isReconciliationEnabled() { return enableReconciliation; }
 
