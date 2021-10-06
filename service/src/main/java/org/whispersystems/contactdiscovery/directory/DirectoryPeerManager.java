@@ -24,11 +24,15 @@ import org.whispersystems.contactdiscovery.providers.RedisClientFactory;
 import org.whispersystems.contactdiscovery.util.TextUtils;
 
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 public class DirectoryPeerManager {
     private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
@@ -62,10 +66,23 @@ public class DirectoryPeerManager {
 
     public String getPeerBuildRequestUrl() {
         try {
-            final InetAddress[] addresses = InetAddress.getAllByName(mapBuilderDns);
+            final List<InetAddress> addresses = Arrays.stream(InetAddress.getAllByName(mapBuilderDns))
+                    .filter(address -> {
+                        try {
+                            // filter out our own IP, for two reasons:
+                            //
+                            // 1. If we were to try to use it at startup, the peer load request would hang, because
+                            //    data is loaded after the service is bound to the port, but before startup is complete
+                            //    and requests are processed
+                            // 2. If we used it later, we’d be serving ourselves our own potentially stale data
+                            return NetworkInterface.getByInetAddress(address) == null;
+                        } catch (final Exception e) {
+                            return false;
+                        }
+                    }).collect(Collectors.toList());
 
-            if (addresses.length > 0) {
-                final InetAddress address = addresses[RANDOM.nextInt(addresses.length)];
+            if (addresses.size() > 0) {
+                final InetAddress address = addresses.get(RANDOM.nextInt(addresses.size()));
                 return String.format("http://%s:%d", address.getHostAddress(), mapBuilderPort);
             }
 

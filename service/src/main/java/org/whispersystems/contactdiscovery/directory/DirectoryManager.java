@@ -417,6 +417,8 @@ public class DirectoryManager implements Managed {
       HttpRequest request = HttpRequest.newBuilder()
               .GET()
               .uri(URI.create(fullUrl))
+              // 10 minutes is very long, but we just want something non-infinite
+              .timeout(Duration.ofMinutes(10))
               .header("Authorization", directoryPeerManager.getAuthHeader())
               .build();
       HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
