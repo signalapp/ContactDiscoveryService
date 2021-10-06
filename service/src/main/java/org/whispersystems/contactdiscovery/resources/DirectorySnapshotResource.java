@@ -57,7 +57,7 @@ public class DirectorySnapshotResource {
     @Path("/")
     public Response streamDirectorySnapshot(@Auth PeerService peerService)
     {
-        if (directoryManager.isBootstrapping()) {
+        if (directoryManager.isBootstrapping() || !directoryManager.isConnected()) {
             return Response.status(503).build();
         }
 
