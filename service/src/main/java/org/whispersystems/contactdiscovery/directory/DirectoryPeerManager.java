@@ -37,14 +37,16 @@ public class DirectoryPeerManager {
 
     private final String mapBuilderLoadBalancer;
     private final String mapBuilderDns;
+    private final int mapBuilderPort;
     private final String peerAuthToken;
     private boolean peerLoadEligible;
 
     private int peerBuildAttempts = 0;
 
-    public DirectoryPeerManager(String mapBuilderLoadBalancer, String mapBuilderDns, String peerAuthToken, boolean peerLoadEligible) {
+    public DirectoryPeerManager(String mapBuilderLoadBalancer, String mapBuilderDns, int mapBuilderPort, String peerAuthToken, boolean peerLoadEligible) {
         this.mapBuilderLoadBalancer = mapBuilderLoadBalancer;
         this.mapBuilderDns = mapBuilderDns;
+        this.mapBuilderPort = mapBuilderPort;
         this.peerAuthToken = peerAuthToken;
         this.peerLoadEligible = peerLoadEligible;
     }
@@ -64,7 +66,7 @@ public class DirectoryPeerManager {
 
             if (addresses.length > 0) {
                 final InetAddress address = addresses[RANDOM.nextInt(addresses.length)];
-                return String.format("http://%s", address.getHostAddress());
+                return String.format("http://%s:%d", address.getHostAddress(), mapBuilderPort);
             }
 
         } catch (final Exception e) {

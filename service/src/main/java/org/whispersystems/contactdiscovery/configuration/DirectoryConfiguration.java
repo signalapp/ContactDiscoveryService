@@ -51,6 +51,9 @@ public class DirectoryConfiguration {
   private String mapBuilderDns;
 
   @JsonProperty
+  private int mapBuilderPort;
+
+  @JsonProperty
   private String mapBuilderLoadBalancer;
 
   @JsonProperty
@@ -87,5 +90,9 @@ public class DirectoryConfiguration {
 
   public String getMapBuilderDns() {
     return mapBuilderDns;
+  }
+
+  public int getMapBuilderPort() {
+    return mapBuilderPort;
   }
 }

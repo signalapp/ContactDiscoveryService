@@ -25,6 +25,7 @@ directory:
   minLoadFactor:           # Directory hash table minimum load factor (decimal in range [0, 1])
   maxLoadFactor:           # Directory hash table maximum load factor (decimal in range [0, 1])
   mapBuilderDns:           # DNS A record that contains peer snapshot servers for direct connection
+  mapBuilderPort:          # Port peer snapshot servers use for direct connection
   mapBuilderLoadBalancer:  # Url for where to query for peer snapshots
   peerAuthenticationToken: # Token used to authenticate with a peer
   peerReadEligible:        # boolean on whether you should attempt to load from a peer or redis
