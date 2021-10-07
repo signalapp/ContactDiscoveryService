@@ -70,8 +70,7 @@ import static com.codahale.metrics.MetricRegistry.name;
  */
 public class DirectoryManager implements Managed {
 
-  private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
-
+  private final Logger logger = LoggerFactory.getLogger(DirectoryManager.class);
 
   private static final String DIRECTORY_SIZE_GAUGE_NAME = name(DirectoryManager.class, "directorySize");
   private static final String DIRECTORY_CAPACITY_GAUGE_NAME = name(DirectoryManager.class, "directoryCapacity");
@@ -397,7 +396,7 @@ public class DirectoryManager implements Managed {
         rebuildLocalDataFromPeer();
         directoryPeerManager.markPeerLoadSuccessful();
       } catch (Exception e) {
-        logger.info("peer build failed with error=" + e);
+        logger.warn("peer build failed with error=" + e);
         Util.sleep(directoryPeerManager.getBackoffTime().toMillis());
         rebuildLocalData();
       }

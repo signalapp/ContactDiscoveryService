@@ -35,7 +35,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 public class DirectoryPeerManager {
-    private final Logger logger = LoggerFactory.getLogger(RedisClientFactory.class);
+    private final Logger logger = LoggerFactory.getLogger(DirectoryPeerManager.class);
 
     private static final Random RANDOM = new SecureRandom();
 
