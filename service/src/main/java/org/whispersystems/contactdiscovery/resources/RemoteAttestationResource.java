@@ -32,6 +32,7 @@ import org.bouncycastle.util.encoders.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.auth.User;
+import org.whispersystems.contactdiscovery.client.IasVersion;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
@@ -45,6 +46,7 @@ import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
@@ -101,8 +103,17 @@ public class RemoteAttestationResource {
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
+
+    final IasVersion iasVersion;
+
+    try {
+      iasVersion = IasVersion.fromVersionNumber(request.getIasVersion());
+    } catch (final IllegalArgumentException e) {
+      throw new BadRequestException("Unrecognized IAS version: " + request.getIasVersion());
+    }
+
     var svcFuture = client.attest(user, authHeader, enclaveId, request.getClientPublic());
-    RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic());
+    RemoteAttestationResponse attestation = sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic(), iasVersion);
 
     // The exceptionally here is because we want to test the performance of the new rate limit service but not rely on
     // it to respond, yet. See CDS-157.
@@ -124,6 +135,15 @@ public class RemoteAttestationResource {
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
+
+    final IasVersion iasVersion;
+
+    try {
+      iasVersion = IasVersion.fromVersionNumber(request.getIasVersion());
+    } catch (final IllegalArgumentException e) {
+      throw new BadRequestException("Unrecognized IAS version: " + request.getIasVersion());
+    }
+
     Function<RemoteAttestationResponse, RemoteAttestationResponse> testFun;
     if ("bad-tag".equals(testName)) {
       testFun = response -> {
@@ -210,7 +230,7 @@ public class RemoteAttestationResource {
       throw new WebApplicationException(404);
     }
 
-    RemoteAttestationResponse attestation = testFun.apply(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic()));
+    RemoteAttestationResponse attestation = testFun.apply(sgxHandshakeManager.getHandshake(enclaveId, request.getClientPublic(), iasVersion));
     return new MultipleRemoteAttestationResponse(Map.of("enclave", attestation));
   }
 

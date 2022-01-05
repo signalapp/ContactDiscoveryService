@@ -3,12 +3,16 @@ package org.whispersystems.contactdiscovery.resources;
 import com.google.common.collect.ImmutableSet;
 import io.dropwizard.auth.PolymorphicAuthValueFactoryProvider;
 import io.dropwizard.testing.junit.ResourceTestRule;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.whispersystems.contactdiscovery.auth.SignalService;
 import org.whispersystems.contactdiscovery.auth.User;
+import org.whispersystems.contactdiscovery.client.IasVersion;
 import org.whispersystems.contactdiscovery.enclave.NoSuchEnclaveException;
 import org.whispersystems.contactdiscovery.enclave.SgxHandshakeManager;
 import org.whispersystems.contactdiscovery.entities.MultipleRemoteAttestationResponse;
@@ -39,6 +43,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
 import static org.whispersystems.contactdiscovery.requests.RequestManager.LOCAL_ENCLAVE_HOST_ID;
 
+@RunWith(JUnitParamsRunner.class)
 public class RemoteAttestationResourceTest {
 
   private static final String VALID_ENCLAVE_ID = "mrenclavevalue";
@@ -84,7 +89,7 @@ public class RemoteAttestationResourceTest {
     secureRandom.nextBytes(this.ciphertext);
     secureRandom.nextBytes(this.tag);
 
-    when(handshakeManager.getHandshake(eq(VALID_ENCLAVE_ID), any()))
+    when(handshakeManager.getHandshake(eq(VALID_ENCLAVE_ID), any(), any()))
         .thenReturn(new RemoteAttestationResponse(serverEphemeral,
                                                   serverPublic,
                                                   iv,
@@ -93,12 +98,13 @@ public class RemoteAttestationResourceTest {
                                                   quote,
                                                   "foo", "bar", "baz"));
 
-    when(handshakeManager.getHandshake(eq(INVALID_ENCLAVE_ID), any()))
+    when(handshakeManager.getHandshake(eq(INVALID_ENCLAVE_ID), any(), any()))
         .thenThrow(new NoSuchEnclaveException("nse"));
   }
 
   @Test
-  public void testRemoteAttestation() throws Exception {
+  @Parameters({"IAS_V3", "IAS_V4"})
+  public void testRemoteAttestation(IasVersion iasVersion) throws Exception {
     byte[] clientPublic = new byte[32];
     new SecureRandom().nextBytes(clientPublic);
 
@@ -119,7 +125,7 @@ public class RemoteAttestationResourceTest {
                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
                  .request(MediaType.APPLICATION_JSON_TYPE)
                  .header("Authorization", authHeader)
-                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
+                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic, iasVersion.getVersionNumber()), MediaType.APPLICATION_JSON_TYPE),
                       MultipleRemoteAttestationResponse.class);
 
     assertEquals(response.getAttestations().size(), 2);
@@ -135,11 +141,12 @@ public class RemoteAttestationResourceTest {
     assertEquals(attestation.getSignature(), "foo");
     assertEquals(attestation.getSignatureBody(), "baz");
 
-    verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic));
+    verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic), eq(iasVersion));
   }
 
   @Test
-  public void testRateLimitSvcFailureDoesntAffectResults() throws Exception {
+  @Parameters({"IAS_V3", "IAS_V4"})
+  public void testRateLimitSvcFailureDoesntAffectResults(IasVersion iasVersion) throws Exception {
     // This test will have to change once we're using CDS rate limit service in production. That's likely around 2020-07
     byte[] clientPublic = new byte[32];
     new SecureRandom().nextBytes(clientPublic);
@@ -153,7 +160,7 @@ public class RemoteAttestationResourceTest {
                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
                  .request(MediaType.APPLICATION_JSON_TYPE)
                  .header("Authorization", authHeader)
-                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE),
+                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic, iasVersion.getVersionNumber()), MediaType.APPLICATION_JSON_TYPE),
                       MultipleRemoteAttestationResponse.class);
 
     assertEquals(response.getAttestations().size(), 1);
@@ -169,7 +176,7 @@ public class RemoteAttestationResourceTest {
     assertEquals(attestation.getSignature(), "foo");
     assertEquals(attestation.getSignatureBody(), "baz");
 
-    verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic));
+    verify(handshakeManager, times(1)).getHandshake(eq(VALID_ENCLAVE_ID), eq(clientPublic), eq(iasVersion));
   }
 
   @Test
@@ -181,7 +188,7 @@ public class RemoteAttestationResourceTest {
                                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
                                  .request(MediaType.APPLICATION_JSON_TYPE)
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.INVALID_PASSWORD))
-                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE));
+                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic, 3), MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(response.getStatus(), 401);
 
@@ -197,7 +204,7 @@ public class RemoteAttestationResourceTest {
                                  .target("/v1/attestation/" + VALID_ENCLAVE_ID)
                                  .request(MediaType.APPLICATION_JSON_TYPE)
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE));
+                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic, 3), MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(response.getStatus(), 422);
 
@@ -205,7 +212,24 @@ public class RemoteAttestationResourceTest {
   }
 
   @Test
-  public void testBadEnclaveId() throws Exception {
+  public void testBadIasVersion() throws Exception {
+    byte[] clientPublic = new byte[32];
+    new SecureRandom().nextBytes(clientPublic);
+
+    Response response = resources.getJerseyTest()
+            .target("/v1/attestation/" + VALID_ENCLAVE_ID)
+            .request(MediaType.APPLICATION_JSON_TYPE)
+            .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
+            .put(Entity.entity(new RemoteAttestationRequest(clientPublic, -43), MediaType.APPLICATION_JSON_TYPE));
+
+    assertEquals(422, response.getStatus());
+
+    verifyNoMoreInteractions(handshakeManager);
+  }
+
+  @Test
+  @Parameters({"IAS_V3", "IAS_V4"})
+  public void testBadEnclaveId(IasVersion iasVersion) throws Exception {
     byte[] clientPublic = new byte[32];
     new SecureRandom().nextBytes(clientPublic);
 
@@ -213,11 +237,11 @@ public class RemoteAttestationResourceTest {
                                  .target("/v1/attestation/" + INVALID_ENCLAVE_ID)
                                  .request(MediaType.APPLICATION_JSON_TYPE)
                                  .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE));
+                                 .put(Entity.entity(new RemoteAttestationRequest(clientPublic, iasVersion.getVersionNumber()), MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(response.getStatus(), 404);
 
-    verify(handshakeManager, times(1)).getHandshake(eq(INVALID_ENCLAVE_ID), eq(clientPublic));
+    verify(handshakeManager, times(1)).getHandshake(eq(INVALID_ENCLAVE_ID), eq(clientPublic), eq(iasVersion));
   }
 
   @Test
@@ -231,7 +255,7 @@ public class RemoteAttestationResourceTest {
             .target("/v1/attestation/" + VALID_ENCLAVE_ID)
             .request(MediaType.APPLICATION_JSON_TYPE)
             .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_NUMBER, AuthHelper.VALID_TOKEN))
-            .put(Entity.entity(new RemoteAttestationRequest(clientPublic), MediaType.APPLICATION_JSON_TYPE));
+            .put(Entity.entity(new RemoteAttestationRequest(clientPublic, 3), MediaType.APPLICATION_JSON_TYPE));
 
     assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
 
