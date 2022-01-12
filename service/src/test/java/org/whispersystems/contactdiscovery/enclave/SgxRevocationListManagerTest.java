@@ -1,7 +1,6 @@
 package org.whispersystems.contactdiscovery.enclave;
 
 import org.junit.Test;
-import org.whispersystems.contactdiscovery.client.IasVersion;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 
 import java.io.IOException;
@@ -24,8 +23,8 @@ public class SgxRevocationListManagerTest {
             final byte[] revocationList = new byte[32];
 
             new Random().nextBytes(revocationList);
-            when(intelClient.getSignatureRevocationList(groupId)).thenReturn(revocationList);
 
+            when(intelClient.getSignatureRevocationList(groupId)).thenReturn(revocationList);
             assertThat(sgxRevocationListManager.getRevocationList(groupId)).isEqualTo(revocationList);
         }
 

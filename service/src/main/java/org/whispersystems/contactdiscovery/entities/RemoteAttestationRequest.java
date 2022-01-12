@@ -23,8 +23,6 @@ import org.hibernate.validator.constraints.Length;
 import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 import org.whispersystems.contactdiscovery.validation.ByteLength;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
 /**
@@ -41,23 +39,14 @@ public class RemoteAttestationRequest {
   @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
   private byte[] clientPublic;
 
-  @JsonProperty
-  @Min(3)
-  @Max(4)
-  private int iasVersion = 3;
-
   public RemoteAttestationRequest() {}
 
-  public RemoteAttestationRequest(byte[] clientPublic, int iasVersion) {
+  public RemoteAttestationRequest(byte[] clientPublic) {
     this.clientPublic = clientPublic;
-    this.iasVersion = iasVersion;
   }
 
   public byte[] getClientPublic() {
     return clientPublic;
   }
 
-  public int getIasVersion() {
-    return iasVersion;
-  }
 }

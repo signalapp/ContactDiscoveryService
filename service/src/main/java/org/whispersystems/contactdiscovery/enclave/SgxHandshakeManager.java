@@ -25,7 +25,6 @@ import org.assertj.core.util.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.client.GroupOutOfDateException;
-import org.whispersystems.contactdiscovery.client.IasVersion;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.client.QuoteSignatureResponse;
 import org.whispersystems.contactdiscovery.client.QuoteVerificationException;
@@ -39,7 +38,6 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -61,8 +59,7 @@ public class SgxHandshakeManager implements Managed {
 
   private static final long REFRESH_INTERVAL_MS = 60_000L;
 
-  private final Map<String, SgxSignedQuote> iasV3Quotes = new HashMap<>();
-  private final Map<String, SgxSignedQuote> iasV4Quotes = new HashMap<>();
+  private final Map<String, SgxSignedQuote> quotes = new HashMap<>();
 
   private final SgxEnclaveManager        sgxEnclaveManager;
   private final SgxRevocationListManager sgxRevocationListManager;
@@ -82,7 +79,7 @@ public class SgxHandshakeManager implements Managed {
     this.executorService          = executorService;
   }
 
-  public RemoteAttestationResponse getHandshake(String enclaveId, byte[] clientPublic, IasVersion iasVersion)
+  public RemoteAttestationResponse getHandshake(String enclaveId, byte[] clientPublic)
       throws SgxException, NoSuchEnclaveException, SignedQuoteUnavailableException
   {
     SgxEnclave enclave = sgxEnclaveManager.getEnclave(enclaveId);
@@ -90,10 +87,6 @@ public class SgxHandshakeManager implements Managed {
     SgxSignedQuote                signedQuote;
     SgxRequestNegotiationResponse response;
 
-    final Map<String, SgxSignedQuote> quotes = getSignedQuoteMap(iasVersion);
-
-    // `quotes` is guaranteed to be one of `iasV3Quotes` or `iasV4Quotes`
-    //noinspection SynchronizationOnLocalVariableOrMethodParameter
     synchronized (quotes) {
       signedQuote = quotes.get(enclaveId);
       if (signedQuote == null) {
@@ -127,7 +120,7 @@ public class SgxHandshakeManager implements Managed {
             this::refreshAllQuotes, REFRESH_INTERVAL_MS, REFRESH_INTERVAL_MS, TimeUnit.MILLISECONDS);
 
     metricRegistry.register(name(getClass(), "oldestSignedQuoteAge"), (Gauge<Long>)() -> {
-      final long oldestSignedQuoteTimestamp = Stream.concat(iasV3Quotes.values().stream(), iasV4Quotes.values().stream())
+      final long oldestSignedQuoteTimestamp = quotes.values().stream()
               .mapToLong(SgxSignedQuote::getTimestamp)
               .min()
               .orElse(0);
@@ -192,35 +185,28 @@ public class SgxHandshakeManager implements Managed {
   private void refreshQuote(String enclaveId, SgxEnclave enclave)
           throws QuoteVerificationException, SgxException, StaleRevocationListException, IOException, InterruptedException {
 
-    byte[] revocationList = sgxRevocationListManager.getRevocationList(enclave.getGid());
-    byte[] quote = enclave.getNextQuote(revocationList);
+    byte[]                 revocationList = sgxRevocationListManager.getRevocationList(enclave.getGid());
+    byte[]                 quote          = enclave.getNextQuote(revocationList);
+    QuoteSignatureResponse signature;
 
-    for (final IasVersion iasVersion : IasVersion.values()) {
-      QuoteSignatureResponse signature;
+    try {
+      signature = client.getQuoteSignature(quote);
+    } catch (GroupOutOfDateException e) {
+      handleGroupOutOfDateException(e);
+      throw e;
+    }
 
-      try {
-        signature = client.getQuoteSignature(quote, iasVersion);
-      } catch (GroupOutOfDateException e) {
-        handleGroupOutOfDateException(e);
-        throw e;
-      }
+    synchronized (quotes) {
+      quotes.put(enclaveId, new SgxSignedQuote(quote, signature, System.currentTimeMillis()));
+      enclave.setCurrentQuote();
+    }
 
-      final Map<String, SgxSignedQuote> quotes = getSignedQuoteMap(iasVersion);
+    getQuoteSignatureMeter.mark();
 
-      // `quotes` is guaranteed to be one of `iasV3Quotes` or `iasV4Quotes`
-      //noinspection SynchronizationOnLocalVariableOrMethodParameter
-      synchronized (quotes) {
-        quotes.put(enclaveId, new SgxSignedQuote(quote, signature, System.currentTimeMillis()));
-        enclave.setCurrentQuote();
-      }
-
-      getQuoteSignatureMeter.mark();
-
-      try {
-        reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
-      } catch (QuoteVerificationException | SgxException | IllegalArgumentException e) {
-        logger.warn("Problems decoding platform info blob", e);
-      }
+    try {
+      reportPlatformAttestationStatus(signature.getPlatformInfoBlob(), true);
+    } catch (QuoteVerificationException | SgxException | IllegalArgumentException e) {
+      logger.warn("Problems decoding platform info blob", e);
     }
   }
 
@@ -242,20 +228,6 @@ public class SgxHandshakeManager implements Managed {
     if (needsUpdateFlags.contains(SgxNeedsUpdateFlag.PSW_UPDATE)) {
       needsPSWUpdateMeter.mark();
       logger.warn("SGX Platform Software (PSW) needs update");
-    }
-  }
-
-  private Map<String, SgxSignedQuote> getSignedQuoteMap(IasVersion iasVersion) {
-    switch (iasVersion) {
-      case IAS_V3: {
-        return iasV3Quotes;
-      }
-      case IAS_V4: {
-        return iasV4Quotes;
-      }
-      default: {
-        throw new AssertionError("Unexpected IAS version: " + iasVersion);
-      }
     }
   }
 

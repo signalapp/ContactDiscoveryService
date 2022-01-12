@@ -1,11 +1,7 @@
 package org.whispersystems.contactdiscovery.enclave;
 
-import junitparams.JUnitParamsRunner;
-import junitparams.Parameters;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.whispersystems.contactdiscovery.client.IasVersion;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 import org.whispersystems.contactdiscovery.client.QuoteSignatureResponse;
 import org.whispersystems.contactdiscovery.entities.RemoteAttestationResponse;
@@ -18,13 +14,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(JUnitParamsRunner.class)
 public class SgxHandshakeManagerTest {
 
   private SgxEnclaveManager enclaveManager;
@@ -79,17 +73,16 @@ public class SgxHandshakeManagerTest {
   }
 
   @Test
-  @Parameters({"IAS_V3", "IAS_V4"})
-  public void testGetQuote(IasVersion iasVersion) throws Exception {
-    when(intelClient.getQuoteSignature(eq(QUOTE), any())).thenReturn(intelResponse);
+  public void testGetQuote() throws Exception {
+    when(intelClient.getQuoteSignature(QUOTE)).thenReturn(intelResponse);
 
     handshakeManager.refreshAllQuotes();
 
     verify(revocationListManager).getRevocationList(eq(1L));
     verify(enclaveManager).getEnclaves();
-    verify(intelClient).getQuoteSignature(QUOTE, iasVersion);
+    verify(intelClient).getQuoteSignature(QUOTE);
 
-    RemoteAttestationResponse response = handshakeManager.getHandshake("mrenclave_valid", new byte[32], iasVersion);
+    RemoteAttestationResponse response = handshakeManager.getHandshake("mrenclave_valid", new byte[32]);
     assertThat(response.getCertificates()).isEqualTo("foo");
     assertThat(response.getSignatureBody()).isEqualTo("bar");
     assertThat(response.getSignature()).isEqualTo("baz");
@@ -102,24 +95,23 @@ public class SgxHandshakeManagerTest {
   }
 
   @Test
-  @Parameters({"IAS_V3", "IAS_V4"})
-  public void testGetQuoteStaleRevocationList(IasVersion iasVersion) throws Exception {
-    when(intelClient.getQuoteSignature(eq(QUOTE), any())).thenThrow(StaleRevocationListException.class);
+  public void testGetQuoteStaleRevocationList() throws Exception {
+    when(intelClient.getQuoteSignature(QUOTE)).thenThrow(StaleRevocationListException.class);
 
     handshakeManager.refreshAllQuotes();
 
     verify(revocationListManager).getRevocationList(eq(1L));
     verify(revocationListManager).expireRevocationList(eq(1L));
     verify(enclaveManager).getEnclaves();
+    verify(intelClient).getQuoteSignature(QUOTE);
 
     assertThatExceptionOfType(SignedQuoteUnavailableException.class)
-            .isThrownBy(() -> handshakeManager.getHandshake("mrenclave_valid", new byte[32], iasVersion));
+            .isThrownBy(() -> handshakeManager.getHandshake("mrenclave_valid", new byte[32]));
   }
 
   @Test
-  @Parameters({"IAS_V3", "IAS_V4"})
-  public void testGetQuoteStaleRevocationListRetry(IasVersion iasVersion) throws Exception {
-    when(intelClient.getQuoteSignature(eq(QUOTE), any()))
+  public void testGetQuoteStaleRevocationListRetry() throws Exception {
+    when(intelClient.getQuoteSignature(QUOTE))
             .thenThrow(StaleRevocationListException.class)
             .thenReturn(intelResponse);
 
@@ -129,9 +121,9 @@ public class SgxHandshakeManagerTest {
     verify(revocationListManager, times(2)).getRevocationList(eq(1L));
     verify(revocationListManager, times(1)).expireRevocationList(eq(1L));
     verify(enclaveManager, times(2)).getEnclaves();
-    verify(intelClient, atLeastOnce()).getQuoteSignature(QUOTE, iasVersion);
+    verify(intelClient, times(2)).getQuoteSignature(QUOTE);
 
-    RemoteAttestationResponse response = handshakeManager.getHandshake("mrenclave_valid", new byte[32], iasVersion);
+    RemoteAttestationResponse response = handshakeManager.getHandshake("mrenclave_valid", new byte[32]);
     assertThat(response.getCertificates()).isEqualTo("foo");
     assertThat(response.getSignatureBody()).isEqualTo("bar");
     assertThat(response.getSignature()).isEqualTo("baz");
@@ -145,7 +137,7 @@ public class SgxHandshakeManagerTest {
 
   @Test
   public void testUnexpectedException() throws Exception {
-    when(intelClient.getQuoteSignature(any(), any())).thenThrow(new RuntimeException("OH NO"));
+    when(intelClient.getQuoteSignature(any())).thenThrow(new RuntimeException("OH NO"));
 
     // We're happy as long as this doesn't throw an exception
     handshakeManager.refreshAllQuotes();

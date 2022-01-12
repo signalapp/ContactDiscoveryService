@@ -16,6 +16,7 @@
  */
 package org.whispersystems.contactdiscovery.enclave;
 
+import io.dropwizard.lifecycle.Managed;
 import org.whispersystems.contactdiscovery.client.IntelClient;
 
 import java.io.IOException;
