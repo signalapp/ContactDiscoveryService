@@ -23,6 +23,7 @@ import org.hibernate.validator.constraints.NotEmpty;
 import org.whispersystems.contactdiscovery.util.ByteArrayAdapter;
 
 import javax.validation.constraints.NotNull;
+import java.util.List;
 
 class QuoteSignatureResponseBody {
 
@@ -45,6 +46,12 @@ class QuoteSignatureResponseBody {
 
   @JsonProperty
   private String platformInfoBlob;
+
+  @JsonProperty
+  private String advisoryURL;
+
+  @JsonProperty
+  private List<String> advisoryIDs;
 
   public QuoteSignatureResponseBody() {
   }
@@ -69,4 +76,11 @@ class QuoteSignatureResponseBody {
     return platformInfoBlob;
   }
 
+  public String getAdvisoryURL() {
+    return advisoryURL;
+  }
+
+  public List<String> getAdvisoryIDs() {
+    return advisoryIDs;
+  }
 }

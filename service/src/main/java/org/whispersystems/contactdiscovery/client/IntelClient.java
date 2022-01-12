@@ -42,6 +42,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * Client interface for communication with IAS
@@ -74,8 +75,8 @@ public class IntelClient {
     this.apiKey = apiKey;
     this.acceptGroupOutOfDate = acceptGroupOutOfDate;
 
-    this.signatureRevocationListBaseUri = URI.create(baseUri).resolve("attestation/v3/sigrl/");
-    this.quoteSignatureUri = URI.create(baseUri).resolve("attestation/v3/report");
+    this.signatureRevocationListBaseUri = URI.create(baseUri).resolve("attestation/v4/sigrl/");
+    this.quoteSignatureUri = URI.create(baseUri).resolve("attestation/v4/report");
   }
 
   public byte[] getSignatureRevocationList(long gid) throws IOException, InterruptedException {
@@ -131,7 +132,7 @@ public class IntelClient {
 
       QuoteSignatureResponseBody responseBody = SystemMapper.getMapper().readValue(responseBodyString, QuoteSignatureResponseBody.class);
 
-      if (responseBody.getVersion() != 3) {
+      if (responseBody.getVersion() != 4) {
         throw new QuoteVerificationException("Bad response version: " + responseBody.getVersion());
       }
 
@@ -149,6 +150,22 @@ public class IntelClient {
         }
       } else if ("GROUP_REVOKED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
+      } else if ("SW_HARDENING_NEEDED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
+        // To quote from Intel's documentation:
+        //
+        // > An attestation response may report “SW_HARDENING_NEEDED” for attestation requests originating from Intel®
+        // > SGX-enabled platforms that have applied the microcode and SGX platform software update and are properly
+        // > configured but are affected by INTEL-SA-00334. In this case a Remote Attestation Verifier should evaluate
+        // > the potential risk of an attack on these platforms and whether the attesting enclave employs adequate
+        // > software hardening to mitigate the risk.
+        //
+        // We have, indeed, applied software mitigations for INTEL-SA-00334, and can consider SW_HARDENING_NEEDED an
+        // acceptable status as long as the only named advisory is the one we've already mitigated.
+        //
+        // The check for INTEL-SA-00334 was introduced in IASv4, and did not appear under IASv3.
+        if (!List.of("INTEL-SA-00334").equals(responseBody.getAdvisoryIDs())) {
+          throw new QuoteVerificationException("Software hardening needed: " + responseBody.getAdvisoryIDs());
+        }
       } else if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new QuoteVerificationException("Bad response: " + responseBodyString);
       }

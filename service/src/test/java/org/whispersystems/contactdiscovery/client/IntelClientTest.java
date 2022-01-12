@@ -39,42 +39,42 @@ public class IntelClientTest {
 
     @Test
     public void getSignatureRevocationList() throws Exception {
-        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v3/sigrl/.*"))
+        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v4/sigrl/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("")));
 
         assertThat(intelClient.getSignatureRevocationList(0x00000077)).isEmpty();
 
-        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v3/sigrl/00000077"))
+        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v4/sigrl/00000077"))
                 .withHeader(IntelClient.SUBSCRIPTION_KEY_HEADER, equalTo(API_KEY)));
     }
 
     @Test
     public void getSignatureRevocationListBadStatus() {
-        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v3/sigrl/.*"))
+        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v4/sigrl/.*"))
                 .willReturn(aResponse().withStatus(401).withBody("")));
 
         assertThatExceptionOfType(IOException.class)
                 .isThrownBy(() -> intelClient.getSignatureRevocationList(0x00000077));
 
-        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v3/sigrl/00000077"))
+        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v4/sigrl/00000077"))
                 .withHeader(IntelClient.SUBSCRIPTION_KEY_HEADER, equalTo(API_KEY)));
     }
 
     @Test
     public void getSignatureRevocationListBadResponse() throws Exception {
-        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v3/sigrl/.*"))
+        wireMockRule.stubFor(get(urlMatching("/foo/bar/attestation/v4/sigrl/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("This is not valid base64 data")));
 
         assertThatExceptionOfType(IOException.class)
                 .isThrownBy(() -> intelClient.getSignatureRevocationList(0x00000077));
 
-        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v3/sigrl/00000077"))
+        verify(getRequestedFor(urlEqualTo("/foo/bar/attestation/v4/sigrl/00000077"))
                 .withHeader(IntelClient.SUBSCRIPTION_KEY_HEADER, equalTo(API_KEY)));
     }
 
     @Test
     public void getQuoteSignature() throws Exception {
-        wireMockRule.stubFor(post(urlEqualTo("/foo/bar/attestation/v3/report"))
+        wireMockRule.stubFor(post(urlEqualTo("/foo/bar/attestation/v4/report"))
                 .willReturn(aResponse().withStatus(200).withBody("")));
 
         final byte[] quote = "A test quote".getBytes(StandardCharsets.UTF_8);
@@ -86,7 +86,7 @@ public class IntelClientTest {
 
         final String expectedBody = SystemMapper.getMapper().writeValueAsString(new QuoteSignatureRequest(quote));
 
-        verify(postRequestedFor(urlEqualTo("/foo/bar/attestation/v3/report"))
+        verify(postRequestedFor(urlEqualTo("/foo/bar/attestation/v4/report"))
                 .withHeader(IntelClient.SUBSCRIPTION_KEY_HEADER, equalTo(API_KEY))
                 .withHeader("Content-Type", equalTo("application/json"))
                 .withRequestBody(equalTo(expectedBody)));
