@@ -95,7 +95,7 @@ public class SgxException extends Exception {
     SGX_ERROR_UPDATE_NEEDED             = (0x4006),   /* SGX needs to be updated */
     SGX_ERROR_NETWORK_FAILURE           = (0x4007),   /* Network connecting or proxy setting issue is encountered */
     SGX_ERROR_AE_SESSION_INVALID        = (0x4008),   /* Session is invalid or ended by server */
-    SGX_ERROR_BUSY                      = (0x400a),   /* The requested service is temporarily not availabe */
+    SGX_ERROR_BUSY                      = (0x400a),   /* The requested service is temporarily not available */
     SGX_ERROR_MC_NOT_FOUND              = (0x400c),   /* The Monotonic Counter doesn't exist or has been invalided */
     SGX_ERROR_MC_NO_ACCESS_RIGHT        = (0x400d),   /* Caller doesn't have the access right to specified VMC */
     SGX_ERROR_MC_USED_UP                = (0x400e),   /* Monotonic counters are used out */
@@ -110,7 +110,7 @@ public class SgxException extends Exception {
     SGX_ERROR_FILE_NOT_SGX_FILE             = (0x7004), /* The file is not an SGX file */
     SGX_ERROR_FILE_CANT_OPEN_RECOVERY_FILE  = (0x7005),	/* A recovery file can't be opened, so flush operation can't continue (only used when no EXXX is returned)  */
     SGX_ERROR_FILE_CANT_WRITE_RECOVERY_FILE = (0x7006), /* A recovery file can't be written, so flush operation can't continue (only used when no EXXX is returned)  */
-    SGX_ERROR_FILE_RECOVERY_NEEDED          = (0x7007),	/* When openeing the file, recovery is needed, but the recovery process failed */
+    SGX_ERROR_FILE_RECOVERY_NEEDED          = (0x7007),	/* When opening the file, recovery is needed, but the recovery process failed */
     SGX_ERROR_FILE_FLUSH_FAILED             = (0x7008),	/* fflush operation (to disk) failed (only used when no EXXX is returned) */
     SGX_ERROR_FILE_CLOSE_FAILED             = (0x7009);	/* fclose operation (to disk) failed (only used when no EXXX is returned) */
 }
