@@ -287,8 +287,8 @@ fn parse_hex_arg(hex: &str) -> Result<TokenSecret, hex::FromHexError> {
 ///
 /// - the desired request rate was 200 requests / second.
 ///
-/// - it took 7.947 seconds (from the begining of the run) for all the
-/// requests to come back, for a response rate of 125.832 respones /
+/// - it took 7.947 seconds (from the beginning of the run) for all the
+/// requests to come back, for a response rate of 125.832 responses /
 /// second.
 struct CliArgs {
     /// Emit debug logging
