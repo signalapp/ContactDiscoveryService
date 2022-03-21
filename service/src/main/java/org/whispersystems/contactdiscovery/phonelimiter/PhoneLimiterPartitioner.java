@@ -1,7 +1,7 @@
 package org.whispersystems.contactdiscovery.phonelimiter;
 
-import org.bouncycastle.util.encoders.DecoderException;
-import org.bouncycastle.util.encoders.Hex;
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 import org.whispersystems.contactdiscovery.RateLimitServiceConfiguration.HostRangeConfig;
 
 import java.math.BigInteger;
@@ -70,7 +70,7 @@ public interface PhoneLimiterPartitioner {
 
   static void validateHex(String str) {
     try {
-      Hex.decode(str);
+      Hex.decodeHex(str);
     } catch (DecoderException e) {
       throw new RuntimeException(String.format("invalid hex string \"%s\" in host range config", str), e);
     }
@@ -92,8 +92,8 @@ public interface PhoneLimiterPartitioner {
       }
       for (var addr : addrs) {
         var uri = URI.create(addr);
-        var hostId = Hex.encode(hasher.digest(addr.getBytes(StandardCharsets.UTF_8)));
-        hostIdToAddrs.put(new String(hostId, StandardCharsets.UTF_8), uri);
+        var hostId = Hex.encodeHex(hasher.digest(addr.getBytes(StandardCharsets.UTF_8)));
+        hostIdToAddrs.put(new String(hostId), uri);
       }
       this.start = start;
       this.end = end;

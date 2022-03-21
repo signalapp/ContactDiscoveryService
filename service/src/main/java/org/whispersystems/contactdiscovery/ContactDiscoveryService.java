@@ -32,7 +32,6 @@ import io.dropwizard.auth.basic.BasicCredentials;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.apache.commons.codec.DecoderException;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.contactdiscovery.auth.PeerService;
@@ -137,7 +136,6 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
       throws CertificateException, KeyStoreException, IOException, DecoderException, URISyntaxException, NoSuchAlgorithmException
   {
     NativeUtils.loadNativeResource("/enclave-jni.so");
-    Security.addProvider(new BouncyCastleProvider());
 
     UncaughtExceptionHandler.register();
 
