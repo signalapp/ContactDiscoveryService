@@ -3,12 +3,12 @@ name: test build without enclave rebuild
 pr:
   branches:
     include:
-      - master
+      - main
 
 trigger:
   branches:
     include:
-      - master
+      - main
       - "test-svc-*"
       - "test_svc_*"
 

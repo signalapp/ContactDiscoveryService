@@ -147,7 +147,7 @@ SGX-enabled hardware.
 # CI
 
 Azure Pipelines is what we currently use for CI. It has two separate Pipelines
-that run on PR and merges to master. You can see results for the PR and master
+that run on PR and merges to main. You can see results for the PR and main
 runs on
 [Azure's site](https://dev.azure.com/signal-testing/directory-testing/_build) or
 in GitHub's UI.
