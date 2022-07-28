@@ -19,10 +19,10 @@ package org.whispersystems.contactdiscovery.configuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
-import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotEmpty;
 import java.util.List;
 
 /**
@@ -53,6 +53,7 @@ public class EnclaveConfiguration {
 
   @JsonProperty
   @Valid
+  @NotEmpty
   private List<EnclaveInstanceConfiguration> instances;
 
   public byte[] getSpid() {

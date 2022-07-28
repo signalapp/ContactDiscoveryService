@@ -24,6 +24,7 @@ import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationReque
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -40,7 +41,7 @@ public class LegacyDirectoryManagementResource {
   @Produces(MediaType.APPLICATION_JSON)
   @Path("/reconcile")
   public DirectoryReconciliationResponse reconcile(@Auth SignalService signalService,
-                                                   @Valid DirectoryReconciliationRequest request)
+                                                   @Valid @NotNull DirectoryReconciliationRequest request)
   {
     return new DirectoryReconciliationResponse(DirectoryReconciliationResponse.Status.OK);
   }

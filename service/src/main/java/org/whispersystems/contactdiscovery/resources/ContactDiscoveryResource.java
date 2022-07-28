@@ -37,6 +37,7 @@ import org.whispersystems.contactdiscovery.requests.RequestManagerFullException;
 import org.whispersystems.contactdiscovery.util.Constants;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.PUT;
@@ -91,7 +92,7 @@ public class ContactDiscoveryResource {
                                     @PathParam("enclaveId") String enclaveId,
                                     @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                     @HeaderParam(HttpHeaders.USER_AGENT) String userAgent,
-                                    @Valid DiscoveryRequest request,
+                                    @Valid @NotNull DiscoveryRequest request,
                                     @Suspended AsyncResponse asyncResponse)
           throws RateLimitExceededException {
     final var ctx = GET_CONTACTS_TIMER.time();
@@ -145,7 +146,7 @@ public class ContactDiscoveryResource {
                                         @PathParam("testName") String testName,
                                         @PathParam("enclaveId") String enclaveId,
                                         @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
-                                        @Valid DiscoveryRequest request,
+                                        @Valid @NotNull DiscoveryRequest request,
                                         @Suspended AsyncResponse asyncResponse)
           throws NoSuchEnclaveException, RateLimitExceededException, RequestManagerFullException {
     if (!enclaves.contains(enclaveId)) {

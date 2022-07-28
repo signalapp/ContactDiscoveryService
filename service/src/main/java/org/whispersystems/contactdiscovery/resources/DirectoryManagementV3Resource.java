@@ -17,7 +17,9 @@ import org.whispersystems.contactdiscovery.directory.InvalidAddressException;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationRequest;
 import org.whispersystems.contactdiscovery.entities.DirectoryReconciliationResponse;
 
+import javax.annotation.Nonnull;
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -31,8 +33,6 @@ import java.util.stream.Collectors;
 @ResponseMetered
 public class DirectoryManagementV3Resource {
 
-  private final Logger logger = LoggerFactory.getLogger(DirectoryManagementV3Resource.class);
-
   private final DirectoryManager directoryManager;
 
   public DirectoryManagementV3Resource(DirectoryManager directoryManager) {
@@ -44,7 +44,7 @@ public class DirectoryManagementV3Resource {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Path("/exists")
-  public DirectoryReconciliationResponse exists(@Auth SignalService signalService, @Valid DirectoryReconciliationRequest request)
+  public DirectoryReconciliationResponse exists(@Auth SignalService signalService, @Valid @NotNull DirectoryReconciliationRequest request)
       throws InvalidAddressException, DirectoryUnavailableException
   {
     directoryManager.existsReconcile(buildUserPairs(request));
@@ -56,7 +56,7 @@ public class DirectoryManagementV3Resource {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Path("/deletes")
-  public DirectoryReconciliationResponse deletes(@Auth SignalService signalService, @Valid DirectoryReconciliationRequest request)
+  public DirectoryReconciliationResponse deletes(@Auth SignalService signalService, @Valid @NotNull DirectoryReconciliationRequest request)
      throws InvalidAddressException, DirectoryUnavailableException
   {
     directoryManager.deletesReconcile(buildUserPairs(request));

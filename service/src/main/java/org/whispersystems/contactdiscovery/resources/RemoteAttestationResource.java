@@ -38,6 +38,7 @@ import org.whispersystems.contactdiscovery.phonelimiter.PhoneRateLimiter;
 import org.whispersystems.contactdiscovery.requests.RequestManager;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotNull;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
@@ -95,7 +96,7 @@ public class RemoteAttestationResource {
   public Response getAttestationHandshake(@Auth User user,
                                           @PathParam("enclaveId") String enclaveId,
                                           @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
-                                          @Valid RemoteAttestationRequest request)
+                                          @Valid @NotNull RemoteAttestationRequest request)
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());
@@ -127,7 +128,7 @@ public class RemoteAttestationResource {
                                                                    @PathParam("testName") String testName,
                                                                    @HeaderParam(HttpHeaders.AUTHORIZATION) String authHeader,
                                                                    @PathParam("enclaveId") String enclaveId,
-                                                                   @Valid RemoteAttestationRequest request)
+                                                                   @Valid @NotNull RemoteAttestationRequest request)
       throws NoSuchEnclaveException, SignedQuoteUnavailableException, SgxException, RateLimitExceededException
   {
     rateLimiter.validate(user.getNumber());

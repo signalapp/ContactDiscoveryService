@@ -73,7 +73,7 @@ public class DiscoveryRequest {
   @JsonProperty
   @NotNull
   @Size(min = 1, max = 3)
-  private Map<String, @Valid DiscoveryRequestEnvelope> envelopes;
+  private Map<String, @Valid @NotNull DiscoveryRequestEnvelope> envelopes;
 
   @JsonProperty
   private String context = "Default";

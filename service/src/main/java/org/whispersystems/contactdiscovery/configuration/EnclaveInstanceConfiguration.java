@@ -18,7 +18,8 @@ package org.whispersystems.contactdiscovery.configuration;
 
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.hibernate.validator.constraints.NotEmpty;
+
+import javax.validation.constraints.NotEmpty;
 
 /**
  * Configuration for a specific enclave instance
