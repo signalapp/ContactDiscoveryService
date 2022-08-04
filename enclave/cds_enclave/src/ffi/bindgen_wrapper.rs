@@ -103,7 +103,8 @@ pub const SGX_XFRM_LEGACY: u32 = 3;
 pub const SGX_XFRM_AVX: u32 = 6;
 pub const SGX_XFRM_AVX512: u32 = 230;
 pub const SGX_XFRM_MPX: u32 = 24;
-pub const SGX_XFRM_RESERVED: i32 = -232;
+pub const SGX_XFRM_PKRU: u32 = 512;
+pub const SGX_XFRM_RESERVED: i32 = -744;
 pub const SGX_KEYSELECT_EINITTOKEN: u32 = 0;
 pub const SGX_KEYSELECT_PROVISION: u32 = 1;
 pub const SGX_KEYSELECT_PROVISION_SEAL: u32 = 2;
@@ -553,6 +554,23 @@ extern "C" {
     ) -> libc::c_int;
 }
 extern "C" {
+    pub fn wcstold(arg1: *const wchar_t, arg2: *mut *mut wchar_t) -> u128;
+}
+extern "C" {
+    pub fn wcstoll(
+        arg1: *const wchar_t,
+        arg2: *mut *mut wchar_t,
+        arg3: libc::c_int,
+    ) -> libc::c_longlong;
+}
+extern "C" {
+    pub fn wcstoull(
+        arg1: *const wchar_t,
+        arg2: *mut *mut wchar_t,
+        arg3: libc::c_int,
+    ) -> libc::c_ulonglong;
+}
+extern "C" {
     pub fn wcswcs(arg1: *const wchar_t, arg2: *const wchar_t) -> *mut wchar_t;
 }
 pub const SGX_SUCCESS: _status_t = 0;
@@ -563,6 +581,7 @@ pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
 pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
 pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
 pub const SGX_PTHREAD_EXIT: _status_t = 9;
+pub const SGX_ERROR_MEMORY_MAP_FAILURE: _status_t = 10;
 pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
 pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
 pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
@@ -3510,9 +3529,9 @@ pub type cds_call_args_t = sgxsd_server_handle_call_args;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct sgxsd_server_terminate_args {
-    pub in_phones: *mut phone_t,
+    pub in_phones: *const phone_t,
     pub in_phone_count: usize,
-    pub in_uuids: *mut uuid_t,
+    pub in_uuids: *const uuid_t,
 }
 #[test]
 fn bindgen_test_layout_sgxsd_server_terminate_args() {
@@ -3651,6 +3670,13 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memcpy_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memmove(
         arg1: *mut libc::c_void,
         arg2: *const libc::c_void,
@@ -3658,7 +3684,21 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memmove_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memset(arg1: *mut libc::c_void, arg2: libc::c_int, arg3: usize) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memset_verw(
+        arg1: *mut libc::c_void,
+        arg2: libc::c_int,
+        arg3: usize,
+    ) -> *mut libc::c_void;
 }
 extern "C" {
     pub fn strchr(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
@@ -3722,6 +3762,9 @@ extern "C" {
 }
 extern "C" {
     pub fn memset_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
+}
+extern "C" {
+    pub fn memset_verw_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
 }
 extern "C" {
     pub fn strndup(arg1: *const libc::c_char, arg2: usize) -> *mut libc::c_char;

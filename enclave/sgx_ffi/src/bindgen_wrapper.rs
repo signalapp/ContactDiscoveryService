@@ -93,7 +93,8 @@ pub const SGX_XFRM_LEGACY: u32 = 3;
 pub const SGX_XFRM_AVX: u32 = 6;
 pub const SGX_XFRM_AVX512: u32 = 230;
 pub const SGX_XFRM_MPX: u32 = 24;
-pub const SGX_XFRM_RESERVED: i32 = -232;
+pub const SGX_XFRM_PKRU: u32 = 512;
+pub const SGX_XFRM_RESERVED: i32 = -744;
 pub const SGX_KEYSELECT_EINITTOKEN: u32 = 0;
 pub const SGX_KEYSELECT_PROVISION: u32 = 1;
 pub const SGX_KEYSELECT_PROVISION_SEAL: u32 = 2;
@@ -122,6 +123,19 @@ pub const SGX_REPORT_BODY_RESERVED2_BYTES: u32 = 32;
 pub const SGX_REPORT_BODY_RESERVED3_BYTES: u32 = 32;
 pub const SGX_REPORT_BODY_RESERVED4_BYTES: u32 = 42;
 pub const SGX_PLATFORM_INFO_SIZE: u32 = 101;
+pub const TEE_HASH_384_SIZE: u32 = 48;
+pub const TEE_MAC_SIZE: u32 = 32;
+pub const SGX_REPORT2_DATA_SIZE: u32 = 64;
+pub const TEE_CPU_SVN_SIZE: u32 = 16;
+pub const SGX_LEGACY_REPORT_TYPE: u32 = 0;
+pub const TEE_REPORT2_TYPE: u32 = 129;
+pub const TEE_REPORT2_SUBTYPE: u32 = 0;
+pub const TEE_REPORT2_VERSION: u32 = 0;
+pub const SGX_REPORT2_MAC_STRUCT_RESERVED1_BYTES: u32 = 12;
+pub const SGX_REPORT2_MAC_STRUCT_RESERVED2_BYTES: u32 = 32;
+pub const TEE_TCB_INFO_SIZE: u32 = 239;
+pub const SGX_REPORT2_RESERVED_BYTES: u32 = 17;
+pub const TEE_INFO_SIZE: u32 = 512;
 pub const EXIT_FAILURE: u32 = 1;
 pub const EXIT_SUCCESS: u32 = 0;
 pub const RAND_MAX: u32 = 2147483647;
@@ -134,6 +148,7 @@ pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
 pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
 pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
 pub const SGX_PTHREAD_EXIT: _status_t = 9;
+pub const SGX_ERROR_MEMORY_MAP_FAILURE: _status_t = 10;
 pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
 pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
 pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
@@ -331,18 +346,6 @@ impl Default for __mbstate_t {
 pub type __intmax_t = __int64_t;
 pub type __uintmax_t = __uint64_t;
 pub type wchar_t = libc::c_int;
-extern "C" {
-    pub fn sgx_is_within_enclave(addr: *const libc::c_void, size: usize) -> libc::c_int;
-}
-extern "C" {
-    pub fn sgx_is_outside_enclave(addr: *const libc::c_void, size: usize) -> libc::c_int;
-}
-extern "C" {
-    pub fn sgx_is_enclave_crashed() -> libc::c_int;
-}
-extern "C" {
-    pub fn sgx_read_rand(rand: *mut libc::c_uchar, length_in_bytes: usize) -> sgx_status_t;
-}
 pub type int_least8_t = __int_least8_t;
 pub type uint_least8_t = __uint_least8_t;
 pub type int_least16_t = __int_least16_t;
@@ -361,6 +364,24 @@ pub type int_fast64_t = __int_fast64_t;
 pub type uint_fast64_t = __uint_fast64_t;
 pub type intmax_t = __intmax_t;
 pub type uintmax_t = __uintmax_t;
+extern "C" {
+    pub fn sgx_is_within_enclave(addr: *const libc::c_void, size: usize) -> libc::c_int;
+}
+extern "C" {
+    pub fn sgx_is_outside_enclave(addr: *const libc::c_void, size: usize) -> libc::c_int;
+}
+extern "C" {
+    pub fn sgx_is_enclave_crashed() -> libc::c_int;
+}
+extern "C" {
+    pub fn sgx_read_rand(rand: *mut libc::c_uchar, length_in_bytes: usize) -> sgx_status_t;
+}
+extern "C" {
+    pub fn sgx_rdpkru(val: *mut u32) -> libc::c_int;
+}
+extern "C" {
+    pub fn sgx_wrpkru(val: u32) -> libc::c_int;
+}
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct _attributes_t {
@@ -1588,6 +1609,391 @@ impl Default for _qe_report_info_t {
     }
 }
 pub type sgx_qe_report_info_t = _qe_report_info_t;
+pub type tee_mac_t = [u8; 32usize];
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct _tee_cpu_svn_t {
+    pub svn: [u8; 16usize],
+}
+#[test]
+fn bindgen_test_layout__tee_cpu_svn_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_tee_cpu_svn_t>(),
+        16usize,
+        concat!("Size of: ", stringify!(_tee_cpu_svn_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_tee_cpu_svn_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_tee_cpu_svn_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_cpu_svn_t>())).svn as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_cpu_svn_t),
+            "::",
+            stringify!(svn)
+        )
+    );
+}
+pub type tee_cpu_svn_t = _tee_cpu_svn_t;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _tee_measurement_t {
+    pub m: [u8; 48usize],
+}
+#[test]
+fn bindgen_test_layout__tee_measurement_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_tee_measurement_t>(),
+        48usize,
+        concat!("Size of: ", stringify!(_tee_measurement_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_tee_measurement_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_tee_measurement_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_measurement_t>())).m as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_measurement_t),
+            "::",
+            stringify!(m)
+        )
+    );
+}
+impl Default for _tee_measurement_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type tee_measurement_t = _tee_measurement_t;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _tee_report_data_t {
+    pub d: [u8; 64usize],
+}
+#[test]
+fn bindgen_test_layout__tee_report_data_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_tee_report_data_t>(),
+        64usize,
+        concat!("Size of: ", stringify!(_tee_report_data_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_tee_report_data_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_tee_report_data_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_report_data_t>())).d as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_report_data_t),
+            "::",
+            stringify!(d)
+        )
+    );
+}
+impl Default for _tee_report_data_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type tee_report_data_t = _tee_report_data_t;
+#[repr(C, packed)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct _tee_attributes_t {
+    pub a: [u32; 2usize],
+}
+#[test]
+fn bindgen_test_layout__tee_attributes_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_tee_attributes_t>(),
+        8usize,
+        concat!("Size of: ", stringify!(_tee_attributes_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_tee_attributes_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_tee_attributes_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_attributes_t>())).a as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_attributes_t),
+            "::",
+            stringify!(a)
+        )
+    );
+}
+pub type tee_attributes_t = _tee_attributes_t;
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct _tee_report_type_t {
+    pub type_: u8,
+    pub subtype: u8,
+    pub version: u8,
+    pub reserved: u8,
+}
+#[test]
+fn bindgen_test_layout__tee_report_type_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_tee_report_type_t>(),
+        4usize,
+        concat!("Size of: ", stringify!(_tee_report_type_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_tee_report_type_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_tee_report_type_t))
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_report_type_t>())).type_ as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_report_type_t),
+            "::",
+            stringify!(type_)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_report_type_t>())).subtype as *const _ as usize },
+        1usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_report_type_t),
+            "::",
+            stringify!(subtype)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_report_type_t>())).version as *const _ as usize },
+        2usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_report_type_t),
+            "::",
+            stringify!(version)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_tee_report_type_t>())).reserved as *const _ as usize },
+        3usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_tee_report_type_t),
+            "::",
+            stringify!(reserved)
+        )
+    );
+}
+pub type tee_report_type_t = _tee_report_type_t;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _sgx_report2_mac_struct_t {
+    pub report_type: tee_report_type_t,
+    pub reserved1: [u8; 12usize],
+    pub cpu_svn: tee_cpu_svn_t,
+    pub tee_tcb_info_hash: tee_measurement_t,
+    pub tee_info_hash: tee_measurement_t,
+    pub report_data: tee_report_data_t,
+    pub reserved2: [u8; 32usize],
+    pub mac: tee_mac_t,
+}
+#[test]
+fn bindgen_test_layout__sgx_report2_mac_struct_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_sgx_report2_mac_struct_t>(),
+        256usize,
+        concat!("Size of: ", stringify!(_sgx_report2_mac_struct_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_sgx_report2_mac_struct_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_sgx_report2_mac_struct_t))
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).report_type as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(report_type)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).reserved1 as *const _ as usize
+        },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(reserved1)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).cpu_svn as *const _ as usize
+        },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(cpu_svn)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).tee_tcb_info_hash as *const _
+                as usize
+        },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(tee_tcb_info_hash)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).tee_info_hash as *const _
+                as usize
+        },
+        80usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(tee_info_hash)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).report_data as *const _ as usize
+        },
+        128usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(report_data)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).reserved2 as *const _ as usize
+        },
+        192usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(reserved2)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_report2_mac_struct_t>())).mac as *const _ as usize },
+        224usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_mac_struct_t),
+            "::",
+            stringify!(mac)
+        )
+    );
+}
+impl Default for _sgx_report2_mac_struct_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type sgx_report2_mac_struct_t = _sgx_report2_mac_struct_t;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct _sgx_report2_t {
+    pub report_mac_struct: sgx_report2_mac_struct_t,
+    pub tee_tcb_info: [u8; 239usize],
+    pub reserved: [u8; 17usize],
+    pub tee_info: [u8; 512usize],
+}
+#[test]
+fn bindgen_test_layout__sgx_report2_t() {
+    assert_eq!(
+        ::core::mem::size_of::<_sgx_report2_t>(),
+        1024usize,
+        concat!("Size of: ", stringify!(_sgx_report2_t))
+    );
+    assert_eq!(
+        ::core::mem::align_of::<_sgx_report2_t>(),
+        1usize,
+        concat!("Alignment of ", stringify!(_sgx_report2_t))
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::core::ptr::null::<_sgx_report2_t>())).report_mac_struct as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_t),
+            "::",
+            stringify!(report_mac_struct)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_report2_t>())).tee_tcb_info as *const _ as usize },
+        256usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_t),
+            "::",
+            stringify!(tee_tcb_info)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_report2_t>())).reserved as *const _ as usize },
+        495usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_t),
+            "::",
+            stringify!(reserved)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::core::ptr::null::<_sgx_report2_t>())).tee_info as *const _ as usize },
+        512usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(_sgx_report2_t),
+            "::",
+            stringify!(tee_info)
+        )
+    );
+}
+impl Default for _sgx_report2_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+pub type sgx_report2_t = _sgx_report2_t;
 extern "C" {
     pub fn sgx_create_report(
         target_info: *const sgx_target_info_t,
@@ -1603,6 +2009,9 @@ extern "C" {
 }
 extern "C" {
     pub fn sgx_verify_report(report: *const sgx_report_t) -> sgx_status_t;
+}
+extern "C" {
+    pub fn sgx_verify_report2(report_mac_struct: *const sgx_report2_mac_struct_t) -> sgx_status_t;
 }
 extern "C" {
     pub fn sgx_get_key(
@@ -1626,6 +2035,13 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memcpy_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memmove(
         arg1: *mut libc::c_void,
         arg2: *const libc::c_void,
@@ -1633,7 +2049,21 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memmove_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memset(arg1: *mut libc::c_void, arg2: libc::c_int, arg3: usize) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memset_verw(
+        arg1: *mut libc::c_void,
+        arg2: libc::c_int,
+        arg3: usize,
+    ) -> *mut libc::c_void;
 }
 extern "C" {
     pub fn strchr(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
@@ -1697,6 +2127,9 @@ extern "C" {
 }
 extern "C" {
     pub fn memset_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
+}
+extern "C" {
+    pub fn memset_verw_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
 }
 extern "C" {
     pub fn strndup(arg1: *const libc::c_char, arg2: usize) -> *mut libc::c_char;

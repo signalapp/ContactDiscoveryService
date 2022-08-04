@@ -7,8 +7,11 @@ export USE_OPT_LIBS
 ## linux sdk
 ##
 
-SGX_SDK_SOURCE_GIT_REV  ?= d166ff0c808e2f78d37eebf1ab614d944437eea3
-SGX_DCAP_SOURCE_GIT_REV ?= 1ac77919552d5409c28cc0cd8e88398851418ba6
+# https://github.com/intel/linux-sgx/releases/tag/sgx_2.17
+SGX_SDK_SOURCE_GIT_REV  ?= effae6280234302a12169f89c561b96e54d80723
+
+# https://github.com/intel/SGXDataCenterAttestationPrimitives/releases/tag/DCAP_1.14
+SGX_DCAP_SOURCE_GIT_REV ?= 68a77a852cd911a44a97733aec870e9bd93a3b86
 
 export SGX_SDK_SOURCE_DIR = $(builddir)/linux-sgx/linux-sgx-$(SGX_SDK_SOURCE_GIT_REV)
 export SGX_SDK_SOURCE_INCLUDEDIR = $(SGX_SDK_SOURCE_DIR)/common/inc

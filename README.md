@@ -36,7 +36,7 @@ and repeat the same steps.
 - GNU Make
 - gcc-6
 - devscripts (debian package)
-- [Intel SGX SDK v2.1.3 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.1.3) build dependencies
+- [Intel SGX SDK v2.17 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.17) build dependencies
 
 `````
 $ make debuild derebuild
@@ -55,7 +55,7 @@ be checked in as build-deps in the enclave/docker/ folder, along with sources.li
 buildinfo, which will then be used to reproduce the build when running `make docker`
 again in the future.
 
-The `debuild` target also builds parts needed from the Intel SGX SDK v2.1.3 after cloning it
+The `debuild` target also builds parts needed from the Intel SGX SDK v2.17 after cloning it
 from github.
 
 ### Building without Docker or Debian:
@@ -63,7 +63,7 @@ from github.
 #### Prerequisites:
 - GNU Make
 - gcc-6
-- [Intel SGX SDK v2.1.3 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.1.3) (or its build dependencies)
+- [Intel SGX SDK v2.17 SDK](https://github.com/intel/linux-sgx/tree/sgx_2.17) (or its build dependencies)
 
 `````
 $ make -C <repository_root>/enclave all install
@@ -98,7 +98,7 @@ $ mvn package
 ## Running the service
 
 ### Runtime requirements:
-- [Intel SGX SDK v2.1.3 PSW](https://github.com/intel/linux-sgx/tree/sgx_2.1.3#install-the-intelr-sgx-psw)
+- [Intel SGX SDK v2.17 PSW](https://github.com/intel/linux-sgx/tree/sgx_2.17#install-the-intelr-sgx-psw)
 
 `````
 $ cd <repository_root>

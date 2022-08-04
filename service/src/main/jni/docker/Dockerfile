@@ -19,9 +19,9 @@ RUN    apt-get update \
                maven \
     && apt-key add /tmp/docker/linux-sgx.gpg \
     && apt-add-repository "deb https://download.01.org/intel-sgx/sgx_repo/ubuntu bionic main" \
-    && apt-get install -y --download-only libsgx-enclave-common=2.7.101.3-bionic1 libsgx-enclave-common-dev=2.7.101.3-bionic1 \
-    && dpkg --unpack /var/cache/apt/archives/libsgx-enclave-common_*.deb \
-    && dpkg --install --ignore-depends=libsgx-enclave-common /var/cache/apt/archives/libsgx-enclave-common-dev_*.deb \
+    && apt install -y libsgx-enclave-common-dev=2.17.100.3-bionic1 \
+           libsgx-uae-service=2.17.100.3-bionic1 \
+           libsgx-urts=2.17.100.3-bionic1 \
     && rm -rf /var/lib/apt/lists/*
 
 ARG UID=0
@@ -49,8 +49,8 @@ RUN    curl -f https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86
     && /tmp/rustup-init -y --profile minimal --component rustfmt --default-toolchain "${TOOLCHAIN}" \
     && rm -f /tmp/rustup-init
 
-ARG SGX_SDK_VERSION=2.7.1
-ARG SGX_SDK_SHA256=68d26293c8ea1c80266e1d897824d5fae021e6d988437ec8b6561a15352af789
+ARG SGX_SDK_VERSION=2.17
+ARG SGX_SDK_SHA256=36143fc805cde77ec43e279e676cae6c31313b1760a03984e48b51cf4f1bea5b
 
 RUN    curl -Lf "https://github.com/intel/linux-sgx/archive/sgx_${SGX_SDK_VERSION}.tar.gz" -o /tmp/linux-sgx.tar.gz \
     && [ `sha256sum /tmp/linux-sgx.tar.gz|cut -d' ' -f1` = "${SGX_SDK_SHA256}" ] \

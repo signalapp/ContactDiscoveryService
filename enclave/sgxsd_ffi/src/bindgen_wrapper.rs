@@ -100,7 +100,8 @@ pub const SGX_XFRM_LEGACY: u32 = 3;
 pub const SGX_XFRM_AVX: u32 = 6;
 pub const SGX_XFRM_AVX512: u32 = 230;
 pub const SGX_XFRM_MPX: u32 = 24;
-pub const SGX_XFRM_RESERVED: i32 = -232;
+pub const SGX_XFRM_PKRU: u32 = 512;
+pub const SGX_XFRM_RESERVED: i32 = -744;
 pub const SGX_KEYSELECT_EINITTOKEN: u32 = 0;
 pub const SGX_KEYSELECT_PROVISION: u32 = 1;
 pub const SGX_KEYSELECT_PROVISION_SEAL: u32 = 2;
@@ -322,6 +323,7 @@ pub const SGX_ERROR_ENCLAVE_LOST: _status_t = 4;
 pub const SGX_ERROR_INVALID_STATE: _status_t = 5;
 pub const SGX_ERROR_FEATURE_NOT_SUPPORTED: _status_t = 8;
 pub const SGX_PTHREAD_EXIT: _status_t = 9;
+pub const SGX_ERROR_MEMORY_MAP_FAILURE: _status_t = 10;
 pub const SGX_ERROR_INVALID_FUNCTION: _status_t = 4097;
 pub const SGX_ERROR_OUT_OF_TCS: _status_t = 4099;
 pub const SGX_ERROR_ENCLAVE_CRASHED: _status_t = 4102;
@@ -2923,6 +2925,13 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memcpy_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memmove(
         arg1: *mut libc::c_void,
         arg2: *const libc::c_void,
@@ -2930,7 +2939,21 @@ extern "C" {
     ) -> *mut libc::c_void;
 }
 extern "C" {
+    pub fn memmove_verw(
+        arg1: *mut libc::c_void,
+        arg2: *const libc::c_void,
+        arg3: usize,
+    ) -> *mut libc::c_void;
+}
+extern "C" {
     pub fn memset(arg1: *mut libc::c_void, arg2: libc::c_int, arg3: usize) -> *mut libc::c_void;
+}
+extern "C" {
+    pub fn memset_verw(
+        arg1: *mut libc::c_void,
+        arg2: libc::c_int,
+        arg3: usize,
+    ) -> *mut libc::c_void;
 }
 extern "C" {
     pub fn strchr(arg1: *const libc::c_char, arg2: libc::c_int) -> *mut libc::c_char;
@@ -2994,6 +3017,9 @@ extern "C" {
 }
 extern "C" {
     pub fn memset_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
+}
+extern "C" {
+    pub fn memset_verw_s(s: *mut libc::c_void, smax: usize, c: libc::c_int, n: usize) -> errno_t;
 }
 extern "C" {
     pub fn strndup(arg1: *const libc::c_char, arg2: usize) -> *mut libc::c_char;
@@ -3150,7 +3176,7 @@ pub struct br_hash_class_ {
     #[doc = ""]
     #[doc = " This method saves the current running state into the `dst`"]
     #[doc = " buffer. What constitutes the \"running state\" depends on the"]
-    #[doc = " hash function; for Merkle-Damgård hash functions (like"]
+    #[doc = " hash function; for Merkle-Damg\u{e5}rd hash functions (like"]
     #[doc = " MD5 or SHA-1), this is the output obtained after processing"]
     #[doc = " each block. The number of bytes injected so far is returned."]
     #[doc = " The context is not modified by this call."]

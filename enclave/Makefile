@@ -6,10 +6,10 @@ targetdir = $(builddir)/target
 resourcedir = ../service/src/main/resources
 
 # see https://github.com/intel/linux-sgx/releases
-SGX_SDK_VERSION = 2.9.1
+SGX_SDK_VERSION = 2.17
 SGX_SDK_SOURCE_GIT_REV = sgx_$(SGX_SDK_VERSION)
 # see https://github.com/intel/SGXDataCenterAttestationPrimitives/releases
-SGX_DCAP_VERSION = 1.6
+SGX_DCAP_VERSION = 1.14
 SGX_DCAP_SOURCE_GIT_REV = DCAP_$(SGX_DCAP_VERSION)
 
 RUSTC ?= rustc
