@@ -43,6 +43,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Client interface for communication with IAS
@@ -62,6 +63,21 @@ public class IntelClient {
 
   @VisibleForTesting
   static final String SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
+
+  // To quote from Intel's documentation:
+  //
+  // > An attestation response may report “SW_HARDENING_NEEDED” for attestation requests originating from Intel®
+  // > SGX-enabled platforms that have applied the microcode and SGX platform software update and are properly
+  // > configured but are affected by INTEL-SA-00334. In this case a Remote Attestation Verifier should evaluate
+  // > the potential risk of an attack on these platforms and whether the attesting enclave employs adequate
+  // > software hardening to mitigate the risk.
+  //
+  // We have, indeed, applied software mitigations for INTEL-SA-00334, and can consider SW_HARDENING_NEEDED an
+  // acceptable status as long as the only named advisory is the one we've already mitigated.
+  //
+  // The check for INTEL-SA-00334 was introduced in IASv4, and did not appear under IASv3. Similarly, INTEL-SA-00615 has
+  // been mitigated, but may appear in IASv4 responses.
+  private static final Set<String> MITIGATED_ADVISORY_IDS = Set.of("INTEL-SA-00334", "INTEL-SA-00615");
 
   public IntelClient(String baseUri, String apiKey, boolean acceptGroupOutOfDate) {
     this.client = HttpClient.newBuilder()
@@ -151,19 +167,7 @@ public class IntelClient {
       } else if ("GROUP_REVOKED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
         throw new GroupOutOfDateException(responseBody.getIsvEnclaveQuoteStatus(), responseBody.getPlatformInfoBlob());
       } else if ("SW_HARDENING_NEEDED".equals(responseBody.getIsvEnclaveQuoteStatus())) {
-        // To quote from Intel's documentation:
-        //
-        // > An attestation response may report “SW_HARDENING_NEEDED” for attestation requests originating from Intel®
-        // > SGX-enabled platforms that have applied the microcode and SGX platform software update and are properly
-        // > configured but are affected by INTEL-SA-00334. In this case a Remote Attestation Verifier should evaluate
-        // > the potential risk of an attack on these platforms and whether the attesting enclave employs adequate
-        // > software hardening to mitigate the risk.
-        //
-        // We have, indeed, applied software mitigations for INTEL-SA-00334, and can consider SW_HARDENING_NEEDED an
-        // acceptable status as long as the only named advisory is the one we've already mitigated.
-        //
-        // The check for INTEL-SA-00334 was introduced in IASv4, and did not appear under IASv3.
-        if (!List.of("INTEL-SA-00334").equals(responseBody.getAdvisoryIDs())) {
+        if (!MITIGATED_ADVISORY_IDS.containsAll(responseBody.getAdvisoryIDs())) {
           throw new QuoteVerificationException("Software hardening needed: " + responseBody.getAdvisoryIDs());
         }
       } else if (!"OK".equals(responseBody.getIsvEnclaveQuoteStatus())) {
