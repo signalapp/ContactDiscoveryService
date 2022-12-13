@@ -5,12 +5,12 @@ name: test with enclave rebuild
 pr:
   branches:
     include:
-    - master
+    - main
 
 trigger:
   branches:
     include:
-    - master
+    - main
     - "test-*"
     - "test_*"
     exclude:
@@ -22,7 +22,7 @@ schedules:
     displayName: "Daily test run"
     branches:
       include:
-      - master
+      - main
     always: true
 
 resources:

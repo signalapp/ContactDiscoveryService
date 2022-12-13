@@ -147,13 +147,13 @@ SGX-enabled hardware.
 # CI
 
 Azure Pipelines is what we currently use for CI. It has two separate Pipelines
-that run on PR and merges to master. You can see results for the PR and master
+that run on PR and merges to `main`. You can see results for the PR and `main`
 runs on
 [Azure's site](https://dev.azure.com/signal-testing/directory-testing/_build) or
 in GitHub's UI.
 
 There are two pipelines configured. They currently (2020-05) are configured in
-`service/ci/master.yml` and `service/ci/test_with_enclave_rebuild.yml`. The
+`service/ci/main.yml` and `service/ci/test_with_enclave_rebuild.yml`. The
 former runs the `service` tests with the enclave library already checked-in to
 the repo. The latter runs the full enclave rebuild and test process, plus the
 `service` tests.
