@@ -28,7 +28,7 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.TimeUnit;
-
+import java.util.List;
 /**
  * Helper class for verifying signed authorization tokens from the
  * main Signal service.
@@ -39,10 +39,10 @@ public class AuthorizationTokenVerifier {
 
   private final Logger logger = LoggerFactory.getLogger(AuthorizationTokenVerifier.class);
 
-  private final byte[] key;
+  private final List<byte[]> keys;
 
-  public AuthorizationTokenVerifier(byte[] key) {
-    this.key = key;
+  public AuthorizationTokenVerifier(List<byte[]> keys) {
+    this.keys = keys;
   }
 
   public boolean isValid(String token, String number, long currentTimeMillis) {
@@ -77,13 +77,18 @@ public class AuthorizationTokenVerifier {
 
   private boolean isValidSignature(String prefix, String suffix) {
     try {
-      Mac hmac = Mac.getInstance("HmacSHA256");
-      hmac.init(new SecretKeySpec(key, "HmacSHA256"));
-
-      byte[] ourSuffix   = ByteUtils.truncate(hmac.doFinal(prefix.getBytes()), 10);
       byte[] theirSuffix = Hex.decodeHex(suffix.toCharArray());
 
-      return MessageDigest.isEqual(ourSuffix, theirSuffix);
+      boolean isValidSignature = false;
+      for (byte[] key : keys) {
+        Mac hmac = Mac.getInstance("HmacSHA256");
+        hmac.init(new SecretKeySpec(key, "HmacSHA256"));
+        byte[] ourSuffix = ByteUtils.truncate(hmac.doFinal(prefix.getBytes()), 10);
+
+        isValidSignature |= MessageDigest.isEqual(ourSuffix, theirSuffix);
+      }
+
+      return isValidSignature;
     } catch (NoSuchAlgorithmException | InvalidKeyException e) {
       throw new AssertionError(e);
     } catch (DecoderException e) {

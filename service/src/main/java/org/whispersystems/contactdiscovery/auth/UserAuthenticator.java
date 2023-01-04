@@ -12,6 +12,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 import io.dropwizard.auth.AuthenticationException;
 import io.dropwizard.auth.basic.BasicCredentials;
 
+import java.util.List;
 import java.util.Optional;
 
 public class UserAuthenticator implements Authenticator<BasicCredentials, User> {
@@ -24,8 +25,8 @@ public class UserAuthenticator implements Authenticator<BasicCredentials, User> 
 
   private final AuthorizationTokenVerifier verifier;
 
-  public UserAuthenticator(byte[] userAuthenticationToken) {
-    this.verifier = new AuthorizationTokenVerifier(userAuthenticationToken);
+  public UserAuthenticator(List<byte[]> userAuthenticationTokens) {
+    this.verifier = new AuthorizationTokenVerifier(userAuthenticationTokens);
   }
 
   @Override

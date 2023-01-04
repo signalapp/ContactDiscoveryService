@@ -147,7 +147,7 @@ public class ContactDiscoveryService extends Application<ContactDiscoveryConfigu
     Optional<String> version = Optional.ofNullable(getClass().getPackage()).map(Package::getImplementationVersion);
     logger.info("starting " + getName() + " version " + version.orElse("unknown"));
 
-    UserAuthenticator          userAuthenticator          = new UserAuthenticator(configuration.getSignalServiceConfiguration().getUserAuthenticationToken());
+    UserAuthenticator          userAuthenticator          = new UserAuthenticator(configuration.getSignalServiceConfiguration().getUserAuthenticationTokens());
     SignalServiceAuthenticator signalServiceAuthenticator = new SignalServiceAuthenticator(configuration.getSignalServiceConfiguration().getServerAuthenticationToken());
     PeerServiceAuthenticator   peerServiceAuthenticator   = new PeerServiceAuthenticator(configuration.getDirectoryConfiguration().getPeerAuthenticationToken());
 

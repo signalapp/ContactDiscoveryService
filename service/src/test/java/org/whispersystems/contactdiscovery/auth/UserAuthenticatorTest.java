@@ -6,8 +6,11 @@ import org.whispersystems.contactdiscovery.util.ByteUtils;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import io.dropwizard.auth.basic.BasicCredentials;
 import static junit.framework.TestCase.assertEquals;
@@ -18,12 +21,12 @@ public class UserAuthenticatorTest {
 
   @Test
   public void testValidUser() throws Exception {
-    byte[]            userAuthenticationToken = new byte[32];
-    UserAuthenticator userAuthenticator       = new UserAuthenticator(userAuthenticationToken);
+    List<byte[]> userAuthenticationTokens = Arrays.asList(new byte[32], new byte[32]);
+    UserAuthenticator userAuthenticator       = new UserAuthenticator(userAuthenticationTokens);
 
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = constructAuthToken(userAuthenticationToken, number, time);
+    String token  = constructAuthToken(userAuthenticationTokens.get(0), number, time);
 
     Optional<User> user = userAuthenticator.authenticate(new BasicCredentials(number, token));
 
@@ -33,12 +36,13 @@ public class UserAuthenticatorTest {
 
   @Test
   public void testNumberMismatch() throws Exception {
-    byte[]            userAuthenticationToken = new byte[32];
-    UserAuthenticator userAuthenticator       = new UserAuthenticator(userAuthenticationToken);
+    List<byte[]> userAuthenticationTokens = Arrays.asList(new byte[32], new byte[32]);
+
+    UserAuthenticator userAuthenticator       = new UserAuthenticator(userAuthenticationTokens);
 
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = constructAuthToken(userAuthenticationToken, number, time);
+    String token  = constructAuthToken(userAuthenticationTokens.get(0), number, time);
 
     Optional<User> user = userAuthenticator.authenticate(new BasicCredentials("+14151111111", token));
 
@@ -47,13 +51,17 @@ public class UserAuthenticatorTest {
 
   @Test
   public void testBadToken() throws Exception {
-    byte[] userAuthenticationToken = new byte[32];
+    List<byte[]> userAuthenticationTokens = Arrays.asList(new byte[32], new byte[32]);
+
     String number                  = "+14152222222";
     long   time                    = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token                   = constructAuthToken(userAuthenticationToken, number, time);
+    String token                   = constructAuthToken(userAuthenticationTokens.get(0), number, time);
 
-    userAuthenticationToken[5] = (byte)0x01;
-    UserAuthenticator userAuthenticator = new UserAuthenticator(userAuthenticationToken);
+    List<byte[]> badTokens = userAuthenticationTokens.stream().map(userAuthenticationToken -> {
+      userAuthenticationToken[0] = (byte)0x01;
+      return userAuthenticationToken;
+    }).collect(Collectors.toList());
+    UserAuthenticator userAuthenticator = new UserAuthenticator(badTokens);
 
     Optional<User> user = userAuthenticator.authenticate(new BasicCredentials(number, token));
 

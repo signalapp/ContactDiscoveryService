@@ -8,7 +8,10 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.List;
 
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
@@ -16,87 +19,105 @@ import static junit.framework.TestCase.assertTrue;
 public class AuthorizationTokenVerifierTest {
 
   @Test
-  public void testGoodToken() throws NoSuchAlgorithmException, InvalidKeyException {
-    byte[] key = new byte[32];
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+  public void testGoodFirstToken() throws NoSuchAlgorithmException, InvalidKeyException {
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
+    keys.get(1)[0] = (byte)0x01;
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
 
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = calculateToken(key, number, String.valueOf(time));
+    String token  = calculateToken(keys.get(0), number, String.valueOf(time));
+
+    assertTrue(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));
+  }
+
+  @Test
+  public void testGoodSecondToken() throws NoSuchAlgorithmException, InvalidKeyException {
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
+    keys.get(0)[0] = (byte)0x01;
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
+
+    String number = "+14152222222";
+    long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+    String token  = calculateToken(keys.get(1), number, String.valueOf(time));
 
     assertTrue(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));
   }
 
   @Test
   public void testExpiredToken() throws NoSuchAlgorithmException, InvalidKeyException {
-    byte[] key = new byte[32];
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
 
     String number    = "+14152222222";
     long   time      = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token     = calculateToken(key, number, String.valueOf(time));
+    String token     = calculateToken(keys.get(0), number, String.valueOf(time));
 
     assertFalse(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis() + TimeUnit.DAYS.toMillis(1)));
   }
 
   @Test
   public void testWrongNumberToken() throws Exception {
-    byte[] key = new byte[32];
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
 
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = calculateToken(key, number, String.valueOf(time));
+    String token  = calculateToken(keys.get(0), number, String.valueOf(time));
 
     assertFalse(authorizationTokenVerifier.isValid(token, "+14151111111", System.currentTimeMillis()));;
   }
 
   @Test
   public void testBadTimestampToken() throws Exception {
-    byte[] key = new byte[32];
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
 
     String number = "+14152222222";
     String time   = "boop";
-    String token  = calculateToken(key, number, time);
+    String token  = calculateToken(keys.get(0), number, time);
 
     assertFalse(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));;
   }
 
   @Test
   public void testBadKeyToken() throws Exception {
-    byte[] key = new byte[32];
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = calculateToken(key, number, String.valueOf(time));
+    String token  = calculateToken(keys.get(0), number, String.valueOf(time));
 
-    key[0] = (byte)0x01;
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    List<byte[]> badKeys = keys.stream().map(key -> {
+      key[0] = (byte)0x01;
+      return key;
+    }).collect(Collectors.toList());
+
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(badKeys);
 
     assertFalse(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));;
   }
 
   @Test
   public void testLongToken() throws Exception {
-    byte[] key = new byte[32];
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-    String token  = calculateToken(key, number, String.valueOf(time));
+    String token  = calculateToken(keys.get(0), number, String.valueOf(time));
 
     token = token + ":0cool";
 
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
     assertFalse(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));;
   }
 
   @Test
   public void testNotHexSignature() throws Exception {
-    byte[] key = new byte[32];
+    List<byte[]> keys = Arrays.asList(new byte[32], new byte[32]);
     String number = "+14152222222";
     long   time   = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
     String token  = number + ":" + time + ":ACGZZZ/+";
 
-    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(key);
+    AuthorizationTokenVerifier authorizationTokenVerifier = new AuthorizationTokenVerifier(keys);
     assertFalse(authorizationTokenVerifier.isValid(token, number, System.currentTimeMillis()));
   }
 
