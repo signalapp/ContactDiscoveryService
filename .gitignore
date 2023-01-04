@@ -18,7 +18,6 @@
 target
 /service/config/
 /service/src/main/resources/enclave/current.mrenclave
-/service/src/main/resources/enclave-jni.so
 dependency-reduced-pom.xml
 
 /ratelimiter/config/production.ratelimiter.yml
