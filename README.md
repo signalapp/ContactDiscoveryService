@@ -1,3 +1,9 @@
+# Deprecation notice
+
+This version of the Contact Discovery Service has been retired and is no longer supported.
+Please see the [CDSv2 repository](https://github.com/signalapp/ContactDiscoveryService-Icelake)
+for the current version of the Contact Discovery Service.
+
 # Private Contact Discovery Service (Beta)
 
 The private contact discovery micro-service allows clients to discover which of their
